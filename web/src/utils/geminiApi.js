@@ -401,7 +401,10 @@ const MODIFY_ALL_SLIDES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드
 여러 슬라이드의 HTML이 ${SLIDE_DELIMITER} 구분자로 구분되어 제공됩니다.
 사용자의 수정 지시를 모든 슬라이드에 일관되게 적용하여 수정된 슬라이드들을 반환하세요.
 
+**중요: 슬라이드를 절대 삭제하거나 병합하지 마세요. 입력된 슬라이드 수와 정확히 동일한 수의 슬라이드를 반환해야 합니다.**
+
 규칙:
+- **절대로 슬라이드를 삭제하지 마세요** — 입력 N개면 반드시 출력도 N개여야 합니다
 - 각 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
 - 반드시 인라인 CSS만 사용하세요
 - 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태를 유지하세요
@@ -411,7 +414,6 @@ const MODIFY_ALL_SLIDES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드
 - 외부 리소스(폰트 CDN 등)를 절대 참조하지 마세요
 - 모든 슬라이드에 수정 지시를 일관되게 적용하세요 (예: 배경색 변경이면 모든 슬라이드 배경색 변경)
 - 수정된 슬라이드 HTML들을 ${SLIDE_DELIMITER} 구분자로 구분하여 출력하세요
-- 입력된 슬라이드 수와 동일한 수의 슬라이드를 반환해야 합니다
 - 다른 설명 텍스트 없이 슬라이드 HTML만 출력하세요.`;
 
 const MODIFY_ALL_WITH_IMAGES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 수정하는 전문가입니다.
@@ -420,7 +422,10 @@ const MODIFY_ALL_WITH_IMAGES_PROMPT = `당신은 HTML 프레젠테이션 슬라�
 사용자의 수정 지시를 모든 슬라이드에 일관되게 적용하여 수정된 슬라이드들을 반환하세요.
 생성된 이미지들이 플레이스홀더로 제공됩니다. 이미지를 배치할 위치에 해당 플레이스홀더를 사용하세요.
 
+**중요: 슬라이드를 절대 삭제하거나 병합하지 마세요. 입력된 슬라이드 수와 정확히 동일한 수의 슬라이드를 반환해야 합니다.**
+
 규칙:
+- **절대로 슬라이드를 삭제하지 마세요** — 입력 N개면 반드시 출력도 N개여야 합니다
 - 각 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
 - 반드시 인라인 CSS만 사용하세요
 - 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태를 유지하세요
@@ -433,8 +438,14 @@ const MODIFY_ALL_WITH_IMAGES_PROMPT = `당신은 HTML 프레젠테이션 슬라�
 - 외부 리소스를 절대 참조하지 마세요
 - 모든 슬라이드에 수정 지시를 일관되게 적용하세요
 - 수정된 슬라이드 HTML들을 ${SLIDE_DELIMITER} 구분자로 구분하여 출력하세요
-- 입력된 슬라이드 수와 동일한 수의 슬라이드를 반환해야 합니다
 - 다른 설명 텍스트 없이 슬라이드 HTML만 출력하세요.`;
+
+// Ensure returned slides match original count — fill missing with originals
+function padSlides(result, originals) {
+  if (result.length >= originals.length) return result.slice(0, originals.length);
+  console.warn(`슬라이드 수 불일치: 원본 ${originals.length}개, 반환 ${result.length}개 — 부족분을 원본으로 보충`);
+  return originals.map((orig, i) => result[i] || orig);
+}
 
 export async function modifyAllSlidesHtml(allSlides, instruction) {
   if (!API_KEY) {
@@ -463,7 +474,7 @@ export async function modifyAllSlidesHtml(allSlides, instruction) {
           .map((img, i) => `- {{IMAGE_${i + 1}}}: ${img.label}`)
           .join('\n');
 
-        const userText = `전체 슬라이드 HTML (${allSlides.length}개):\n\n${allSlidesHtml}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n수정 지시 (모든 슬라이드에 적용):\n${instruction}`;
+        const userText = `전체 슬라이드 HTML (${allSlides.length}개, 반드시 ${allSlides.length}개 모두 반환):\n\n${allSlidesHtml}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n수정 지시 (모든 슬라이드에 적용):\n${instruction}`;
         let html = await callProModel(MODIFY_ALL_WITH_IMAGES_PROMPT, userText);
 
         processedImages.forEach((img, i) => {
@@ -476,14 +487,14 @@ export async function modifyAllSlidesHtml(allSlides, instruction) {
           .map((s) => s.trim())
           .filter((s) => s.length > 0 && s.includes('<div'));
 
-        if (slides.length > 0) return slides;
+        if (slides.length > 0) return padSlides(slides, allSlides);
         throw new Error('유효한 슬라이드 HTML이 반환되지 않았습니다.');
       }
     }
   }
 
   // Text-only modification for all slides
-  const userText = `전체 슬라이드 HTML (${allSlides.length}개):\n\n${allSlidesHtml}\n\n수정 지시 (모든 슬라이드에 적용):\n${instruction}`;
+  const userText = `전체 슬라이드 HTML (${allSlides.length}개, 반드시 ${allSlides.length}개 모두 반환):\n\n${allSlidesHtml}\n\n수정 지시 (모든 슬라이드에 적용):\n${instruction}`;
   const html = await callProModel(MODIFY_ALL_SLIDES_PROMPT, userText);
 
   const slides = html
@@ -495,7 +506,7 @@ export async function modifyAllSlidesHtml(allSlides, instruction) {
     throw new Error('유효한 슬라이드 HTML이 반환되지 않았습니다.');
   }
 
-  return slides;
+  return padSlides(slides, allSlides);
 }
 
 export async function modifySlideHtml(currentSlideHtml, instruction) {

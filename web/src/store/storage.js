@@ -162,7 +162,7 @@ function presDoc(uid, presId) {
 // Firestore does not support nested arrays, so we serialize each slide's
 // history array as a JSON string: slideHistories = ["[...]", "[...]", ...]
 function serializeHistories(histories) {
-  return (histories || []).map((h) => JSON.stringify(h));
+  return (histories || []).map((h) => JSON.stringify(h || []));
 }
 
 function deserializeHistories(raw) {

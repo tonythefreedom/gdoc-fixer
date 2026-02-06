@@ -18,6 +18,7 @@ const useSlideStore = create((set, get) => ({
   isGenerating: false,
   modifyingSlideIndices: [], // Array of indices currently being modified
   isModifyingAll: false,
+  presentationSnapshots: [], // [{instruction, slides, slideHistories, timestamp}]
   uid: null,
 
   loadPresentations: async (uid) => {
@@ -84,12 +85,13 @@ const useSlideStore = create((set, get) => ({
         slideHistories: pres.slideHistories || slides.map(() => []),
         currentSlideIndex: 0,
         modifyingSlideIndices: [],
+        presentationSnapshots: [],
       });
     }
   },
 
   clearActivePresentation: () => {
-    set({ activePresentationId: null, slides: [], slideHistories: [], currentSlideIndex: 0, modifyingSlideIndices: [] });
+    set({ activePresentationId: null, slides: [], slideHistories: [], currentSlideIndex: 0, modifyingSlideIndices: [], presentationSnapshots: [] });
   },
 
   setCurrentSlideIndex: (index) => {
@@ -123,8 +125,8 @@ const useSlideStore = create((set, get) => ({
         const newSlides = [...state.slides];
         newSlides[index] = modified;
 
-        const newHistories = [...state.slideHistories];
-        if (!newHistories[index]) newHistories[index] = [];
+        // Ensure histories array matches slides length (fill gaps with [])
+        const newHistories = newSlides.map((_, i) => state.slideHistories[i] || []);
         newHistories[index] = [
           ...newHistories[index],
           { instruction, html: modified, timestamp: Date.now() },
@@ -158,10 +160,17 @@ const useSlideStore = create((set, get) => ({
   },
 
   modifyAllSlides: async (instruction) => {
-    const { slides, uid, activePresentationId } = get();
+    const { slides, slideHistories, uid, activePresentationId } = get();
     if (!instruction.trim() || slides.length === 0) return;
 
-    set({ isModifyingAll: true });
+    // Save snapshot before modification
+    set((state) => ({
+      isModifyingAll: true,
+      presentationSnapshots: [
+        ...state.presentationSnapshots,
+        { instruction, slides: [...slides], slideHistories: slideHistories.map((h) => [...(h || [])]), timestamp: Date.now() },
+      ],
+    }));
     try {
       let newSlides = await modifyAllSlidesHtml(slides, instruction);
 
@@ -242,6 +251,32 @@ const useSlideStore = create((set, get) => ({
         presentations: state.presentations.map((p) =>
           p.id === activePresentationId
             ? { ...p, slideHistories: newHistories, updatedAt: Date.now() }
+            : p
+        ),
+      }));
+    }
+  },
+
+  revertToSnapshot: async (snapshotIndex) => {
+    const { presentationSnapshots, uid, activePresentationId } = get();
+    if (!presentationSnapshots[snapshotIndex]) return;
+
+    const snapshot = presentationSnapshots[snapshotIndex];
+    // Remove snapshots after this one (they're no longer valid)
+    const newSnapshots = presentationSnapshots.slice(0, snapshotIndex);
+
+    set({
+      slides: snapshot.slides,
+      slideHistories: snapshot.slideHistories,
+      presentationSnapshots: newSnapshots,
+    });
+
+    if (uid && activePresentationId) {
+      await updatePresentationSlides(uid, activePresentationId, snapshot.slides, snapshot.slideHistories);
+      set((state) => ({
+        presentations: state.presentations.map((p) =>
+          p.id === activePresentationId
+            ? { ...p, slides: snapshot.slides, slideHistories: snapshot.slideHistories, updatedAt: Date.now() }
             : p
         ),
       }));

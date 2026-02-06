@@ -18,11 +18,14 @@ export default function SlideEditor() {
   const modifyAllSlides = useSlideStore((s) => s.modifyAllSlides);
   const revertSlide = useSlideStore((s) => s.revertSlide);
   const deleteHistoryEntry = useSlideStore((s) => s.deleteHistoryEntry);
+  const presentationSnapshots = useSlideStore((s) => s.presentationSnapshots);
+  const revertToSnapshot = useSlideStore((s) => s.revertToSnapshot);
 
   const { exportSlidesToPdf, pdfLoading } = usePdfExport();
 
   const [modifyPrompt, setModifyPrompt] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [isAllMode, setIsAllMode] = useState(false);
   const containerRef = useRef(null);
   const textareaRef = useRef(null);
@@ -263,6 +266,40 @@ export default function SlideEditor() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Global snapshot history */}
+      {presentationSnapshots.length > 0 && (
+        <div className="bg-slate-800 border-t border-slate-700 shrink-0">
+          <button
+            onClick={() => setSnapshotOpen(!snapshotOpen)}
+            className="w-full flex items-center gap-2 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            전체 수정 이력 ({presentationSnapshots.length})
+            {snapshotOpen ? <ChevronDown className="w-3.5 h-3.5 ml-auto" /> : <ChevronUp className="w-3.5 h-3.5 ml-auto" />}
+          </button>
+          {snapshotOpen && (
+            <div className="max-h-32 overflow-y-auto px-4 pb-2 space-y-1.5">
+              {presentationSnapshots.map((snap, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 text-xs bg-slate-700/50 rounded-lg px-3 py-2"
+                >
+                  <span className="text-slate-500 shrink-0 pt-0.5">#{i + 1}</span>
+                  <span className="flex-1 text-slate-300 break-words">{snap.instruction}</span>
+                  <button
+                    onClick={() => revertToSnapshot(i)}
+                    className="shrink-0 flex items-center gap-1 text-slate-500 hover:text-amber-400 transition-colors"
+                    title="이 시점으로 전체 되돌리기"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
