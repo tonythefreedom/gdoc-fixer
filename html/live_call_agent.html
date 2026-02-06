@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>복지 콜센터 에이전트 시스템 아키텍쳐 및 흐름도 (VoIP 통합)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-button.active {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-gray-900 min-h-screen p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="mb-10 text-center">
+            <div class="inline-flex items-center justify-center p-3 bg-indigo-100 rounded-2xl mb-4 text-indigo-600">
+                <i data-lucide="phone-forwarded" class="w-10 h-10"></i>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900 mb-3">
+                복지 콜센터 통합 에이전트 시스템 아키텍쳐
+            </h1>
+            <p class="text-gray-500 text-lg max-w-3xl mx-auto">
+                VoIP(SIP) 및 WebRTC 기술을 융합하여 일반 전화와 앱 사용자 모두에게 AI 상담 서비스를 제공하는 통합 구조
+            </p>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="flex flex-wrap justify-center gap-3 mb-8">
+            <button onclick="switchTab('architecture')" id="btn-architecture" class="tab-button flex items-center gap-2 px-6 py-3 rounded-lg transition-all font-medium bg-white text-gray-600 hover:bg-gray-50 border border-gray-100">
+                <i data-lucide="layout" class="w-5 h-5"></i> 통합 시스템 구조
+            </button>
+            <button onclick="switchTab('sequence')" id="btn-sequence" class="tab-button flex items-center gap-2 px-6 py-3 rounded-lg transition-all font-medium bg-white text-gray-600 hover:bg-gray-50 border border-gray-100">
+                <i data-lucide="git-pull-request" class="w-5 h-5"></i> VoIP 호출 흐름
+            </button>
+            <button onclick="switchTab('network')" id="btn-network" class="tab-button active flex items-center gap-2 px-6 py-3 rounded-lg transition-all font-medium bg-white text-gray-600 hover:bg-gray-50 border border-gray-100">
+                <i data-lucide="shield-alert" class="w-5 h-5"></i> 인프라 및 포트
+            </button>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="bg-white p-6 md:p-10 rounded-3xl shadow-xl shadow-slate-200/50 mb-10 border border-slate-100 min-h-[600px]">
+            <!-- Info Box -->
+            <div id="info-box" class="mb-8 flex items-start gap-3 text-slate-700 bg-slate-50 p-4 rounded-xl text-sm border border-slate-200">
+                <i data-lucide="info" class="w-5 h-5 text-indigo-500 shrink-0 mt-0.5"></i>
+                <p id="info-text" class="font-medium">SIP 프로토콜(5060) 및 미디어 RTP 포트 등을 포함한 복합적인 방화벽 설정 가이드입니다.</p>
+            </div>
+
+            <!-- Tab: Architecture -->
+            <div id="architecture" class="tab-content animate-fade-in">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-stretch">
+                    <!-- Layer 1: Users -->
+                    <div class="flex flex-col gap-4">
+                        <div class="flex-1 bg-slate-50 border-2 border-slate-200 p-5 rounded-2xl flex flex-col items-center justify-center gap-4">
+                            <span class="text-xs font-bold bg-slate-200 px-2 py-1 rounded text-slate-600 uppercase">Layer 1: Users</span>
+                            <div class="w-full space-y-3">
+                                <div class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex items-center gap-3">
+                                    <i data-lucide="smartphone" class="text-blue-500 w-6 h-6"></i>
+                                    <div>
+                                        <div class="font-bold text-sm">App 사용자</div>
+                                        <div class="text-[10px] text-gray-400 italic">WebRTC 기반</div>
+                                    </div>
+                                </div>
+                                <div class="bg-white p-4 rounded-xl border border-green-200 shadow-sm flex items-center gap-3">
+                                    <i data-lucide="phone" class="text-green-500 w-6 h-6"></i>
+                                    <div>
+                                        <div class="font-bold text-sm">일반 전화 사용자</div>
+                                        <div class="text-[10px] text-gray-400 italic">PSTN/VoIP 유선망</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layer 2: Gateway -->
+                    <div class="flex flex-col gap-4">
+                        <div class="flex-1 bg-indigo-50 border-2 border-indigo-100 p-5 rounded-2xl flex flex-col items-center justify-center gap-4">
+                            <span class="text-xs font-bold bg-indigo-200 px-2 py-1 rounded text-indigo-600 uppercase">Layer 2: Gateway</span>
+                            <div class="w-full space-y-3">
+                                <div class="bg-white p-4 rounded-xl border border-indigo-200 shadow-sm">
+                                    <div class="font-bold text-sm mb-1">SIP Trunking</div>
+                                    <div class="text-xs text-gray-500">전화 사업자 연동</div>
+                                </div>
+                                <div class="bg-white p-4 rounded-xl border border-indigo-200 shadow-sm">
+                                    <div class="font-bold text-sm mb-1">Auth & API Gateway</div>
+                                    <div class="text-xs text-gray-500">인증 및 보안 관리</div>
+                                </div>
+                                <div class="bg-white p-4 rounded-xl border border-indigo-300 shadow-sm bg-indigo-600 text-white">
+                                    <div class="font-bold text-sm mb-1 text-center">LiveKit SIP Ingress</div>
+                                    <div class="text-[10px] opacity-80 text-center uppercase">SIP ↔ WebRTC Bridge</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layer 3: Media Server -->
+                    <div class="flex flex-col gap-4">
+                        <div class="flex-1 bg-purple-50 border-2 border-purple-100 p-5 rounded-2xl flex flex-col items-center justify-center gap-4">
+                            <span class="text-xs font-bold bg-purple-200 px-2 py-1 rounded text-purple-600 uppercase">Layer 3: Core</span>
+                            <div class="w-full space-y-3">
+                                <div class="bg-white p-4 rounded-xl border border-purple-200 shadow-sm text-center">
+                                    <div class="font-bold text-sm mb-1">LiveKit Media Server</div>
+                                    <div class="text-xs text-gray-500 italic">Selective Forwarding Unit</div>
+                                </div>
+                                <div class="bg-white p-4 rounded-xl border border-purple-200 shadow-sm text-center">
+                                    <div class="font-bold text-sm mb-1">Voice Agent (Python)</div>
+                                    <div class="text-xs text-gray-500">대화 제어 및 오디오 트랙 관리</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layer 4: AI Services (Banya LLM Lab Wrapper) -->
+                    <div class="flex flex-col gap-4">
+                        <div class="flex-1 bg-orange-600 border-2 border-orange-400 p-5 rounded-2xl flex flex-col items-center justify-center gap-4 shadow-lg">
+                            <span class="text-xs font-bold bg-white px-2 py-1 rounded text-orange-600 uppercase tracking-widest mb-1 shadow-sm">Banya LLM Lab</span>
+                            <div class="w-full space-y-2">
+                                <div class="bg-orange-50 p-3 rounded-xl border border-orange-200 shadow-inner flex items-center gap-3">
+                                    <i data-lucide="mic" class="text-orange-600 w-5 h-5 shrink-0"></i>
+                                    <div class="font-bold text-xs">Real-time STT</div>
+                                </div>
+                                <div class="bg-white p-4 rounded-xl border-2 border-orange-300 shadow-md flex items-center gap-3 relative overflow-hidden group">
+                                    <div class="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent"></div>
+                                    <i data-lucide="brain" class="text-orange-600 w-6 h-6 shrink-0 z-10"></i>
+                                    <div class="z-10">
+                                        <div class="font-extrabold text-sm text-gray-900">Solar-Banya-100b</div>
+                                        <div class="text-[9px] text-orange-600 font-bold uppercase tracking-tighter">Core LLM Engine</div>
+                                    </div>
+                                </div>
+                                <div class="bg-orange-50 p-3 rounded-xl border border-orange-200 shadow-inner flex items-center gap-3">
+                                    <i data-lucide="volume-2" class="text-orange-600 w-5 h-5 shrink-0"></i>
+                                    <div class="font-bold text-xs">Streaming TTS</div>
+                                </div>
+                            </div>
+                            <div class="mt-1 text-[9px] text-white/80 font-medium text-center italic">Integrated AI Platform</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Connector Visualization -->
+                <div class="hidden lg:flex justify-around items-center mt-6 px-10">
+                    <div class="flex flex-col items-center gap-1">
+                        <i data-lucide="chevrons-right" class="text-slate-300"></i>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Signaling</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <i data-lucide="chevrons-right" class="text-indigo-300"></i>
+                        <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">Media Bridge</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <i data-lucide="chevrons-right" class="text-purple-300"></i>
+                        <span class="text-[10px] font-bold text-purple-400 uppercase tracking-tighter">AI Inference</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Sequence -->
+            <div id="sequence" class="tab-content animate-fade-in">
+                <div class="max-w-3xl mx-auto space-y-6">
+                    <div class="relative pl-10 border-l-2 border-dashed border-slate-200 pb-2">
+                        <div class="absolute -left-[13px] top-0 bg-white p-1">
+                            <div class="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold">1</div>
+                        </div>
+                        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                            <h5 class="font-bold mb-1 flex items-center gap-2">
+                                <i data-lucide="phone-call" class="w-4 h-4 text-slate-600"></i> 전화 인입 (Inbound Call)
+                            </h5>
+                            <p class="text-sm text-gray-600">사용자가 전화망(PSTN)을 통해 전화를 걸면 SIP Trunk를 경유하여 게이트웨이로 전달됩니다.</p>
+                        </div>
+                    </div>
+                    <div class="relative pl-10 border-l-2 border-dashed border-slate-200 pb-2">
+                        <div class="absolute -left-[13px] top-0 bg-white p-1">
+                            <div class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">2</div>
+                        </div>
+                        <div class="bg-indigo-50 p-5 rounded-2xl border border-indigo-100">
+                            <h5 class="font-bold mb-1 flex items-center gap-2 text-indigo-800">
+                                <i data-lucide="shuffle" class="w-4 h-4"></i> SIP Ingress 브릿징
+                            </h5>
+                            <p class="text-sm text-indigo-700">SIP 신호를 WebRTC로 변환하고, 해당 세션을 관리할 전용 룸에 AI 에이전트를 연결합니다.</p>
+                        </div>
+                    </div>
+                    <div class="relative pl-10 border-l-2 border-dashed border-slate-200 pb-2">
+                        <div class="absolute -left-[13px] top-0 bg-white p-1">
+                            <div class="w-6 h-6 rounded-full bg-orange-600 text-white flex items-center justify-center text-xs font-bold shadow-md shadow-orange-200">3</div>
+                        </div>
+                        <div class="bg-orange-50 p-5 rounded-2xl border-2 border-orange-200">
+                            <h5 class="font-bold mb-1 flex items-center gap-2 text-orange-800">
+                                <i data-lucide="brain" class="w-4 h-4"></i> Banya LLM Lab 분석
+                            </h5>
+                            <p class="text-sm text-orange-700">Solar-Banya-100b 기반 에이전트가 실시간 STT를 통해 사용자의 상담 의도를 파악하고 지식 기반 답변을 생성합니다.</p>
+                        </div>
+                    </div>
+                    <div class="relative pl-10 pb-2">
+                        <div class="absolute -left-[13px] top-0 bg-white p-1">
+                            <div class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">4</div>
+                        </div>
+                        <div class="bg-blue-50 p-5 rounded-2xl border border-blue-100 shadow-sm">
+                            <h5 class="font-bold mb-1 flex items-center gap-2 text-blue-800">
+                                <i data-lucide="message-circle" class="w-4 h-4"></i> 실시간 AI 응답 (Full Duplex)
+                            </h5>
+                            <p class="text-sm text-blue-700">생성된 답변을 스트리밍 TTS로 즉시 오디오 트랙에 게시하여 사용자에게 전달합니다.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Network -->
+            <div id="network" class="tab-content active animate-fade-in">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-900 text-slate-300 p-6 rounded-3xl overflow-hidden">
+                        <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="terminal" class="w-5 h-5"></i> 인프라 보안 및 포트 구성
+                        </h4>
+                        <div class="space-y-4 font-mono text-xs">
+                            <div class="flex justify-between border-b border-slate-800 pb-2">
+                                <span class="text-blue-400">SIP Signaling</span>
+                                <span class="text-white">TCP/UDP 5060, 5061</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-800 pb-2">
+                                <span class="text-green-400">RTP Media</span>
+                                <span class="text-white">UDP 10000 - 20000</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-800 pb-2">
+                                <span class="text-purple-400">LiveKit API</span>
+                                <span class="text-white">TCP 7880</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-800 pb-2">
+                                <span class="text-yellow-400">WebRTC TCP</span>
+                                <span class="text-white">TCP 7881</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-800 pb-2">
+                                <span class="text-orange-400">Banya AI SSE</span>
+                                <span class="text-white">TCP 8083</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
+                            <h6 class="font-bold text-sm mb-1 text-orange-600 underline decoration-orange-300">Banya LLM Lab 특징</h6>
+                            <p class="text-xs text-gray-500 font-medium">STT, Solar-Banya-100b, TTS가 하나의 파이프라인으로 통합되어 최적화된 추론 속도와 음성 합성 품질을 보장합니다.</p>
+                        </div>
+                        <div class="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
+                            <h6 class="font-bold text-sm mb-1 text-indigo-600">통합 가로채기 제어</h6>
+                            <p class="text-xs text-gray-500">전화와 앱 모두에서 사용자의 끼어들기(Barge-in)를 실시간으로 감지하고 오디오 출력을 중단합니다.</p>
+                        </div>
+                        <div class="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
+                            <h6 class="font-bold text-sm mb-1 text-green-600">고가용성 SIP 설계</h6>
+                            <p class="text-xs text-gray-500">다수의 SIP Trunk를 이중화하여 장애 발생 시에도 중단 없는 상담 서비스를 보장합니다.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Summary -->
+        <div class="flex flex-wrap gap-4 justify-center">
+            <div class="px-6 py-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+                <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 font-bold">SIP</div>
+                <div>
+                    <div class="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Gateway</div>
+                    <div class="font-bold text-sm">PSTN & VoIP Trunk</div>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+                <div class="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center text-orange-600 font-bold">AI</div>
+                <div>
+                    <div class="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Platform</div>
+                    <div class="font-bold text-sm">Banya LLM Lab</div>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+                <div class="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center text-purple-500 font-bold">OSS</div>
+                <div>
+                    <div class="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Core Stack</div>
+                    <div class="font-bold text-sm">LiveKit Infrastructure</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.getElementById('btn-' + tabId).classList.add('active');
+
+            const infoText = document.getElementById('info-text');
+            if (tabId === 'architecture') infoText.innerText = 'PSTN(유선전화)과 WebRTC(앱)를 LiveKit SIP Ingress를 통해 통합한 현대적인 콜센터 구성도입니다.';
+            else if (tabId === 'sequence') infoText.innerText = '일반 전화기가 게이트웨이를 거쳐 AI 에이전트와 실시간 대화를 나누는 통신 타임라인입니다.';
+            else if (tabId === 'network') infoText.innerText = 'SIP 프로토콜(5060) 및 미디어 RTP 포트 등을 포함한 복합적인 방화벽 설정 가이드입니다.';
+        }
+    </script>
+</body>
+</html>

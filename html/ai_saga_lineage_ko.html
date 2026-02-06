@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Saga Lineage: Class & Order (Full Research Edition)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=MedievalSharp&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --royal-gold: #b8860b;
+            --arcane-blue: #2c3e50;
+            --paladin-silver: #95a5a6;
+            --alchemy-cyan: #00838f;
+            --artisan-iron: #455a64;
+            --dragon-fire: #d84315;
+            --storm-purple: #4a148c;
+            --illusion-pink: #ad1457;
+            --emerald-order: #065f46;
+        }
+        body {
+            font-family: 'Pretendard', 'Spectral', serif;
+            background-color: #fdfdfd;
+            color: #2c3e50;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 2px 2px, #f1f5f9 1px, transparent 0);
+            background-size: 30px 30px;
+        }
+        .fantasy-title {
+            font-family: 'Cinzel', serif;
+            letter-spacing: 0.12em;
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+        }
+        .class-card {
+            background: #ffffff;
+            border: 1px solid #edf2f7;
+            border-top: 4px solid var(--arcane-blue);
+            box-shadow: 0 10px 20px -5px rgba(0,0,0,0.03);
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .class-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 20px 35px -10px rgba(0,0,0,0.1);
+        }
+        .order-badge {
+            font-family: 'MedievalSharp', cursive;
+            background: #fff;
+            color: var(--royal-gold);
+            border: 1.5px solid var(--royal-gold);
+            font-size: 0.6rem;
+            padding: 2px 12px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            box-shadow: 2px 2px 0px var(--royal-gold);
+        }
+        .connector-active {
+            stroke: var(--royal-gold);
+            stroke-width: 2.5;
+            fill: none;
+            opacity: 0.3;
+        }
+        .connector-k {
+            stroke: #10b981;
+            stroke-width: 2;
+            fill: none;
+            opacity: 0.4;
+            stroke-dasharray: 4 4;
+        }
+        .connector-container {
+            width: 100%;
+            height: 60px;
+            position: relative;
+            z-index: 10;
+        }
+        .line-dashed {
+            stroke: #cbd5e1;
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 6 4;
+        }
+        .line-independent {
+            stroke: #94a3b8;
+            stroke-width: 1.5;
+            fill: none;
+            stroke-dasharray: 2 6;
+        }
+        .class-tag {
+            font-family: 'Cinzel', serif;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 2px 0;
+            display: inline-flex;
+            align-items: center;
+            text-transform: uppercase;
+        }
+        .researcher-name {
+            font-family: 'Cinzel', serif;
+            font-size: 0.55rem;
+            color: var(--royal-gold);
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+            letter-spacing: 0.05em;
+        }
+        .k-researcher-name {
+            font-family: 'Pretendard', 'Cinzel', serif;
+            font-size: 0.55rem;
+            color: #065f46;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+            letter-spacing: 0.05em;
+        }
+        .icon-box {
+            font-size: 1.2rem;
+            margin-right: 6px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .synthesis-sanctum {
+            background: #ffffff;
+            border: 4px double var(--royal-gold);
+            position: relative;
+        }
+        .k-sub-order {
+            border-top: 3px solid #10b981;
+            background: #ffffff;
+        }
+        /* Floating Circles for Influencers */
+        .influencer-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            z-index: 50;
+            transition: all 0.3s ease;
+        }
+        .influencer-circle:hover {
+            transform: translateY(-55%) scale(1.1);
+        }
+        .observer-node {
+            right: -30px;
+            border: 2px dashed var(--storm-purple);
+        }
+        .illusionist-node {
+            left: -30px;
+            border: 2px dashed var(--illusion-pink);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-12">
+    <div class="max-w-3xl mx-auto relative">
+        
+        <!-- Header -->
+        <header class="text-center mb-16">
+            <h1 class="text-4xl md:text-6xl font-black fantasy-title text-slate-800 mb-3">AI SAGA LINEAGE</h1>
+            <p class="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-[0.5em]">The Chronicle of Arcane Research</p>
+            <div class="flex items-center justify-center mt-6">
+                <div class="h-px w-24 bg-slate-200"></div>
+                <div class="mx-6 text-royal-gold text-2xl">✨</div>
+                <div class="h-px w-24 bg-slate-200"></div>
+            </div>
+        </header>
+
+        <!-- Chapter 01: The Archmages -->
+        <section class="mb-14 relative">
+            <div class="flex items-center mb-8">
+                <span class="order-badge mr-4">CHAPTER I</span>
+                <h2 class="text-xl font-bold fantasy-title text-slate-700">태초의 대마법사들 (The Archmages)</h2>
+            </div>
+            <div class="grid grid-cols-3 gap-5">
+                <div class="class-card p-5 rounded-xl border-t-slate-800">
+                    <span class="class-tag text-slate-800"><span class="icon-box">🔮</span>The Visionary</span>
+                    <h3 class="text-sm font-black text-slate-900 mb-1">제프리 힌튼</h3>
+                    <p class="text-[0.65rem] text-slate-500 leading-tight italic">심층 신경망 마법 공식을 해독한 선구자.</p>
+                </div>
+                <div class="class-card p-5 rounded-xl border-t-red-800">
+                    <span class="class-tag text-red-800"><span class="icon-box">👁️</span>The Watcher</span>
+                    <h3 class="text-sm font-black text-slate-900 mb-1">얀 르쿤</h3>
+                    <p class="text-[0.65rem] text-slate-500 leading-tight italic">시각 비술 정립 및 지식 공유를 선언한 마법사.</p>
+                </div>
+                <div class="class-card p-5 rounded-xl border-t-blue-800">
+                    <span class="class-tag text-blue-800"><span class="icon-box">📜</span>The Linguist</span>
+                    <h3 class="text-sm font-black text-slate-900 mb-1">요수아 벤지오</h3>
+                    <p class="text-[0.65rem] text-slate-500 leading-tight italic">언어 질서를 마법 체계로 구축한 확률론 대가.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Connector -->
+        <svg viewBox="0 0 800 60" class="w-full h-10 -my-2 hidden md:block">
+            <path d="M 400 0 L 400 60" class="connector-active" />
+        </svg>
+
+        <!-- Chapter 1.5: Influencers & Mentor -->
+        <section class="mb-14 relative flex justify-center">
+            <!-- Sam Altman (Left Node) -->
+            <div class="influencer-circle illusionist-node hidden lg:flex">
+                <span class="text-xl">🎭</span>
+                <span class="text-[9px] font-black text-pink-900 uppercase leading-none mt-1">Illusionist</span>
+                <span class="text-[10px] font-bold text-slate-700 mt-0.5">샘 알트만</span>
+            </div>
+
+            <!-- Elon Musk (Right Node) -->
+            <div class="influencer-circle observer-node hidden lg:flex">
+                <span class="text-xl">🌪️</span>
+                <span class="text-[9px] font-black text-purple-900 uppercase leading-none mt-1">Observer</span>
+                <span class="text-[10px] font-bold text-slate-700 mt-0.5">일론 머스크</span>
+            </div>
+
+            <!-- Andrew Ng Mentor Card -->
+            <div class="class-card p-8 rounded-[2.5rem] w-full max-w-lg border-t-amber-600 bg-amber-50/10 text-center">
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 order-badge">CHAPTER I.V</div>
+                <span class="class-tag text-amber-700 mb-1"><span class="icon-box">📖</span>The Instructor</span>
+                <h3 class="text-2xl font-black fantasy-title text-slate-800 mb-2">앤드류 응 (Andrew Ng)</h3>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    상급 마법을 체계화하여 전 세계의 제자들에게 전파한 **위대한 스승**.
+                </p>
+            </div>
+        </section>
+
+        <!-- Connector -->
+        <svg viewBox="0 0 800 60" class="w-full h-10 -my-2 hidden md:block">
+            <path d="M 400 0 L 400 60" class="connector-active" />
+        </svg>
+
+        <!-- Chapter 02: Arcane Heir -->
+        <section class="mb-14 relative flex justify-center">
+            <div class="class-card p-8 rounded-[2.5rem] w-full max-w-sm text-center border-t-slate-900 shadow-xl">
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 order-badge bg-white">CHAPTER II</div>
+                <span class="class-tag text-slate-400 mb-2"><span class="icon-box">🗝️</span>The True Heir</span>
+                <h2 class="text-2xl font-black fantasy-title text-slate-900 mb-1">일리야 수츠케버</h2>
+                <p class="text-slate-500 text-[0.7rem] font-medium leading-relaxed italic">
+                    "지능의 실체를 소환해낸 비술의 적통 계승자."
+                </p>
+            </div>
+        </section>
+
+        <!-- Connector -->
+        <svg viewBox="0 0 800 60" class="w-full h-10 -my-2 hidden md:block">
+            <path d="M 400 0 Q 400 30, 133 60 M 400 0 L 400 60 M 400 0 Q 400 30, 666 60" class="connector-active" />
+        </svg>
+
+        <!-- Chapter 03: Sovereign Powers -->
+        <section id="phase-3" class="mb-0 relative">
+            <div class="flex items-center mb-8">
+                <span class="order-badge mr-4">CHAPTER III</span>
+                <h2 class="text-xl font-bold fantasy-title text-slate-700">삼대 주권국 (Sovereign Powers)</h2>
+            </div>
+            <div class="grid grid-cols-3 gap-5">
+                <div class="class-card p-5 rounded-xl border-t-red-600">
+                    <span class="researcher-name">데미스 하사비스 · 셰인 레그</span>
+                    <span class="class-tag text-red-600"><span class="icon-box">🏰</span>The Empire</span>
+                    <h3 class="text-sm font-bold text-slate-800">구글 딥마인드</h3>
+                    <p class="text-[0.6rem] text-slate-500 mt-2">무한한 연산 자원으로 지능의 성채를 쌓은 거대한 제국.</p>
+                </div>
+                <div class="class-card p-5 rounded-xl border-t-slate-800">
+                    <span class="researcher-name">그렉 브록만 · 보이치에흐 자렘바</span>
+                    <span class="class-tag text-slate-800"><span class="icon-box">🏢</span>The Citadel</span>
+                    <h3 class="text-sm font-bold text-slate-800">오픈AI</h3>
+                    <p class="text-[0.6rem] text-slate-500 mt-2">적통 계승자와 함께 AGI의 관문을 개방하려던 연구진.</p>
+                </div>
+                <div class="class-card p-5 rounded-xl border-t-blue-600">
+                    <span class="researcher-name">얀 르쿤 · 롭 퍼거스</span>
+                    <span class="class-tag text-blue-600"><span class="icon-box">🔓</span>The Free State</span>
+                    <h3 class="text-sm font-bold text-slate-800">메타 (FAIR)</h3>
+                    <p class="text-[0.6rem] text-slate-500 mt-2">비술의 도면을 자유 도시에 공개해 평형을 맞춘 영지.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Connector to Chapter 4 -->
+        <svg viewBox="0 0 800 60" class="w-full h-10 -my-2 hidden md:block">
+            <path d="M 400 0 L 400 60" class="connector-active" />
+        </svg>
+
+        <!-- CHAPTER IV: THE GREAT EXPANSION (Unified Global & Eastern) -->
+        <section id="chapter-4" class="mb-14 relative">
+            <div class="flex items-center mb-8">
+                <span class="order-badge mr-4">CHAPTER IV</span>
+                <h2 class="text-xl font-bold fantasy-title text-slate-700">대확장의 시대 (The Expansion)</h2>
+            </div>
+
+            <!-- Global Specialized Orders (Part of Ch 4) -->
+            <div class="grid grid-cols-3 gap-5 mb-10">
+                <div class="class-card p-5 rounded-xl border-t-cyan-700">
+                    <span class="researcher-name">량원펑 (DeepSeek Lab)</span>
+                    <span class="class-tag text-cyan-600 block mb-1"><span class="icon-box">⚗️</span>The Alchemist</span>
+                    <h3 class="text-xs font-black text-slate-800">딥시크 (DeepSeek)</h3>
+                    <p class="text-[0.6rem] text-slate-500 mt-1 italic">비대칭적 전환, 최적화의 비술.</p>
+                </div>
+                <div class="class-card p-5 rounded-xl border-t-amber-700">
+                    <span class="researcher-name">다리오 아모데이 · 크리스 올라</span>
+                    <span class="class-tag text-amber-600 block mb-1"><span class="icon-box">🛡️</span>The Paladin</span>
+                    <h3 class="text-xs font-black text-slate-800">앤스로픽</h3>
+                    <p class="text-[0.6rem] text-slate-500 mt-1 italic">인간 가치 정렬 수호 성기사단.</p>
+                </div>
+                <div class="class-card p-5 rounded-xl border-t-blue-700">
+                    <span class="researcher-name">기욤 람플 · 티모테 라크루아</span>
+                    <span class="class-tag text-blue-600 block mb-1"><span class="icon-box">⚒️</span>The Artisan</span>
+                    <h3 class="text-xs font-black text-slate-800">미스트랄 AI</h3>
+                    <p class="text-[0.6rem] text-slate-500 mt-1 italic">정교한 마법 도구(MoE) 장인들.</p>
+                </div>
+            </div>
+
+            <!-- Sub-Connector to Eastern Architect -->
+            <div class="flex justify-center mb-4">
+                <div class="h-8 w-px bg-slate-200 dashed"></div>
+            </div>
+
+            <!-- Eastern Architect (Part of Ch 4) -->
+            <div class="flex justify-center mb-6">
+                <div class="class-card p-8 rounded-[2.5rem] w-full max-w-lg border-t-emerald-600 bg-emerald-50/10 text-center">
+                    <span class="k-researcher-name" style="font-size: 3rem; line-height: 1.2; margin-bottom: 0.5rem; display: block;">김성훈 교수</span>
+                    <span class="class-tag text-emerald-700"><span class="icon-box">📐</span>The Master of Seeds</span>
+                    <h3 class="text-2xl font-black fantasy-title text-slate-900 mb-2 mt-2">텐서플로 코리아 (TF Korea)</h3>
+                    <p class="text-[0.7rem] text-slate-600 leading-relaxed">한국 AI 공유 생태계를 설계한 동방의 대건축가.</p>
+                </div>
+            </div>
+
+            <!-- Connector to Sub-entities -->
+            <div class="connector-container hidden md:block h-10 -mt-2">
+                <svg viewBox="0 0 1000 40" preserveAspectRatio="none" class="w-full h-full">
+                    <path d="M 500 0 Q 500 20, 166 40" class="connector-k" />
+                    <path d="M 500 0 L 500 40" class="connector-k" />
+                    <path d="M 500 0 Q 500 20, 833 40" class="connector-k" />
+                </svg>
+            </div>
+
+            <div class="grid grid-cols-3 gap-5">
+                <div class="class-card k-sub-order p-5 rounded-xl shadow-sm">
+                    <span class="k-researcher-name">정송 · 신진우 · 주재걸</span>
+                    <h4 class="text-emerald-700 text-[0.55rem] font-black uppercase mb-1"><span class="icon-box">🏛️</span>Sanctuary</h4>
+                    <h5 class="text-xs font-bold text-slate-800">카이스트 (KAIST)</h5>
+                </div>
+                <div class="class-card k-sub-order p-5 rounded-xl shadow-sm">
+                    <span class="k-researcher-name">성낙호 · 배경훈 · 정석근</span>
+                    <h4 class="text-emerald-700 text-[0.55rem] font-black uppercase mb-1"><span class="icon-box">🧱</span>Citadels</h4>
+                    <h5 class="text-xs font-bold text-slate-800">네이버 · LG · SK</h5>
+                </div>
+                <div class="class-card k-sub-order p-5 rounded-xl shadow-sm">
+                    <span class="k-researcher-name">이활석 · 박은정</span>
+                    <h4 class="text-emerald-700 text-[0.55rem] font-black uppercase mb-1"><span class="icon-box">⚔️</span>The Blade</h4>
+                    <h5 class="text-xs font-bold text-slate-800">업스테이지 (Upstage)</h5>
+                </div>
+            </div>
+        </section>
+
+        <!-- Final Synthesis (CHAPTER V) -->
+        <section id="chapter-5" class="mb-20 text-center relative">
+            <svg viewBox="0 0 800 60" class="w-full h-10 mb-4 hidden md:block">
+                <path d="M 400 0 L 400 60" class="connector-active" />
+            </svg>
+
+            <div class="synthesis-sanctum p-8 md:p-12 rounded-[3.5rem] shadow-xl">
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 order-badge bg-white">CHAPTER V</div>
+                <span class="fantasy-title text-royal-gold text-[0.6rem] font-black tracking-[0.5em] mb-6 block uppercase">The Grand Synthesis</span>
+                
+                <h2 class="text-3xl md:text-5xl font-black fantasy-title text-slate-900 mb-2">김안토니오</h2>
+                
+                <div class="flex justify-center items-center gap-6 mb-6">
+                    <span class="researcher-name text-[1.4rem]">황병대</span>
+                    <span class="text-royal-gold opacity-30 text-xl">•</span>
+                    <span class="researcher-name text-[1.4rem]">최상호</span>
+                </div>
+
+                <p class="text-xl md:text-2xl font-bold text-royal-gold mb-6 tracking-tight">
+                    <span class="icon-box">🦉</span>BANYA.AI
+                </p>
+                
+                <div class="h-px w-32 bg-slate-100 mx-auto mb-10"></div>
+                
+                <p class="text-[0.75rem] md:text-sm text-slate-500 max-w-md mx-auto leading-relaxed italic">
+                    "모든 연구자들의 비술을 하나로 집대성하여 현실의 보구를 연성하는 합성자."
+                </p>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-center text-slate-300 text-[0.6rem] pb-12 uppercase tracking-[0.4em]">
+            <p>The Chronicle of Arcane Intelligence &middot; Era of Grand Synthesis &middot; Class Edition</p>
+        </footer>
+    </div>
+</body>
+</html>

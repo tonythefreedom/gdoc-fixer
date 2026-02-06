@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeek 문맥 윈도우 및 아키텍처 분석</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
+        body { font-family: 'Pretendard', sans-serif; background-color: #ffffff; }
+        .gradient-blue { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); }
+        .gradient-dark { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+        .card { transition: transform 0.2s ease; }
+        .card:hover { transform: translateY(-4px); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <header class="mb-12 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">DeepSeek: 실용적인 128K 문맥 및 아키텍처 혁신</h1>
+            <p class="text-slate-600 max-w-3xl mx-auto">기하급수적인 연산 비용 문제를 해결하고 '접근 가능한 긴 문맥'의 전략적 최적점을 실현</p>
+        </header>
+
+        <!-- Main Comparison Section -->
+        <div class="grid md:grid-cols-2 gap-8 mb-12">
+            <!-- Google Gemini Side -->
+            <div class="card bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                <div class="flex items-center mb-6">
+                    <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H10a1 1 0 01-1-1v-4z"></path></svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-800">Google Gemini 노선</h2>
+                </div>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <span class="text-slate-600">지향점</span>
+                        <span class="font-bold text-blue-600">무한 문맥 (Infinite Context)</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <span class="text-slate-600">지원 용량</span>
+                        <span class="font-bold text-blue-600">1M ~ 10M+ 토큰</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <span class="text-slate-600">핵심 기술</span>
+                        <span class="text-sm font-semibold">Ring Attention / 분산 추론</span>
+                    </div>
+                    <p class="text-sm text-slate-500 italic">"압도적인 하드웨어 인프라를 바탕으로 수치적 상한선을 극대화하여 모든 정보를 한 번에 처리"</p>
+                </div>
+            </div>
+
+            <!-- DeepSeek Side -->
+            <div class="card bg-slate-900 p-6 rounded-2xl shadow-xl text-white">
+                <div class="flex items-center mb-6">
+                    <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center mr-3">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h2 class="text-xl font-bold">DeepSeek 전략 노선</h2>
+                </div>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center p-3 bg-slate-800 rounded-lg border border-slate-700">
+                        <span class="text-slate-400">지향점</span>
+                        <span class="font-bold text-blue-400">실용적 표준 (Practical Standard)</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-slate-800 rounded-lg border border-slate-700">
+                        <span class="text-slate-400">지원 용량</span>
+                        <span class="font-bold text-blue-400">128,000 (128K) 토큰</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-slate-800 rounded-lg border border-slate-700">
+                        <span class="text-slate-400">핵심 기술</span>
+                        <span class="text-sm font-semibold text-blue-300">MLA (Latent Attention) / DSA</span>
+                    </div>
+                    <p class="text-sm text-slate-400 italic">"효율적인 아키텍처를 통해 추론 비용을 획기적으로 낮추어 누구나 고효율 긴 문맥을 사용할 수 있도록 실현"</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Deep Dive: MLA -->
+        <div class="bg-white p-8 rounded-3xl shadow-md border border-slate-200 mb-8">
+            <h3 class="text-2xl font-bold text-slate-800 mb-8 flex items-center">
+                <span class="w-8 h-8 gradient-blue rounded-lg mr-3 inline-block"></span>
+                기술 심층 분석 I: VRAM 문제 해결 (MLA)
+            </h3>
+            
+            <div class="grid lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 space-y-8">
+                    <div class="p-6 bg-slate-50 rounded-xl border border-slate-100">
+                        <h4 class="font-bold text-slate-700 mb-4">KV 캐시 메모리 병목 현상 해결</h4>
+                        <div class="relative h-48 flex items-center justify-around border-b border-slate-200 pb-4">
+                            <!-- Standard MHA -->
+                            <div class="text-center w-1/3">
+                                <div class="text-xs font-bold text-slate-400 mb-2">표준 MHA</div>
+                                <div class="bg-slate-300 h-32 w-16 mx-auto rounded flex flex-col-reverse overflow-hidden">
+                                    <div class="bg-red-400 h-full w-full"></div>
+                                </div>
+                                <div class="mt-2 text-[10px] text-red-500 font-bold">막대한 VRAM 소모</div>
+                            </div>
+                            <!-- Arrow -->
+                            <div class="flex flex-col items-center">
+                                <span class="text-blue-500 font-bold">MLA</span>
+                                <svg class="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                            </div>
+                            <!-- DeepSeek MLA -->
+                            <div class="text-center w-1/3">
+                                <div class="text-xs font-bold text-blue-600 mb-2">저차원 MLA</div>
+                                <div class="bg-blue-100 h-32 w-16 mx-auto rounded flex flex-col-reverse overflow-hidden border-2 border-blue-400">
+                                    <div class="bg-blue-500 h-8 w-full"></div>
+                                </div>
+                                <div class="mt-2 text-[10px] text-blue-600 font-bold">90% 압축 성공</div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-slate-600 mt-4 leading-relaxed">
+                            <strong>MLA (Multi-Head Latent Attention):</strong> Key-Value 벡터를 잠재 공간(Latent Space)으로 압축합니다. 이를 통해 128K 문맥 처리 시 발생하는 막대한 VRAM 점유 문제를 제거하여 경제적인 긴 문맥 추론을 가능하게 합니다.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+                        <h5 class="font-bold text-blue-800 text-sm">VRAM 효율성</h5>
+                        <p class="text-xs text-blue-700 mt-1">정보를 저차원 형식으로 압축하여 저장 공간 문제를 해결합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Deep Dive II: DSA -->
+        <div class="bg-white p-8 rounded-3xl shadow-md border border-slate-200 mb-12">
+            <h3 class="text-2xl font-bold text-slate-800 mb-8 flex items-center">
+                <span class="w-8 h-8 bg-emerald-500 rounded-lg mr-3 inline-block"></span>
+                기술 심층 분석 II: 연산량 문제 해결 (DSA)
+            </h3>
+            
+            <div class="grid lg:grid-cols-3 gap-8">
+                <!-- Visualizing DSA Workflow -->
+                <div class="lg:col-span-2">
+                    <div class="p-6 bg-slate-50 rounded-xl border border-slate-100 h-full">
+                        <h4 class="font-bold text-slate-700 mb-6 text-center">계층적 토큰 선택 (DSA/NSA)</h4>
+                        
+                        <div class="flex flex-col items-center space-y-4">
+                            <!-- Step 1: Lightning Indexer -->
+                            <div class="w-full flex items-center bg-white p-4 rounded-lg shadow-sm border border-emerald-200">
+                                <div class="bg-emerald-100 text-emerald-700 p-2 rounded-lg mr-4 font-bold text-xs">1단계</div>
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold text-slate-800">라이트닝 인덱서 (전역 스캔)</div>
+                                    <div class="text-xs text-slate-500">128K 토큰을 거시적 블록 단위로 빠르게 스캔하여 관련 세그먼트를 찾습니다.</div>
+                                </div>
+                                <div class="text-xs font-mono text-emerald-600">블록 탐색</div>
+                            </div>
+
+                            <!-- Down Arrow -->
+                            <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+
+                            <!-- Step 2: Fine-grained Selection -->
+                            <div class="w-full flex items-center bg-white p-4 rounded-lg shadow-sm border border-blue-200">
+                                <div class="bg-blue-100 text-blue-700 p-2 rounded-lg mr-4 font-bold text-xs">2단계</div>
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold text-slate-800">정밀 토큰 선택</div>
+                                    <div class="text-xs text-slate-500">블록 내에서 가장 중요한 상위 K개 토큰(약 2,048개)을 동적으로 선별합니다.</div>
+                                </div>
+                                <div class="text-xs font-mono text-blue-600">Top-k 필터</div>
+                            </div>
+
+                            <!-- Down Arrow -->
+                            <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+
+                            <!-- Step 3: Sparse Attention -->
+                            <div class="w-full flex items-center bg-slate-900 p-4 rounded-lg shadow-lg text-white">
+                                <div class="bg-white/20 text-white p-2 rounded-lg mr-4 font-bold text-xs">결과</div>
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold">최적화된 희소 어텐션 (Sparse Attention)</div>
+                                    <div class="text-xs text-slate-300">최종 어텐션 연산은 선택된 핵심 토큰들에 대해서만 수행됩니다.</div>
+                                </div>
+                                <div class="text-xs font-bold text-emerald-400">O(n) 효율성</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Strategic Summary for DSA -->
+                <div class="space-y-4">
+                    <div class="p-4 bg-emerald-50 border-l-4 border-emerald-500 rounded-r-lg">
+                        <h5 class="font-bold text-emerald-800 text-sm">$O(n^2)$ 장벽 극복</h5>
+                        <p class="text-xs text-emerald-700 mt-1">표준 어텐션 비용은 문맥 길이에 따라 기하급수적으로 증가하지만, DSA는 선택적 계산으로 128K에서도 고속을 유지합니다.</p>
+                    </div>
+                    <div class="p-4 bg-slate-50 border-l-4 border-slate-400 rounded-r-lg">
+                        <h5 class="font-bold text-slate-800 text-sm">동적 선택 vs 고정 방식</h5>
+                        <p class="text-xs text-slate-700 mt-1">단순한 '슬라이딩 윈도우'와 달리, 학습된 모델이 질문에 가장 중요한 토큰이 무엇인지 스스로 판단합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conclusion Footer -->
+        <footer class="text-center p-8 bg-slate-50 rounded-2xl border border-slate-100">
+            <p class="text-slate-700 font-semibold mb-2">"DeepSeek: 고효율 긴 문맥 처리를 위한 아키텍처의 승리"</p>
+            <div class="flex justify-center space-x-4 text-xs text-slate-400">
+                <span>MLA: VRAM 병목 현상 해결</span>
+                <span>•</span>
+                <span>DSA: 연산 복잡도 문제 해결</span>
+                <span>•</span>
+                <span>문맥: 128K 최적화 표준</span>
+            </div>
+        </footer>
+    </div>
+
+</body>
+</html>
