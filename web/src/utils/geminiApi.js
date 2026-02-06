@@ -235,15 +235,11 @@ async function generateImages(imageDescriptions) {
 
 // ─── Image post-processing: transparent background for non-background images ───
 
-const BG_IMAGE_AREA_THRESHOLD = 500000; // width*height >= this → background image
+const BG_LABEL_KEYWORDS = ['배경', 'background', 'bg'];
 
-function getImageDimensions(dataUri) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve({ width: img.width, height: img.height });
-    img.onerror = () => resolve({ width: 0, height: 0 });
-    img.src = dataUri;
-  });
+function isBackgroundImage(label) {
+  const lower = (label || '').toLowerCase();
+  return BG_LABEL_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 function removeImageBackground(dataUri, tolerance = 40) {
@@ -309,16 +305,12 @@ function removeImageBackground(dataUri, tolerance = 40) {
 async function processGeneratedImages(images) {
   return Promise.all(
     images.map(async (img) => {
-      const { width, height } = await getImageDimensions(img.dataUri);
-      const area = width * height;
-      const isBackground = area >= BG_IMAGE_AREA_THRESHOLD;
-
-      if (isBackground) {
-        console.log(`이미지 "${img.label}" (${width}x${height}) → 배경 이미지, 투명 처리 생략`);
+      if (isBackgroundImage(img.label)) {
+        console.log(`이미지 "${img.label}" → 배경 이미지, 투명 처리 생략`);
         return img;
       }
 
-      console.log(`이미지 "${img.label}" (${width}x${height}) → 비배경 이미지, 배경 투명 처리`);
+      console.log(`이미지 "${img.label}" → 비배경 이미지, 배경 투명 처리`);
       const processedUri = await removeImageBackground(img.dataUri);
       return { ...img, dataUri: processedUri };
     })

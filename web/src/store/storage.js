@@ -9,8 +9,7 @@ import {
   orderBy,
   query,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
 
 function filesCol(uid) {
   return collection(db, 'users', uid, 'files');
@@ -54,7 +53,73 @@ export async function renameFileDoc(uid, fileId, newName) {
   await updateDoc(fileDoc(uid, fileId), { name: newName, updatedAt: Date.now() });
 }
 
-// Image upload: extract base64 data URIs from HTML, upload to Storage, replace with URLs
+// ─── GCS image upload via service account JWT ───
+
+const GCS_BUCKET = import.meta.env.VITE_GCS_BUCKET;
+const GCS_SA_EMAIL = import.meta.env.VITE_GCS_SA_EMAIL;
+const GCS_PRIVATE_KEY = (import.meta.env.VITE_GCS_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+
+function base64url(data) {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function importPrivateKey(pem) {
+  const b64 = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '');
+  const binary = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  return crypto.subtle.importKey('pkcs8', binary, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+}
+
+let _cachedToken = null;
+let _tokenExpiry = 0;
+
+async function getGcsAccessToken() {
+  if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const payload = base64url(JSON.stringify({
+    iss: GCS_SA_EMAIL,
+    scope: 'https://www.googleapis.com/auth/devstorage.read_write',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  }));
+
+  const signingInput = `${header}.${payload}`;
+  const key = await importPrivateKey(GCS_PRIVATE_KEY);
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput));
+  const jwt = `${signingInput}.${base64url(sig)}`;
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${jwt}`,
+  });
+
+  if (!res.ok) throw new Error(`GCS token exchange failed: ${res.status}`);
+  const data = await res.json();
+  _cachedToken = data.access_token;
+  _tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return _cachedToken;
+}
+
+async function uploadBlobToGcs(path, blob) {
+  const token = await getGcsAccessToken();
+  const res = await fetch(
+    `https://storage.googleapis.com/upload/storage/v1/b/${GCS_BUCKET}/o?uploadType=media&name=${encodeURIComponent(path)}`,
+    {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': blob.type },
+      body: blob,
+    }
+  );
+  if (!res.ok) throw new Error(`GCS upload failed: ${res.status}`);
+  return `https://storage.googleapis.com/${GCS_BUCKET}/${path}`;
+}
 
 function dataUriToBlob(dataUri) {
   const [header, b64] = dataUri.split(',');
@@ -66,7 +131,6 @@ function dataUriToBlob(dataUri) {
 }
 
 export async function uploadSlideImages(uid, presId, slideIndex, html) {
-  // Match all base64 data URIs (in src="..." or url(...))
   const dataUriRegex = /data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/g;
   const matches = [...new Set(html.match(dataUriRegex) || [])];
 
@@ -76,10 +140,8 @@ export async function uploadSlideImages(uid, presId, slideIndex, html) {
   const uploads = matches.map(async (dataUri, i) => {
     const blob = dataUriToBlob(dataUri);
     const ext = blob.type.split('/')[1].replace('+xml', '');
-    const path = `users/${uid}/presentations/${presId}/slide_${slideIndex}_img_${i}_${Date.now()}.${ext}`;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, blob);
-    const url = await getDownloadURL(storageRef);
+    const path = `wiki-images/slides/${uid}/${presId}/s${slideIndex}_${i}_${Date.now()}.${ext}`;
+    const url = await uploadBlobToGcs(path, blob);
     result = result.replaceAll(dataUri, url);
   });
 

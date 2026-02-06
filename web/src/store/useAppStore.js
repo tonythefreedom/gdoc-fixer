@@ -88,12 +88,17 @@ const useAppStore = create((set, get) => ({
   },
 
   setActiveFile: async (fileId) => {
-    const { uid } = get();
-    if (!uid) return;
-
     // Revoke old image URLs
     const oldUrls = get().imageUrls;
     Object.values(oldUrls).forEach((url) => URL.revokeObjectURL(url));
+
+    if (!fileId) {
+      set({ activeFileId: null, activeFileContent: '', images: [], imageUrls: {}, isImagePanelOpen: false });
+      return;
+    }
+
+    const { uid } = get();
+    if (!uid) return;
 
     const content = await loadFileContent(uid, fileId);
     set({
