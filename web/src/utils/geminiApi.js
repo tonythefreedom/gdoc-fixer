@@ -396,6 +396,108 @@ export async function convertHtmlToSlides(html) {
   return slides;
 }
 
+const MODIFY_ALL_SLIDES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 수정하는 전문가입니다.
+
+여러 슬라이드의 HTML이 ${SLIDE_DELIMITER} 구분자로 구분되어 제공됩니다.
+사용자의 수정 지시를 모든 슬라이드에 일관되게 적용하여 수정된 슬라이드들을 반환하세요.
+
+규칙:
+- 각 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
+- 반드시 인라인 CSS만 사용하세요
+- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태를 유지하세요
+- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
+- 외부 이미지 URL(http/https)을 절대 사용하지 마세요
+- 이미 슬라이드에 포함된 data URI 이미지는 그대로 유지하세요
+- 외부 리소스(폰트 CDN 등)를 절대 참조하지 마세요
+- 모든 슬라이드에 수정 지시를 일관되게 적용하세요 (예: 배경색 변경이면 모든 슬라이드 배경색 변경)
+- 수정된 슬라이드 HTML들을 ${SLIDE_DELIMITER} 구분자로 구분하여 출력하세요
+- 입력된 슬라이드 수와 동일한 수의 슬라이드를 반환해야 합니다
+- 다른 설명 텍스트 없이 슬라이드 HTML만 출력하세요.`;
+
+const MODIFY_ALL_WITH_IMAGES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 수정하는 전문가입니다.
+
+여러 슬라이드의 HTML이 ${SLIDE_DELIMITER} 구분자로 구분되어 제공됩니다.
+사용자의 수정 지시를 모든 슬라이드에 일관되게 적용하여 수정된 슬라이드들을 반환하세요.
+생성된 이미지들이 플레이스홀더로 제공됩니다. 이미지를 배치할 위치에 해당 플레이스홀더를 사용하세요.
+
+규칙:
+- 각 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
+- 반드시 인라인 CSS만 사용하세요
+- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태를 유지하세요
+- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
+- 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 적절한 위치에 배치하세요:
+  - 배경 이미지: background-image: url({{IMAGE_1}}) 형태로 사용
+  - 일반 이미지: <img src="{{IMAGE_1}}" style="..."> 형태로 사용
+- 이미지 크기와 위치를 슬라이드 레이아웃에 맞게 조정하세요
+- 이미 슬라이드에 포함된 기존 data URI 이미지는 그대로 유지하세요
+- 외부 리소스를 절대 참조하지 마세요
+- 모든 슬라이드에 수정 지시를 일관되게 적용하세요
+- 수정된 슬라이드 HTML들을 ${SLIDE_DELIMITER} 구분자로 구분하여 출력하세요
+- 입력된 슬라이드 수와 동일한 수의 슬라이드를 반환해야 합니다
+- 다른 설명 텍스트 없이 슬라이드 HTML만 출력하세요.`;
+
+export async function modifyAllSlidesHtml(allSlides, instruction) {
+  if (!API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const allSlidesHtml = allSlides.join(`\n${SLIDE_DELIMITER}\n`);
+  const slideContext = allSlides.map((s) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)).join(' | ');
+
+  // Check if instruction involves image generation
+  if (isImageRelated(instruction)) {
+    let imageDescriptions = [];
+    try {
+      imageDescriptions = await extractImagePrompts(instruction, slideContext.slice(0, 500));
+    } catch (err) {
+      console.warn('이미지 분석 실패:', err.message);
+    }
+
+    if (imageDescriptions.length > 0) {
+      const generatedImages = await generateImages(imageDescriptions);
+
+      if (generatedImages.length > 0) {
+        const processedImages = await processGeneratedImages(generatedImages);
+
+        const imageInfo = processedImages
+          .map((img, i) => `- {{IMAGE_${i + 1}}}: ${img.label}`)
+          .join('\n');
+
+        const userText = `전체 슬라이드 HTML (${allSlides.length}개):\n\n${allSlidesHtml}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n수정 지시 (모든 슬라이드에 적용):\n${instruction}`;
+        let html = await callProModel(MODIFY_ALL_WITH_IMAGES_PROMPT, userText);
+
+        processedImages.forEach((img, i) => {
+          const placeholder = `{{IMAGE_${i + 1}}}`;
+          html = html.replaceAll(placeholder, img.dataUri);
+        });
+
+        const slides = html
+          .split(SLIDE_DELIMITER)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0 && s.includes('<div'));
+
+        if (slides.length > 0) return slides;
+        throw new Error('유효한 슬라이드 HTML이 반환되지 않았습니다.');
+      }
+    }
+  }
+
+  // Text-only modification for all slides
+  const userText = `전체 슬라이드 HTML (${allSlides.length}개):\n\n${allSlidesHtml}\n\n수정 지시 (모든 슬라이드에 적용):\n${instruction}`;
+  const html = await callProModel(MODIFY_ALL_SLIDES_PROMPT, userText);
+
+  const slides = html
+    .split(SLIDE_DELIMITER)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s.includes('<div'));
+
+  if (slides.length === 0) {
+    throw new Error('유효한 슬라이드 HTML이 반환되지 않았습니다.');
+  }
+
+  return slides;
+}
+
 export async function modifySlideHtml(currentSlideHtml, instruction) {
   if (!API_KEY) {
     throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
