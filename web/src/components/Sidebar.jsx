@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { FilePlus, Trash2, FileCode, Images, Pencil, Check, X, LogOut } from 'lucide-react';
+import { FilePlus, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
+import useSlideStore from '../store/useSlideStore';
 
 export default function Sidebar() {
   const files = useAppStore((s) => s.files);
@@ -13,17 +14,27 @@ export default function Sidebar() {
   const toggleImagePanel = useAppStore((s) => s.toggleImagePanel);
   const isImagePanelOpen = useAppStore((s) => s.isImagePanelOpen);
 
+  const presentations = useSlideStore((s) => s.presentations);
+  const activePresentationId = useSlideStore((s) => s.activePresentationId);
+  const setActivePresentation = useSlideStore((s) => s.setActivePresentation);
+  const clearActivePresentation = useSlideStore((s) => s.clearActivePresentation);
+  const deletePresentation = useSlideStore((s) => s.deletePresentation);
+  const renamePresentation = useSlideStore((s) => s.renamePresentation);
+
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
 
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
+  const [editingPresId, setEditingPresId] = useState(null);
+  const [editPresName, setEditPresName] = useState('');
 
   const handleCreate = () => {
     const name = `document_${Date.now().toString(36)}`;
     createFile(name);
   };
 
+  // File rename handlers
   const handleStartRename = (e, file) => {
     e.stopPropagation();
     setEditingId(file.id);
@@ -50,6 +61,43 @@ export default function Sidebar() {
     }
   };
 
+  // Presentation rename handlers
+  const handleStartPresRename = (e, pres) => {
+    e.stopPropagation();
+    setEditingPresId(pres.id);
+    setEditPresName(pres.name);
+  };
+
+  const handleConfirmPresRename = (e) => {
+    e.stopPropagation();
+    if (editPresName.trim()) {
+      renamePresentation(editingPresId, editPresName.trim());
+    }
+    setEditingPresId(null);
+  };
+
+  const handleCancelPresRename = (e) => {
+    e.stopPropagation();
+    setEditingPresId(null);
+  };
+
+  const handleDeletePres = (e, presId) => {
+    e.stopPropagation();
+    if (confirm('이 프레젠테이션을 삭제하시겠습니까?')) {
+      deletePresentation(presId);
+    }
+  };
+
+  const handleSelectFile = (fileId) => {
+    clearActivePresentation();
+    setActiveFile(fileId);
+  };
+
+  const handleSelectPresentation = (presId) => {
+    setActiveFile(null);
+    setActivePresentation(presId);
+  };
+
   return (
     <div className="w-64 bg-slate-900 text-white flex flex-col h-full shrink-0">
       <div className="p-4 border-b border-slate-700 flex items-center gap-2.5">
@@ -73,6 +121,70 @@ export default function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2">
+        {/* Presentations section */}
+        {presentations.length > 0 && (
+          <>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wider px-2 mb-2">
+              Presentations ({presentations.length})
+            </div>
+            {presentations.map((pres) => (
+              <div
+                key={pres.id}
+                className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 cursor-pointer transition-colors ${
+                  activePresentationId === pres.id
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                }`}
+                onClick={() => handleSelectPresentation(pres.id)}
+              >
+                <Presentation className="w-4 h-4 shrink-0 text-indigo-400" />
+                {editingPresId === pres.id ? (
+                  <div className="flex-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      className="flex-1 bg-slate-600 text-white text-xs px-1.5 py-0.5 rounded outline-none"
+                      value={editPresName}
+                      onChange={(e) => setEditPresName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleConfirmPresRename(e);
+                        if (e.key === 'Escape') handleCancelPresRename(e);
+                      }}
+                      autoFocus
+                    />
+                    <button onClick={handleConfirmPresRename} className="text-emerald-400 hover:text-emerald-300">
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={handleCancelPresRename} className="text-slate-500 hover:text-slate-300">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="flex-1 text-xs truncate">{pres.name}</span>
+                    <div className="hidden group-hover:flex items-center gap-0.5">
+                      <button
+                        onClick={(e) => handleStartPresRename(e, pres)}
+                        className="p-1 rounded text-slate-500 hover:bg-slate-600 hover:text-slate-300"
+                        title="이름 변경"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeletePres(e, pres.id)}
+                        className="p-1 rounded text-slate-500 hover:bg-slate-600 hover:text-red-400"
+                        title="삭제"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+            <div className="my-2" />
+          </>
+        )}
+
+        {/* Files section */}
         <div className="text-[10px] text-slate-500 uppercase tracking-wider px-2 mb-2">
           Files ({files.length})
         </div>
@@ -80,11 +192,11 @@ export default function Sidebar() {
           <div
             key={file.id}
             className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 cursor-pointer transition-colors ${
-              activeFileId === file.id
+              activeFileId === file.id && !activePresentationId
                 ? 'bg-slate-700 text-white'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
             }`}
-            onClick={() => setActiveFile(file.id)}
+            onClick={() => handleSelectFile(file.id)}
           >
             <FileCode className="w-4 h-4 shrink-0 text-slate-500" />
             {editingId === file.id ? (

@@ -2,7 +2,6 @@ import Sidebar from './Sidebar';
 import MainPanel from './MainPanel';
 import ImagePanel from './ImagePanel';
 import ImageModal from './gallery/ImageModal';
-import SlideViewer from './slide/SlideViewer';
 
 export default function Layout() {
   return (
@@ -13,7 +12,6 @@ export default function Layout() {
         <ImagePanel />
       </div>
       <ImageModal />
-      <SlideViewer />
     </>
   );
 }

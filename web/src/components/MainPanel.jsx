@@ -1,20 +1,23 @@
 import { useRef, useState, useCallback } from 'react';
 import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
+import useSlideStore from '../store/useSlideStore';
 import HtmlEditor from './editor/HtmlEditor';
 import PreviewContainer from './preview/PreviewContainer';
 import ViewportControls from './preview/ViewportControls';
 import ExportButton from './export/ExportButton';
+import SlideEditor from './slide/SlideEditor';
 import { useExport } from '../hooks/useExport';
-import useSlideStore from '../store/useSlideStore';
 import { generateShareUrl } from '../utils/shareUrl';
 
 export default function MainPanel() {
   const activeFileId = useAppStore((s) => s.activeFileId);
+  const files = useAppStore((s) => s.files);
   const iframeRef = useRef(null);
   const { exportPng } = useExport(iframeRef);
   const generateSlides = useSlideStore((s) => s.generateSlides);
   const isGenerating = useSlideStore((s) => s.isGenerating);
+  const activePresentationId = useSlideStore((s) => s.activePresentationId);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -38,6 +41,13 @@ export default function MainPanel() {
     } finally {
       setSharing(false);
     }
+  };
+
+  const handleGenerateSlides = () => {
+    const { activeFileContent, activeFileId: fileId } = useAppStore.getState();
+    if (!activeFileContent) return;
+    const file = files.find((f) => f.id === fileId);
+    generateSlides(activeFileContent, fileId, file?.name || 'Untitled');
   };
 
   const handleDividerMouseDown = useCallback(
@@ -68,6 +78,12 @@ export default function MainPanel() {
     [editorWidth]
   );
 
+  // Presentation mode
+  if (activePresentationId) {
+    return <SlideEditor />;
+  }
+
+  // No file selected
   if (!activeFileId) {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-100 text-slate-400 text-sm">
@@ -76,6 +92,7 @@ export default function MainPanel() {
     );
   }
 
+  // File editor mode
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full">
       {/* Top bar: viewport controls + export */}
@@ -125,10 +142,7 @@ export default function MainPanel() {
             )}
           </button>
           <button
-            onClick={() => {
-              const { activeFileContent } = useAppStore.getState();
-              if (activeFileContent) generateSlides(activeFileContent);
-            }}
+            onClick={handleGenerateSlides}
             disabled={isGenerating}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
               isGenerating

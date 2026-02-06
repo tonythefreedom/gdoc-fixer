@@ -1,16 +1,64 @@
-# React + Vite
+# GDoc Fixer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+HTML 콘텐츠를 AI 기반으로 프레젠테이션 슬라이드로 변환하고 편집할 수 있는 웹 애플리케이션.
 
-Currently, two official plugins are available:
+## 주요 기능
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### HTML 편집기
+- HTML 직접 작성 및 실시간 미리보기
+- 파일 생성/삭제/이름변경
+- Google 계정 기반 클라우드 저장 (Firestore)
 
-## React Compiler
+### 프레젠테이션 생성
+- HTML 콘텐츠를 Gemini 2.5 Pro로 16:9 슬라이드 자동 변환
+- 사이드바에서 프레젠테이션 프로젝트 관리 (생성/삭제/이름변경)
+- PDF 내보내기
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### AI 슬라이드 수정
+- 자연어 지시로 개별 슬라이드 수정 (Gemini 2.5 Pro)
+- 수정 이력 관리 및 특정 버전으로 되돌리기
 
-## Expanding the ESLint configuration
+### AI 이미지 생성 및 삽입
+- 슬라이드 수정 지시에 이미지 관련 키워드 포함 시 자동으로 이미지 생성
+- 3단계 파이프라인:
+  1. **Gemini 2.5 Flash** — 지시 분석, 생성할 이미지 목록 추출
+  2. **Gemini 2.5 Flash (Image)** — 이미지 병렬 생성
+  3. **Gemini 2.5 Pro** — 생성된 이미지를 포함하여 슬라이드 HTML 수정
+- 비배경 이미지 자동 투명 배경 처리 (Canvas Flood-fill 기반, 이미지 크기로 배경/비배경 구분)
+- 생성된 이미지는 Firebase Storage에 업로드 후 URL로 교체 (Firestore 1MB 제한 회피)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 기술 스택
+
+- **프론트엔드**: React 19 + Vite 7 + Tailwind CSS v4
+- **상태 관리**: Zustand
+- **백엔드**: Firebase (Auth, Firestore, Storage, Hosting)
+- **AI**: Google Gemini API (2.5 Pro, 2.5 Flash, 2.5 Flash Image)
+
+## 환경 변수
+
+`.env` 파일에 다음 변수를 설정:
+
+```
+VITE_GEMINI_API_KEY=
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
+```
+
+## 개발
+
+```bash
+npm install
+npm run dev
+```
+
+## 빌드 및 배포
+
+```bash
+npm run build
+firebase deploy --only hosting
+```
