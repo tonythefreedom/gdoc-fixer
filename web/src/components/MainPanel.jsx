@@ -9,6 +9,7 @@ import ExportButton from './export/ExportButton';
 import SlideEditor from './slide/SlideEditor';
 import { useExport } from '../hooks/useExport';
 import { generateShareUrl } from '../utils/shareUrl';
+import useShareStore from '../store/useShareStore';
 
 export default function MainPanel() {
   const activeFileId = useAppStore((s) => s.activeFileId);
@@ -23,12 +24,18 @@ export default function MainPanel() {
   const [sharing, setSharing] = useState(false);
   const [editorWidth, setEditorWidth] = useState(800);
 
+  const addShare = useShareStore((s) => s.addShare);
+
   const handleCopyShareLink = async () => {
-    const { activeFileContent } = useAppStore.getState();
-    if (!activeFileContent || sharing) return;
+    const { activeFileContent, activeFileId: fileId, files: allFiles, uid } = useAppStore.getState();
+    if (!activeFileContent || sharing || !uid) return;
     setSharing(true);
     try {
-      const url = await generateShareUrl(activeFileContent);
+      const file = allFiles.find((f) => f.id === fileId);
+      const name = file?.name || 'Untitled';
+      const url = await generateShareUrl(activeFileContent, uid, name);
+      const shareId = url.split('/share/')[1];
+      addShare({ id: shareId, name, createdAt: Date.now(), uid });
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -159,7 +166,7 @@ export default function MainPanel() {
             ) : (
               <>
                 <FileText className="w-3.5 h-3.5" />
-                PDF 보기
+                프리젠테이션 변환
               </>
             )}
           </button>

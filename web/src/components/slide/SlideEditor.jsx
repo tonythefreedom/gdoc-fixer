@@ -38,7 +38,7 @@ export default function SlideEditor() {
 
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      const padding = 32;
+      const padding = 16;
       const availW = Math.max(100, width - padding * 2);
       const availH = Math.max(100, height - padding * 2);
       setScale(Math.min(availW / SLIDE_W, availH / SLIDE_H, 1));
@@ -216,7 +216,7 @@ export default function SlideEditor() {
           }}
         >
           <iframe
-            srcDoc={currentSlide}
+            srcDoc={`<style>html,body{margin:0;padding:0;overflow:hidden}</style>${currentSlide}`}
             sandbox="allow-same-origin allow-scripts"
             style={{
               width: SLIDE_W,

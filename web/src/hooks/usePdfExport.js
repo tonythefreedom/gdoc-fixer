@@ -9,6 +9,30 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Convert external image URLs to data URIs so html-to-image can render them
+async function inlineExternalImages(html) {
+  const urlRegex = /https:\/\/storage\.googleapis\.com\/[^\s"')]+/g;
+  const urls = [...new Set(html.match(urlRegex) || [])];
+  if (urls.length === 0) return html;
+
+  let result = html;
+  await Promise.all(urls.map(async (url) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const dataUri = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      result = result.replaceAll(url, dataUri);
+    } catch (err) {
+      console.warn('Failed to inline image for PDF:', url, err);
+    }
+  }));
+  return result;
+}
+
 // Preload Google Font for slide rendering
 function injectFont(container) {
   const style = document.createElement('style');
@@ -50,12 +74,13 @@ export function usePdfExport() {
       });
 
       for (let i = 0; i < slides.length; i++) {
+        const inlinedHtml = await inlineExternalImages(slides[i]);
         const slideEl = document.createElement('div');
         slideEl.style.cssText = `width:${SLIDE_W}px;height:${SLIDE_H}px;overflow:hidden;background:#fff;`;
-        slideEl.innerHTML = slides[i];
+        slideEl.innerHTML = inlinedHtml;
         container.appendChild(slideEl);
 
-        await delay(500);
+        await delay(300);
 
         const canvas = await toCanvas(slideEl, {
           width: SLIDE_W,

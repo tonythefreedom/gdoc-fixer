@@ -14,7 +14,17 @@ const SYSTEM_PROMPT = `당신은 HTML 콘텐츠를 16:9 비율의 프레젠테�
 규칙:
 - 각 슬라이드는 width:1280px, height:720px 크기에 맞는 독립적인 HTML입니다
 - 반드시 인라인 CSS만 사용하세요 (외부 CSS/JS 참조 불가)
-- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태여야 합니다
+- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태여야 합니다
+
+**[필수] 뷰포트 제약 — 반드시 준수하세요:**
+- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
+- 루트 div에 반드시 overflow:hidden을 설정하세요.
+- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
+- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
+- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
+- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
+- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+
 - 깔끔하고 전문적인 프레젠테이션 디자인을 적용하세요
   - 적절한 여백(padding: 60px 이상)
   - 가독성 좋은 큰 폰트 크기(제목 40px+, 본문 24px+)
@@ -33,9 +43,9 @@ const SYSTEM_PROMPT = `당신은 HTML 콘텐츠를 16:9 비율의 프레젠테�
 다른 설명 텍스트 없이 슬라이드 HTML만 출력하세요.
 
 예시:
-<div style="width:1280px;height:720px;...">슬라이드1</div>
+<div style="width:1280px;height:720px;overflow:hidden;position:relative;...">슬라이드1</div>
 ${SLIDE_DELIMITER}
-<div style="width:1280px;height:720px;...">슬라이드2</div>`;
+<div style="width:1280px;height:720px;overflow:hidden;position:relative;...">슬라이드2</div>`;
 
 const MODIFY_SLIDE_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 수정하는 전문가입니다.
 
@@ -44,7 +54,17 @@ const MODIFY_SLIDE_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 �
 규칙:
 - 기존 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
 - 반드시 인라인 CSS만 사용하세요
-- 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태를 유지하세요
+- 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태를 유지하세요
+
+**[필수] 뷰포트 제약 — 반드시 준수하세요:**
+- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
+- 루트 div에 반드시 overflow:hidden을 설정하세요.
+- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
+- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
+- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
+- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
+- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+
 - 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
 - 외부 이미지 URL(http/https)을 절대 사용하지 마세요
 - base64 data URI 이미지(<img src="data:image/png;base64,...">)는 사용 가능합니다. 이미 슬라이드에 포함된 data URI 이미지는 그대로 유지하세요.
@@ -59,7 +79,17 @@ const MODIFY_WITH_IMAGES_PROMPT = `당신은 HTML 프레젠테이션 슬라이�
 규칙:
 - 기존 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
 - 반드시 인라인 CSS만 사용하세요
-- 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태를 유지하세요
+- 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태를 유지하세요
+
+**[필수] 뷰포트 제약 — 반드시 준수하세요:**
+- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
+- 루트 div에 반드시 overflow:hidden을 설정하세요.
+- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
+- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
+- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
+- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
+- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+
 - 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
 - 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 적절한 위치에 배치하세요:
   - 배경 이미지: background-image: url({{IMAGE_1}}) 형태로 사용
@@ -87,6 +117,27 @@ const EXTRACT_IMAGES_PROMPT = `사용자의 슬라이드 수정 지시를 분석
 예시 입력: "관련된 내용으로 슬라이드의 배경 이미지를 생성해서 깔고 로고 이미지도 만들어서 넣어줘"
 예시 출력:
 [{"label":"배경 이미지","prompt":"Professional corporate presentation background, abstract blue gradient with subtle geometric patterns, 16:9 aspect ratio, suitable for presentation background"},{"label":"로고","prompt":"Modern minimalist company logo design, simple clean icon, transparent background, professional business style"}]`;
+
+const VIEWPORT_FIX_PROMPT = `당신은 HTML 프레젠테이션 슬라이드의 뷰포트 오버플로우를 수정하는 전문가입니다.
+
+첨부된 스크린샷은 이 슬라이드를 1280×720px 뷰포트에서 overflow:hidden으로 렌더링한 결과입니다.
+콘텐츠가 잘려 보인다면 뷰포트(1280×720) 밖으로 넘친 것입니다.
+
+주어진 HTML 코드를 분석하고 스크린샷을 참고하여, 모든 콘텐츠가 1280×720px 안에 완전히 들어가도록 수정하세요.
+
+수정 방법:
+- 폰트 크기를 줄이세요
+- 여백(padding/margin)을 줄이세요
+- 요소 간 간격을 줄이세요
+- 텍스트가 너무 길면 축약하세요
+- 모든 요소의 위치를 재계산하여 top+height ≤ 720px, left+width ≤ 1280px 확인
+
+규칙:
+- 원본의 디자인과 색상 구성을 최대한 유지하세요
+- 콘텐츠를 삭제하지 마세요 — 크기만 조정하세요
+- 루트 div의 width:1280px;height:720px;overflow:hidden을 반드시 유지하세요
+- 인라인 CSS만 사용하세요
+- 수정된 HTML만 출력하세요. 다른 설명 없이.`;
 
 // ─── Helpers ───
 
@@ -407,7 +458,17 @@ const MODIFY_ALL_SLIDES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드
 - **절대로 슬라이드를 삭제하지 마세요** — 입력 N개면 반드시 출력도 N개여야 합니다
 - 각 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
 - 반드시 인라인 CSS만 사용하세요
-- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태를 유지하세요
+- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태를 유지하세요
+
+**[필수] 뷰포트 제약 — 반드시 준수하세요:**
+- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
+- 루트 div에 반드시 overflow:hidden을 설정하세요.
+- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
+- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
+- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
+- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
+- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+
 - 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
 - 외부 이미지 URL(http/https)을 절대 사용하지 마세요
 - 이미 슬라이드에 포함된 data URI 이미지는 그대로 유지하세요
@@ -428,7 +489,17 @@ const MODIFY_ALL_WITH_IMAGES_PROMPT = `당신은 HTML 프레젠테이션 슬라�
 - **절대로 슬라이드를 삭제하지 마세요** — 입력 N개면 반드시 출력도 N개여야 합니다
 - 각 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
 - 반드시 인라인 CSS만 사용하세요
-- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;..."> 형태를 유지하세요
+- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태를 유지하세요
+
+**[필수] 뷰포트 제약 — 반드시 준수하세요:**
+- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
+- 루트 div에 반드시 overflow:hidden을 설정하세요.
+- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
+- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
+- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
+- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
+- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+
 - 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
 - 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 적절한 위치에 배치하세요:
   - 배경 이미지: background-image: url({{IMAGE_1}}) 형태로 사용
@@ -565,4 +636,89 @@ export async function modifySlideHtml(currentSlideHtml, instruction) {
   }
 
   return html;
+}
+
+// ─── Viewport fix: render → screenshot → Gemini Flash multimodal → fixed HTML ───
+
+async function renderSlideToBase64(slideHtml) {
+  const { toPng } = await import('html-to-image');
+
+  const container = document.createElement('div');
+  container.style.cssText =
+    'position:fixed;left:-9999px;top:-9999px;width:1280px;height:720px;overflow:hidden;z-index:-1;';
+  container.innerHTML = slideHtml;
+  document.body.appendChild(container);
+
+  try {
+    // Wait for any images to load
+    const images = container.querySelectorAll('img');
+    await Promise.all(
+      Array.from(images).map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise((r) => {
+              img.onload = r;
+              img.onerror = r;
+            })
+      )
+    );
+
+    const dataUrl = await toPng(container.firstElementChild || container, {
+      width: 1280,
+      height: 720,
+      canvasWidth: 1280,
+      canvasHeight: 720,
+    });
+
+    return dataUrl.split(',')[1]; // base64 only
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+async function fixSlideViewport(slideHtml, imageBase64) {
+  const res = await fetch(FLASH_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: VIEWPORT_FIX_PROMPT },
+            { text: `수정할 슬라이드 HTML:\n\n${slideHtml}` },
+            { inlineData: { mimeType: 'image/png', data: imageBase64 } },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 32768,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `뷰포트 픽스 API 오류: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const text = parseGeminiResponse(data);
+  return stripCodeFences(text);
+}
+
+export async function fixAllSlideViewports(slides) {
+  const results = [];
+  for (let i = 0; i < slides.length; i++) {
+    try {
+      console.log(`뷰포트 픽스 ${i + 1}/${slides.length}...`);
+      const base64 = await renderSlideToBase64(slides[i]);
+      const fixed = await fixSlideViewport(slides[i], base64);
+      results.push(fixed.includes('<div') ? fixed : slides[i]);
+    } catch (err) {
+      console.warn(`슬라이드 ${i + 1} 뷰포트 픽스 실패:`, err);
+      results.push(slides[i]);
+    }
+  }
+  return results;
 }

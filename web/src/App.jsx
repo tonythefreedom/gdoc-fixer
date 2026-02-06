@@ -6,6 +6,7 @@ import { isShareUrl } from './utils/shareUrl';
 import useAuthStore from './store/useAuthStore';
 import useAppStore from './store/useAppStore';
 import useSlideStore from './store/useSlideStore';
+import useShareStore from './store/useShareStore';
 import { Loader2 } from 'lucide-react';
 
 function App() {
@@ -16,18 +17,20 @@ function App() {
   const loadUserFiles = useAppStore((s) => s.loadUserFiles);
   const filesLoading = useAppStore((s) => s.filesLoading);
   const loadPresentations = useSlideStore((s) => s.loadPresentations);
+  const loadShares = useShareStore((s) => s.loadShares);
 
   useEffect(() => {
     initAuth();
   }, [initAuth]);
 
-  // Load user files and presentations when user logs in
+  // Load user files, presentations, and shares when user logs in
   useEffect(() => {
     if (user) {
       loadUserFiles(user.uid);
       loadPresentations(user.uid);
+      loadShares(user.uid);
     }
-  }, [user, loadUserFiles, loadPresentations]);
+  }, [user, loadUserFiles, loadPresentations, loadShares]);
 
   useEffect(() => {
     const handleHashChange = () => {

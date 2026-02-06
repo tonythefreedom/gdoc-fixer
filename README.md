@@ -8,7 +8,8 @@ HTML 문서를 AI 기반 프레젠테이션 슬라이드로 변환하고 편집�
 - **상태관리**: Zustand
 - **Backend**: Firebase (Auth, Firestore)
 - **스토리지**: Google Cloud Storage (REST API + Service Account JWT)
-- **AI**: Google Gemini API (Flash, Flash-Image, Pro 3-모델 파이프라인)
+- **AI**: Google Gemini API (Flash, Flash-Image, Pro 3-모델 파이프라인 + Flash 멀티모달 뷰포트 보정)
+- **서버**: Firebase Cloud Functions (Gen 2) — OG 메타 태그 SSR
 
 ## 주요 기능
 
@@ -36,8 +37,19 @@ HTML 문서를 AI 기반 프레젠테이션 슬라이드로 변환하고 편집�
 - 프레젠테이션 이름 변경, 삭제
 - Firestore에 자동 저장
 
+### 뷰포트 자동 보정
+- 슬라이드 생성 후 각 슬라이드를 1280×720px로 렌더링하여 스크린샷 캡처
+- Gemini Flash 멀티모달에 스크린샷 + HTML을 전송하여 뷰포트 오버플로우 자동 감지 및 수정
+- 폰트 크기, 여백, 요소 배치를 자동 조정하여 콘텐츠가 뷰포트 내에 완전히 수용되도록 보정
+
+### 공유 링크
+- HTML 문서를 공유 링크로 생성 (Firestore `shared` 컬렉션에 저장)
+- OG 메타 태그 지원 — Cloud Function (Gen 2)이 `/share/:id` 경로에서 OG title/description/image 제공
+- 사이드바 SHARED 섹션에서 공유 목록 관리 (링크 복사, 새 탭 열기, 삭제)
+
 ### PDF 내보내기
 - 슬라이드를 PDF 파일로 변환 및 다운로드
+- GCS 외부 이미지를 data URI로 인라인 변환하여 PDF 내 이미지 깨짐 방지
 
 ## 설정
 
@@ -71,4 +83,5 @@ npm run dev
 cd web
 npm run build
 npx firebase deploy --only hosting
+npx firebase deploy --only functions  # Cloud Function 배포
 ```

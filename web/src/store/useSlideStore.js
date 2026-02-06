@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { convertHtmlToSlides, modifySlideHtml, modifyAllSlidesHtml } from '../utils/geminiApi';
+import { convertHtmlToSlides, modifySlideHtml, modifyAllSlidesHtml, fixAllSlideViewports } from '../utils/geminiApi';
 import {
   loadPresentationList,
   createPresentationDoc,
@@ -38,6 +38,10 @@ const useSlideStore = create((set, get) => ({
     set({ isGenerating: true });
     try {
       let slides = await convertHtmlToSlides(html);
+
+      // Viewport fix: render each slide → screenshot → Gemini Flash multimodal fix
+      slides = await fixAllSlideViewports(slides);
+
       const slideHistories = slides.map(() => []);
       const now = Date.now();
       const presId = now.toString(36) + Math.random().toString(36).slice(2, 6);
