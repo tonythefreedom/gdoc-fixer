@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText, FileDown } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
 import HtmlEditor from './editor/HtmlEditor';
@@ -8,6 +8,7 @@ import ViewportControls from './preview/ViewportControls';
 import ExportButton from './export/ExportButton';
 import SlideEditor from './slide/SlideEditor';
 import { useExport } from '../hooks/useExport';
+import { useDocxExport } from '../hooks/useDocxExport';
 import { generateShareUrl } from '../utils/shareUrl';
 import useShareStore from '../store/useShareStore';
 
@@ -16,6 +17,7 @@ export default function MainPanel() {
   const files = useAppStore((s) => s.files);
   const iframeRef = useRef(null);
   const { exportPng } = useExport(iframeRef);
+  const { exportDocx, isExportingDocx } = useDocxExport();
   const generateSlides = useSlideStore((s) => s.generateSlides);
   const isGenerating = useSlideStore((s) => s.isGenerating);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
@@ -167,6 +169,28 @@ export default function MainPanel() {
               <>
                 <FileText className="w-3.5 h-3.5" />
                 프리젠테이션 변환
+              </>
+            )}
+          </button>
+          <button
+            onClick={exportDocx}
+            disabled={isExportingDocx}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              isExportingDocx
+                ? 'bg-slate-100 text-slate-400 cursor-wait'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+            }`}
+            title="DOCX 파일로 내보내기"
+          >
+            {isExportingDocx ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                DOCX 변환 중...
+              </>
+            ) : (
+              <>
+                <FileDown className="w-3.5 h-3.5" />
+                DOCX 내보내기
               </>
             )}
           </button>

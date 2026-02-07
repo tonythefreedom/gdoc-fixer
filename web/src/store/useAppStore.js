@@ -53,6 +53,9 @@ const useAppStore = create((set, get) => ({
   images: [],
   imageUrls: {},
 
+  // HWP import
+  hwpImporting: false,
+
   // UI state
   isExporting: false,
   modalImageKey: null,
@@ -85,6 +88,27 @@ const useAppStore = create((set, get) => ({
     await createFileDoc(uid, file, DEFAULT_HTML);
     set({ files: [...get().files, file] });
     get().setActiveFile(id);
+  },
+
+  createFileFromHwp: async (file) => {
+    const { uid } = get();
+    if (!uid) return;
+    set({ hwpImporting: true });
+    try {
+      const { parseHwpToHtml } = await import('../utils/hwpParser');
+      const htmlContent = await parseHwpToHtml(file);
+      const name = file.name.replace(/\.hwp$/i, '') || `hwp_${Date.now().toString(36)}`;
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const fileDoc = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
+      await createFileDoc(uid, fileDoc, htmlContent);
+      set({ files: [...get().files, fileDoc] });
+      get().setActiveFile(id);
+    } catch (err) {
+      console.error('HWP import failed:', err);
+      alert(`HWP 파일 가져오기 실패: ${err.message || err}`);
+    } finally {
+      set({ hwpImporting: false });
+    }
   },
 
   setActiveFile: async (fileId) => {

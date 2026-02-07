@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { FilePlus, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2 } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
 import useSlideStore from '../store/useSlideStore';
@@ -15,6 +15,8 @@ export default function Sidebar() {
   const renameFile = useAppStore((s) => s.renameFile);
   const toggleImagePanel = useAppStore((s) => s.toggleImagePanel);
   const isImagePanelOpen = useAppStore((s) => s.isImagePanelOpen);
+  const createFileFromHwp = useAppStore((s) => s.createFileFromHwp);
+  const hwpImporting = useAppStore((s) => s.hwpImporting);
 
   const presentations = useSlideStore((s) => s.presentations);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
@@ -31,6 +33,7 @@ export default function Sidebar() {
 
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
+  const hwpInputRef = useRef(null);
   const [editingPresId, setEditingPresId] = useState(null);
   const [editPresName, setEditPresName] = useState('');
 
@@ -132,7 +135,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="p-3">
+      <div className="p-3 space-y-2">
         <button
           onClick={handleCreate}
           className="w-full flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors"
@@ -140,6 +143,40 @@ export default function Sidebar() {
           <FilePlus className="w-4 h-4" />
           새 파일
         </button>
+        <button
+          onClick={() => hwpInputRef.current?.click()}
+          disabled={hwpImporting}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            hwpImporting
+              ? 'bg-slate-700 text-slate-400 cursor-wait'
+              : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+          }`}
+        >
+          {hwpImporting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              HWP 변환 중...
+            </>
+          ) : (
+            <>
+              <FileUp className="w-4 h-4" />
+              HWP 가져오기
+            </>
+          )}
+        </button>
+        <input
+          ref={hwpInputRef}
+          type="file"
+          accept=".hwp"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              createFileFromHwp(file);
+              e.target.value = '';
+            }
+          }}
+          className="hidden"
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto px-2">
