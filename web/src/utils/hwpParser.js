@@ -26,6 +26,119 @@ function replaceHwpFonts(html) {
   return result;
 }
 
+/**
+ * hwp.js가 렌더링한 <img> 중 blob: URL을 canvas로 캡처하여 base64 data URI로 변환
+ */
+function inlineImages(container) {
+  const imgs = container.querySelectorAll('img');
+  const promises = Array.from(imgs).map((img) => {
+    const src = img.getAttribute('src') || '';
+    // blob: URL 또는 상대경로(hwp.js 내부 생성) → base64로 변환
+    if (!src.startsWith('data:')) {
+      return new Promise((resolve) => {
+        const cvs = document.createElement('canvas');
+        const onLoad = () => {
+          try {
+            cvs.width = img.naturalWidth || img.width || 200;
+            cvs.height = img.naturalHeight || img.height || 200;
+            const ctx = cvs.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            img.src = cvs.toDataURL('image/png');
+          } catch {
+            // CORS 등으로 실패 시 원본 유지
+          }
+          resolve();
+        };
+        if (img.complete && img.naturalWidth > 0) {
+          onLoad();
+        } else {
+          img.onload = onLoad;
+          img.onerror = resolve;
+        }
+      });
+    }
+    return Promise.resolve();
+  });
+  return Promise.all(promises);
+}
+
+/**
+ * 배경 이미지(background-image: url(...))를 캡처하여 base64 인라인으로 변환
+ */
+function inlineBackgroundImages(container) {
+  const allElements = container.querySelectorAll('*');
+  const promises = Array.from(allElements).map((el) => {
+    const bg = el.style.backgroundImage || '';
+    const match = bg.match(/url\(["']?(blob:[^"')]+|(?!data:)[^"')]+)["']?\)/);
+    if (!match) return Promise.resolve();
+
+    const url = match[1];
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const cvs = document.createElement('canvas');
+          cvs.width = img.naturalWidth || 200;
+          cvs.height = img.naturalHeight || 200;
+          const ctx = cvs.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const dataUri = cvs.toDataURL('image/png');
+          el.style.backgroundImage = `url(${dataUri})`;
+        } catch {
+          // 실패 시 원본 유지
+        }
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = url;
+    });
+  });
+  return Promise.all(promises);
+}
+
+/**
+ * 어두운 배경색 → 흰색, 밝은 텍스트 → 어두운 색으로 보정
+ * hwp.js가 검정 배경 + 흰색 텍스트로 렌더링하는 경우 대응
+ */
+function fixColors(html) {
+  const replacements = [
+    // ── 어두운 배경색 → 흰색 ──
+    // background-color: black / #000 / #000000 / rgb(0,0,0)
+    [/background-color\s*:\s*black\b/gi, 'background-color: #ffffff'],
+    [/background-color\s*:\s*#000\b(?![\da-f])/gi, 'background-color: #ffffff'],
+    [/background-color\s*:\s*#000000\b/gi, 'background-color: #ffffff'],
+    [/background-color\s*:\s*rgb\(\s*0\s*,\s*0\s*,\s*0\s*\)/gi, 'background-color: #ffffff'],
+    // 매우 어두운 배경 (rgb 0~30 범위)
+    [/background-color\s*:\s*rgb\(\s*([0-2]?\d)\s*,\s*([0-2]?\d)\s*,\s*([0-2]?\d)\s*\)/gi, 'background-color: #ffffff'],
+    // #000~#1f1f1f 범위
+    [/background-color\s*:\s*#([0-1][0-9a-f])([0-1][0-9a-f])([0-1][0-9a-f])\b/gi, 'background-color: #ffffff'],
+    // background 단축형 (color만 있는 경우)
+    [/background\s*:\s*black\b/gi, 'background: #ffffff'],
+    [/background\s*:\s*#000\b(?![\da-f])/gi, 'background: #ffffff'],
+    [/background\s*:\s*#000000\b/gi, 'background: #ffffff'],
+    [/background\s*:\s*rgb\(\s*0\s*,\s*0\s*,\s*0\s*\)/gi, 'background: #ffffff'],
+
+    // ── 밝은 텍스트 색상 → 어두운 색 ──
+    // color: white / #fff / #ffffff
+    [/(?<![-\w])color\s*:\s*white\b/gi, 'color: #222'],
+    [/(?<![-\w])color\s*:\s*#fff\b(?![\da-f])/gi, 'color: #222'],
+    [/(?<![-\w])color\s*:\s*#ffffff\b/gi, 'color: #222'],
+    [/(?<![-\w])color\s*:\s*rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)/gi, 'color: #222'],
+    // 매우 밝은 회색 (rgb 240~255 범위)
+    [/(?<![-\w])color\s*:\s*rgb\(\s*(2[4-5]\d)\s*,\s*(2[4-5]\d)\s*,\s*(2[4-5]\d)\s*\)/gi, 'color: #222'],
+    // #eee ~ #fff 범위
+    [/(?<![-\w])color\s*:\s*#([e-f])([e-f])([e-f])\b(?![\da-f])/gi, 'color: #222'],
+    [/(?<![-\w])color\s*:\s*#([e-f]{2})([e-f]{2})([e-f]{2})\b/gi, 'color: #222'],
+  ];
+
+  let result = html;
+  for (const [pattern, replacement] of replacements) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
 function wrapInHtmlTemplate(bodyHtml, stylesHtml = '') {
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -68,6 +181,10 @@ export async function parseHwpToHtml(file) {
   try {
     new HWPViewer(container, data, { type: 'array' });
 
+    // 이미지 로딩 대기 후 base64 인라인 변환
+    await inlineImages(container);
+    await inlineBackgroundImages(container);
+
     // style 태그 추출
     const styles = container.querySelectorAll('style');
     const stylesHtml = Array.from(styles)
@@ -86,7 +203,11 @@ export async function parseHwpToHtml(file) {
     const cleanBody = replaceHwpFonts(bodyHtml);
     const cleanStyles = replaceHwpFonts(stylesHtml);
 
-    return wrapInHtmlTemplate(cleanBody, cleanStyles);
+    // 색상 보정: 어두운 배경 → 흰색, 밝은 텍스트 → 어두운 색
+    const fixedBody = fixColors(cleanBody);
+    const fixedStyles = fixColors(cleanStyles);
+
+    return wrapInHtmlTemplate(fixedBody, fixedStyles);
   } finally {
     document.body.removeChild(container);
   }

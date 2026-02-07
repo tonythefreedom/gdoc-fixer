@@ -638,6 +638,37 @@ export async function modifySlideHtml(currentSlideHtml, instruction) {
   return html;
 }
 
+// ─── Document-level HTML modification ───
+
+const MODIFY_DOCUMENT_PROMPT = `당신은 HTML 문서를 수정하는 전문가입니다.
+
+주어진 HTML 문서와 사용자의 수정 지시를 받아 수정된 HTML 문서를 반환하세요.
+
+규칙:
+- 원본 HTML 문서의 전체 구조(<!DOCTYPE html>부터 </html>까지)를 유지하세요
+- <head> 내의 메타 태그, 스타일, 폰트 링크 등을 그대로 유지하세요
+- Tailwind CSS CDN 스크립트가 포함되어 있으면 유지하세요
+- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
+- 사용자의 수정 지시에 따라 <body> 내의 콘텐츠를 수정하세요
+- 문서의 서식(글꼴, 크기, 색상, 정렬 등)을 최대한 유지하면서 지시사항을 반영하세요
+- 표(table), 목록(ul/ol), 이미지(img) 등 기존 HTML 요소를 적절히 활용하세요
+- 수정된 전체 HTML 문서만 출력하세요. 다른 설명 텍스트 없이 HTML만 출력하세요.`;
+
+export async function modifyDocumentHtml(currentHtml, instruction) {
+  if (!API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const userText = `현재 HTML 문서:\n\n${currentHtml}\n\n수정 지시:\n${instruction}`;
+  const html = await callProModel(MODIFY_DOCUMENT_PROMPT, userText);
+
+  if (!html.includes('<')) {
+    throw new Error('유효한 HTML이 반환되지 않았습니다.');
+  }
+
+  return html;
+}
+
 // ─── Viewport fix: render → screenshot → Gemini Flash multimodal → fixed HTML ───
 
 async function renderSlideToBase64(slideHtml) {
