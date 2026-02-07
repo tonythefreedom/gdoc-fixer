@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2 } from 'lucide-react';
+import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
 import useSlideStore from '../store/useSlideStore';
@@ -17,6 +17,8 @@ export default function Sidebar() {
   const isImagePanelOpen = useAppStore((s) => s.isImagePanelOpen);
   const createFileFromHwp = useAppStore((s) => s.createFileFromHwp);
   const hwpImporting = useAppStore((s) => s.hwpImporting);
+  const startPlanning = useAppStore((s) => s.startPlanning);
+  const isPlanningMode = useAppStore((s) => s.isPlanningMode);
 
   const presentations = useSlideStore((s) => s.presentations);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
@@ -136,6 +138,30 @@ export default function Sidebar() {
       </div>
 
       <div className="p-3 space-y-2">
+        <button
+          onClick={() => {
+            clearActivePresentation();
+            startPlanning();
+          }}
+          disabled={isPlanningMode}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            isPlanningMode
+              ? 'bg-emerald-700 text-white cursor-default'
+              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+          }`}
+        >
+          {isPlanningMode ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              기획안 작성 중...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4" />
+              새 기획안
+            </>
+          )}
+        </button>
         <button
           onClick={handleCreate}
           className="w-full flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors"

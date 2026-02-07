@@ -149,6 +149,25 @@ export async function uploadSlideImages(uid, presId, slideIndex, html) {
   return result;
 }
 
+export async function uploadDocumentImages(uid, html) {
+  const dataUriRegex = /data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/g;
+  const matches = [...new Set(html.match(dataUriRegex) || [])];
+
+  if (matches.length === 0) return html;
+
+  let result = html;
+  const uploads = matches.map(async (dataUri, i) => {
+    const blob = dataUriToBlob(dataUri);
+    const ext = blob.type.split('/')[1].replace('+xml', '');
+    const path = `wiki-images/docs/${uid}/doc_${Date.now()}_${i}.${ext}`;
+    const url = await uploadBlobToGcs(path, blob);
+    result = result.replaceAll(dataUri, url);
+  });
+
+  await Promise.all(uploads);
+  return result;
+}
+
 // Presentation Firestore operations
 
 function presCol(uid) {

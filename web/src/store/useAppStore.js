@@ -56,6 +56,9 @@ const useAppStore = create((set, get) => ({
   // HWP import
   hwpImporting: false,
 
+  // Planning mode
+  isPlanningMode: false,
+
   // UI state
   isExporting: false,
   modalImageKey: null,
@@ -109,6 +112,24 @@ const useAppStore = create((set, get) => ({
     } finally {
       set({ hwpImporting: false });
     }
+  },
+
+  startPlanning: () => {
+    set({ activeFileId: null, activeFileContent: '', isPlanningMode: true });
+  },
+
+  cancelPlanning: () => {
+    set({ isPlanningMode: false });
+  },
+
+  createFileWithContent: async (name, content) => {
+    const { uid } = get();
+    if (!uid) return;
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const file = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
+    await createFileDoc(uid, file, content);
+    set({ files: [...get().files, file], isPlanningMode: false });
+    get().setActiveFile(id);
   },
 
   setActiveFile: async (fileId) => {

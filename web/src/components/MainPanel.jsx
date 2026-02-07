@@ -7,6 +7,7 @@ import PreviewContainer from './preview/PreviewContainer';
 import ViewportControls from './preview/ViewportControls';
 import ExportButton from './export/ExportButton';
 import SlideEditor from './slide/SlideEditor';
+import PlanningEditor from './planning/PlanningEditor';
 import { useExport } from '../hooks/useExport';
 import { useDocxExport } from '../hooks/useDocxExport';
 import { useDocModify } from '../hooks/useDocModify';
@@ -23,6 +24,7 @@ export default function MainPanel() {
   const generateSlides = useSlideStore((s) => s.generateSlides);
   const isGenerating = useSlideStore((s) => s.isGenerating);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
+  const isPlanningMode = useAppStore((s) => s.isPlanningMode);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -88,6 +90,11 @@ export default function MainPanel() {
     },
     [editorWidth]
   );
+
+  // Planning mode
+  if (isPlanningMode) {
+    return <PlanningEditor />;
+  }
 
   // Presentation mode
   if (activePresentationId) {

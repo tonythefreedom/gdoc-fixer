@@ -271,7 +271,7 @@ async function generateImage(prompt) {
 }
 
 // Generate multiple images in parallel
-async function generateImages(imageDescriptions) {
+export async function generateImages(imageDescriptions) {
   const results = await Promise.allSettled(
     imageDescriptions.map(async (desc) => {
       const dataUri = await generateImage(desc.prompt);
@@ -353,7 +353,7 @@ function removeImageBackground(dataUri, tolerance = 40) {
   });
 }
 
-async function processGeneratedImages(images) {
+export async function processGeneratedImages(images) {
   return Promise.all(
     images.map(async (img) => {
       if (isBackgroundImage(img.label)) {
@@ -664,6 +664,144 @@ export async function modifyDocumentHtml(currentHtml, instruction) {
 
   if (!html.includes('<')) {
     throw new Error('유효한 HTML이 반환되지 않았습니다.');
+  }
+
+  return html;
+}
+
+// ─── Planning: Research + Document Generation with Google Search Grounding ───
+
+const PLANNING_RESEARCH_PROMPT = `당신은 전문 기획안 작성자입니다. 사용자의 기획 브리프를 받아 Google 검색을 활용하여 주제를 조사하고, 전문적인 기획안 문서의 구조를 설계하세요.
+
+반드시 다음 JSON 형식으로만 응답하세요:
+
+{
+  "title": "기획안 제목",
+  "sections": [
+    {
+      "heading": "섹션 제목",
+      "subsections": [
+        {
+          "subheading": "소제목",
+          "contentBrief": "이 소제목 아래에 들어갈 내용 설명 (2-3문장, 조사한 데이터/수치 포함)"
+        }
+      ]
+    }
+  ],
+  "imageDescriptions": [
+    {
+      "label": "이미지 용도 설명 (한글)",
+      "prompt": "Detailed English prompt for image generation AI. Professional, high-quality style."
+    }
+  ],
+  "searchFindings": "조사 결과 요약 (핵심 데이터, 통계, 트렌드 등)"
+}
+
+규칙:
+- Google 검색으로 최신 정보, 통계, 트렌드를 조사하세요
+- 섹션은 5-8개 정도로 구성하세요
+- 이미지는 3-6개 정도 포함하세요
+- imageDescriptions의 prompt는 반드시 영문으로 작성하세요
+- 배경용 이미지의 label에 "배경"을 포함하고 prompt에 "16:9 aspect ratio, suitable for document header background"를 포함하세요
+- 아이콘/로고 이미지의 prompt에 "simple, clean icon design, flat style, white background"를 포함하세요
+- 일반 삽화 이미지의 prompt에 "professional illustration, clean style"을 포함하세요
+- contentBrief에 조사한 구체적 데이터와 수치를 포함하세요
+- JSON만 출력하세요. 다른 텍스트 없이.`;
+
+const PLANNING_COMPOSE_PROMPT = `당신은 전문적인 HTML 기획안 문서를 작성하는 전문가입니다.
+
+주어진 구조화된 기획안 계획과 이미지 플레이스홀더를 사용하여 완성된 HTML 문서를 생성하세요.
+
+규칙:
+- 완전한 HTML 문서를 출력하세요 (<!DOCTYPE html>부터 </html>까지)
+- Tailwind CSS CDN을 포함하세요: <script src="https://cdn.tailwindcss.com"><\\/script>
+- 한국어 폰트: <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+- body에 font-family: 'Noto Sans KR', sans-serif를 적용하세요
+- 전문적이고 깔끔한 기획안 문서 디자인을 적용하세요:
+  - 표지/헤더 섹션 (제목, 날짜, 기획 의도)
+  - 목차
+  - 각 섹션은 명확한 시각적 구분 (배경색, 구분선 등)
+  - 데이터는 표(table) 또는 리스트로 정리
+  - 적절한 여백과 타이포그래피
+  - 인용/출처 표시
+- 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 적절한 위치에 배치하세요:
+  - 배경 이미지: style="background-image: url({{IMAGE_1}}); background-size: cover;" 형태
+  - 삽화/아이콘 이미지: <img src="{{IMAGE_1}}" class="..." alt="..."> 형태
+- 이미지 크기는 문서 레이아웃에 맞게 Tailwind 클래스로 조정하세요
+- 외부 이미지 URL을 절대 사용하지 마세요 (플레이스홀더만 사용)
+- A4 또는 웹 문서에 적합한 너비(max-width: 1024px)로 설계하세요
+- 수정된 전체 HTML 문서만 출력하세요. 다른 설명 텍스트 없이.`;
+
+export async function researchAndPlan(brief) {
+  if (!API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const res = await fetch(PRO_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: PLANNING_RESEARCH_PROMPT },
+            { text: `기획 브리프:\n\n${brief}` },
+          ],
+        },
+      ],
+      tools: [{ google_search: {} }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 32768,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `주제 조사 API 오류: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const text = parseGeminiResponse(data);
+  const cleaned = stripCodeFences(text);
+
+  try {
+    const plan = JSON.parse(cleaned);
+    if (!plan.title || !plan.sections || !plan.imageDescriptions) {
+      throw new Error('기획안 구조가 올바르지 않습니다.');
+    }
+    return plan;
+  } catch (parseErr) {
+    if (parseErr.message === '기획안 구조가 올바르지 않습니다.') throw parseErr;
+    console.error('Plan JSON parse failed:', cleaned);
+    throw new Error('기획안 구조 파싱에 실패했습니다. 다시 시도해주세요.');
+  }
+}
+
+export async function composeDocument(plan, processedImages) {
+  if (!API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const imageInfo = processedImages
+    .map((img, i) => `- {{IMAGE_${i + 1}}}: ${img.label}`)
+    .join('\n');
+
+  const planText = JSON.stringify(plan, null, 2);
+
+  const userText = `기획안 구조:\n\n${planText}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n위 구조에 따라 전문적인 HTML 기획안 문서를 작성하세요.`;
+
+  let html = await callProModel(PLANNING_COMPOSE_PROMPT, userText);
+
+  // Replace image placeholders with actual data URIs
+  processedImages.forEach((img, i) => {
+    const placeholder = `{{IMAGE_${i + 1}}}`;
+    html = html.replaceAll(placeholder, img.dataUri);
+  });
+
+  if (!html.includes('<')) {
+    throw new Error('유효한 HTML이 생성되지 않았습니다.');
   }
 
   return html;
