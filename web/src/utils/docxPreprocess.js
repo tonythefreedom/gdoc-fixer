@@ -526,14 +526,42 @@ export async function preprocessHtmlForDocx(html) {
     iframe.srcdoc = safeHtml;
   });
 
-  // 5단계: CSS border shorthand → longhand 변환 (html-to-docx의 border 파서 호환)
-  const sanitizedHtml = styledHtml.replace(
+  // 5단계: html-to-docx 호환 CSS 정리
+  // (a) border shorthand → longhand 변환 (html-to-docx의 border 파서는 shorthand 미지원)
+  let sanitizedHtml = styledHtml.replace(
     /(?<![-a-z])border\s*:\s*none\b[^;]*;?/gi,
     'border-top-style:none;border-right-style:none;border-bottom-style:none;border-left-style:none;'
   ).replace(
     /(?<![-a-z])border\s*:\s*0\b[^;]*;?/gi,
     'border-top-width:0;border-right-width:0;border-bottom-width:0;border-left-width:0;'
+  ).replace(
+    // border: Npx solid #color 같은 shorthand → 4방향 longhand
+    /(?<![-a-z])border\s*:\s*(\d+(?:\.\d+)?(?:px|pt))\s+(solid|dashed|dotted|double|groove|ridge|inset|outset)\s+([^;"]+)\s*;?/gi,
+    (_, w, s, c) =>
+      `border-top-width:${w};border-right-width:${w};border-bottom-width:${w};border-left-width:${w};` +
+      `border-top-style:${s};border-right-style:${s};border-bottom-style:${s};border-left-style:${s};` +
+      `border-top-color:${c.trim()};border-right-color:${c.trim()};border-bottom-color:${c.trim()};border-left-color:${c.trim()};`
   );
+
+  // (b) width 값 중 html-to-docx tcW 파서가 지원하지 않는 형식 변환/제거
+  // tcW는 px, pt, cm, in만 지원 — %, auto, fit-content 등은 Invalid XML name: @w 에러 유발
+  sanitizedHtml = sanitizedHtml.replace(/style="([^"]*)"/gi, (match, styleStr) => {
+    const fixed = styleStr.replace(
+      /(?<![-a-z])width\s*:\s*([^;"]+)/gi,
+      (widthMatch, val) => {
+        const v = val.trim();
+        // px, pt, cm, in → 그대로 유지
+        if (/^\d+(\.\d+)?(px|pt|cm|in)$/i.test(v)) return widthMatch;
+        // 퍼센트 → 800px 폴백
+        if (/%/.test(v)) return 'width: 800px';
+        // 단위 없는 숫자 → px 추가
+        if (/^\d+(\.\d+)?$/.test(v)) return `width: ${v}px`;
+        // auto, inherit, fit-content 등 → width 제거 (tcW 생성 방지)
+        return '';
+      }
+    );
+    return `style="${fixed}"`;
+  });
 
   // 6단계: 플레이스홀더를 원본 이미지로 복원
   const finalHtml = restoreImages(sanitizedHtml, imageMap);

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles } from 'lucide-react';
+import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
 import useSlideStore from '../store/useSlideStore';
@@ -19,6 +19,10 @@ export default function Sidebar() {
   const hwpImporting = useAppStore((s) => s.hwpImporting);
   const startPlanning = useAppStore((s) => s.startPlanning);
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
+  const isAdminMode = useAppStore((s) => s.isAdminMode);
+  const setAdminMode = useAppStore((s) => s.setAdminMode);
+
+  const userProfile = useAuthStore((s) => s.userProfile);
 
   const presentations = useSlideStore((s) => s.presentations);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
@@ -380,6 +384,26 @@ export default function Sidebar() {
           </>
         )}
       </div>
+
+      {/* Admin menu */}
+      {userProfile?.role === 'super_admin' && (
+        <div className="px-3 pt-2 pb-1 border-t border-slate-700">
+          <button
+            onClick={() => {
+              clearActivePresentation();
+              setAdminMode(!isAdminMode);
+            }}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isAdminMode
+                ? 'bg-amber-600 text-white'
+                : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            회원 관리
+          </button>
+        </div>
+      )}
 
       {/* User profile */}
       {user && (

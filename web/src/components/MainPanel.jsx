@@ -8,6 +8,7 @@ import ViewportControls from './preview/ViewportControls';
 import ExportButton from './export/ExportButton';
 import SlideEditor from './slide/SlideEditor';
 import PlanningEditor from './planning/PlanningEditor';
+import AdminUserManagement from './AdminUserManagement';
 import { useExport } from '../hooks/useExport';
 import { useDocxExport } from '../hooks/useDocxExport';
 import { useDocModify } from '../hooks/useDocModify';
@@ -25,6 +26,7 @@ export default function MainPanel() {
   const isGenerating = useSlideStore((s) => s.isGenerating);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
+  const isAdminMode = useAppStore((s) => s.isAdminMode);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -90,6 +92,11 @@ export default function MainPanel() {
     },
     [editorWidth]
   );
+
+  // Admin mode
+  if (isAdminMode) {
+    return <AdminUserManagement />;
+  }
 
   // Planning mode
   if (isPlanningMode) {

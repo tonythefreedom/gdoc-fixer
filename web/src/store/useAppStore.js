@@ -59,6 +59,9 @@ const useAppStore = create((set, get) => ({
   // Planning mode
   isPlanningMode: false,
 
+  // Admin mode
+  isAdminMode: false,
+
   // UI state
   isExporting: false,
   modalImageKey: null,
@@ -115,11 +118,19 @@ const useAppStore = create((set, get) => ({
   },
 
   startPlanning: () => {
-    set({ activeFileId: null, activeFileContent: '', isPlanningMode: true });
+    set({ activeFileId: null, activeFileContent: '', isPlanningMode: true, isAdminMode: false });
   },
 
   cancelPlanning: () => {
     set({ isPlanningMode: false });
+  },
+
+  setAdminMode: (v) => {
+    if (v) {
+      set({ isAdminMode: true, activeFileId: null, activeFileContent: '', isPlanningMode: false });
+    } else {
+      set({ isAdminMode: false });
+    }
   },
 
   createFileWithContent: async (name, content) => {
@@ -152,6 +163,7 @@ const useAppStore = create((set, get) => ({
       images: [],
       imageUrls: {},
       isImagePanelOpen: false,
+      isAdminMode: false,
     });
 
     // Load images for this file
