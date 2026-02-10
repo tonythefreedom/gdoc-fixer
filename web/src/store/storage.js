@@ -27,22 +27,67 @@ export async function loadFileList(uid) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+const FIRESTORE_MAX_BYTES = 900_000; // 안전 마진 (~900KB, Firestore 1MB 제한)
+
+function contentExceedsLimit(content) {
+  return new Blob([content]).size > FIRESTORE_MAX_BYTES;
+}
+
+async function uploadContentToGcs(uid, fileId, content) {
+  const path = `wiki-docs/${uid}/${fileId}.html`;
+  const blob = new Blob([content], { type: 'text/html' });
+  return uploadBlobToGcs(path, blob);
+}
+
+async function fetchContentFromGcs(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`GCS fetch failed: ${res.status}`);
+  return res.text();
+}
+
 export async function createFileDoc(uid, file, content) {
-  await setDoc(fileDoc(uid, file.id), {
-    name: file.name,
-    content,
-    createdAt: file.createdAt,
-    updatedAt: file.updatedAt,
-  });
+  if (contentExceedsLimit(content)) {
+    const gcsUrl = await uploadContentToGcs(uid, file.id, content);
+    await setDoc(fileDoc(uid, file.id), {
+      name: file.name,
+      content: '',
+      contentGcsUrl: gcsUrl,
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
+    });
+  } else {
+    await setDoc(fileDoc(uid, file.id), {
+      name: file.name,
+      content,
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
+    });
+  }
 }
 
 export async function loadFileContent(uid, fileId) {
   const snap = await getDoc(fileDoc(uid, fileId));
-  return snap.exists() ? snap.data().content || '' : '';
+  if (!snap.exists()) return '';
+  const data = snap.data();
+  // GCS에 저장된 대용량 콘텐츠 로드
+  if (data.contentGcsUrl) {
+    try {
+      return await fetchContentFromGcs(data.contentGcsUrl);
+    } catch (err) {
+      console.error('GCS content fetch failed:', err);
+      return data.content || '';
+    }
+  }
+  return data.content || '';
 }
 
 export async function updateFileContentDoc(uid, fileId, content) {
-  await updateDoc(fileDoc(uid, fileId), { content, updatedAt: Date.now() });
+  if (contentExceedsLimit(content)) {
+    const gcsUrl = await uploadContentToGcs(uid, fileId, content);
+    await updateDoc(fileDoc(uid, fileId), { content: '', contentGcsUrl: gcsUrl, updatedAt: Date.now() });
+  } else {
+    await updateDoc(fileDoc(uid, fileId), { content, contentGcsUrl: null, updatedAt: Date.now() });
+  }
 }
 
 export async function deleteFileDoc(uid, fileId) {

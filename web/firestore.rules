@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 사용자 파일/프레젠테이션: 본인만 읽기/쓰기
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 공유 문서: 누구나 읽기, 인증된 사용자 생성, 소유자만 삭제
+    match /shared/{shareId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
+    // 유저 프로필
+    match /userProfiles/{uid} {
+      // 수퍼관리자: 전체 프로필 읽기/수정 가능
+      allow read, update: if request.auth != null && request.auth.token.email == 'tony@banya.ai';
+
+      // 본인 프로필: 읽기 + 생성 + lastLoginAt 업데이트
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLoginAt']);
+    }
+  }
+}

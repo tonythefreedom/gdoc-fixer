@@ -21,8 +21,16 @@ function extractGoogleFontUrls(html) {
   return urls;
 }
 
+// Google Fonts에 없는 폰트 (CORS 400 에러 방지)
+const NON_GOOGLE_FONTS = ['pretendard', 'paperlogy'];
+
 async function fetchAndInlineFontCss(fontUrl) {
   try {
+    // Google Fonts에 없는 폰트는 fetch 건너뛰기 (CORS 에러 로그 방지)
+    const familyMatch = fontUrl.match(/family=([^:&]+)/i);
+    if (familyMatch && NON_GOOGLE_FONTS.some((f) => familyMatch[1].toLowerCase().includes(f))) {
+      return null;
+    }
     const res = await fetch(fontUrl);
     if (!res.ok) return null;
     let cssText = await res.text();
@@ -93,9 +101,13 @@ export async function inlineExternalResources(html, iframeDoc) {
     ''
   );
 
-  // 6. Remove Google Fonts link tags (we'll inline them)
+  // 6. Remove Google Fonts link tags and @import (we'll inline them)
   processedHtml = processedHtml.replace(
     /<link[^>]*href=["']https:\/\/fonts\.googleapis\.com[^"']*["'][^>]*\/?>/gi,
+    ''
+  );
+  processedHtml = processedHtml.replace(
+    /@import\s+url\(["']?https:\/\/fonts\.googleapis\.com[^)]*\)[\s;]*/gi,
     ''
   );
 
