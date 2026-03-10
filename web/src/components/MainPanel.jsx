@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText, FileDown, FileCode, Send, IndentIncrease, SeparatorHorizontal } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText, FileDown, FileCode, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
 import HtmlEditor from './editor/HtmlEditor';
@@ -29,6 +29,8 @@ export default function MainPanel() {
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
   const isAdminMode = useAppStore((s) => s.isAdminMode);
+  const attachedExcels = useAppStore((s) => s.attachedExcels);
+  const detachExcel = useAppStore((s) => s.detachExcel);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -326,6 +328,26 @@ export default function MainPanel() {
                 페이지 맞춤
               </button>
             </div>
+            {attachedExcels.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-2 px-1">
+                {attachedExcels.map((excel, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-700">
+                    <Paperclip className="w-3 h-3" />
+                    <span className="font-medium">{excel.fileName}</span>
+                    <span className="text-emerald-500">
+                      ({excel.sheets.length}개 시트)
+                    </span>
+                    <button
+                      onClick={() => detachExcel(idx)}
+                      className="ml-1 p-0.5 rounded hover:bg-emerald-200 text-emerald-500 hover:text-emerald-700 transition-colors"
+                      title="Excel 첨부 해제"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-3">
               <textarea
                 value={modifyPrompt}

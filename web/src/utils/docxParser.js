@@ -881,7 +881,7 @@ export async function parseDocxToHtml(file) {
       color: #1e293b;
       max-width: 900px;
       margin: 0 auto;
-      padding: 40px 32px;
+      padding: 40px 32px 40px 48px;
     }
     table { border-collapse: collapse; margin: 0.5em 0; }
     img { max-width: 100%; height: auto; }

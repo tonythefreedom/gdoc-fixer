@@ -57,6 +57,9 @@ const useAppStore = create((set, get) => ({
   hwpImporting: false,
   docxImporting: false,
 
+  // Excel attachments (parsed sheet data for Gemini context)
+  attachedExcels: [], // [{ fileName, sheets: [{ name, csv, rowCount, colCount }], promptText }]
+
   // Planning mode
   isPlanningMode: false,
 
@@ -137,6 +140,31 @@ const useAppStore = create((set, get) => ({
     } finally {
       set({ docxImporting: false });
     }
+  },
+
+  attachExcel: async (file) => {
+    try {
+      const { parseExcelToSheets, formatSheetsForPrompt } = await import('../utils/xlsxParser');
+      const sheets = await parseExcelToSheets(file);
+      if (!sheets.length) {
+        alert('Excel 파일에 데이터가 있는 시트가 없습니다.');
+        return;
+      }
+      const promptText = formatSheetsForPrompt(file.name, sheets);
+      const entry = { fileName: file.name, sheets, promptText };
+      set({ attachedExcels: [...get().attachedExcels, entry] });
+    } catch (err) {
+      console.error('Excel parse failed:', err);
+      alert(`Excel 파일 파싱 실패: ${err.message || err}`);
+    }
+  },
+
+  detachExcel: (index) => {
+    set({ attachedExcels: get().attachedExcels.filter((_, i) => i !== index) });
+  },
+
+  detachAllExcels: () => {
+    set({ attachedExcels: [] });
   },
 
   startPlanning: () => {
