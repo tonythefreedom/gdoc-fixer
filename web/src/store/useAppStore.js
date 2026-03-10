@@ -156,6 +156,42 @@ const useAppStore = create((set, get) => ({
           reader.readAsDataURL(f);
         });
 
+      // Helper: Resize image to max dimension for API token savings
+      const MAX_IMAGE_DIM = 1536;
+      const resizeImage = (file, mimeType) =>
+        new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            let { width: w, height: h } = img;
+            // Skip resize if already small enough
+            if (w <= MAX_IMAGE_DIM && h <= MAX_IMAGE_DIM) {
+              const reader = new FileReader();
+              reader.onload = () => resolve({ base64: reader.result.split(',')[1], mimeType });
+              reader.readAsDataURL(file);
+              return;
+            }
+            const ratio = Math.min(MAX_IMAGE_DIM / w, MAX_IMAGE_DIM / h);
+            w = Math.round(w * ratio);
+            h = Math.round(h * ratio);
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            // Use JPEG for smaller size (except PNG with transparency needs)
+            const outMime = mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+            const dataUrl = canvas.toDataURL(outMime, 0.85);
+            resolve({ base64: dataUrl.split(',')[1], mimeType: outMime });
+          };
+          img.onerror = () => {
+            // Fallback: use original
+            const reader = new FileReader();
+            reader.onload = () => resolve({ base64: reader.result.split(',')[1], mimeType });
+            reader.readAsDataURL(file);
+          };
+          img.src = URL.createObjectURL(file);
+        });
+
       // Excel files → parse to CSV text
       if (['xlsx', 'xlsm', 'xls'].includes(ext)) {
         const { parseExcelToSheets, formatSheetsForPrompt } = await import('../utils/xlsxParser');
