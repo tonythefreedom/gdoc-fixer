@@ -330,24 +330,26 @@ export default function MainPanel() {
                 페이지 맞춤
               </button>
             </div>
-            {attachments.length > 0 && (
+            {attachments.some((att) => att.type !== 'image') && (
               <div className="flex flex-wrap items-center gap-1.5 mb-2 px-1">
-                {attachments.map((att, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-md text-xs text-indigo-700">
-                    <Paperclip className="w-3 h-3" />
-                    <span className="font-medium truncate max-w-[160px]">{att.fileName}</span>
-                    {att.type === 'excel' && att.sheetCount && (
-                      <span className="text-indigo-400">({att.sheetCount}개 시트)</span>
-                    )}
-                    <button
-                      onClick={() => detachFile(idx)}
-                      className="ml-1 p-0.5 rounded hover:bg-indigo-200 text-indigo-400 hover:text-indigo-700 transition-colors"
-                      title="첨부 해제"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+                {attachments.map((att, idx) =>
+                  att.type === 'image' ? null : (
+                    <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-md text-xs text-indigo-700">
+                      <Paperclip className="w-3 h-3" />
+                      <span className="font-medium truncate max-w-[160px]">{att.fileName}</span>
+                      {att.type === 'excel' && att.sheetCount && (
+                        <span className="text-indigo-400">({att.sheetCount}개 시트)</span>
+                      )}
+                      <button
+                        onClick={() => detachFile(idx)}
+                        className="ml-1 p-0.5 rounded hover:bg-indigo-200 text-indigo-400 hover:text-indigo-700 transition-colors"
+                        title="첨부 해제"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
             )}
             <div className="flex items-end gap-3">
@@ -379,11 +381,14 @@ export default function MainPanel() {
               <input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 accept=".xlsx,.xlsm,.xls,.png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.txt,.csv,.json,.xml,.md,.html,.css,.js,.ts,.tsx,.jsx"
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    attachFile(file);
+                  const files = e.target.files;
+                  if (files) {
+                    for (const file of files) {
+                      attachFile(file);
+                    }
                     e.target.value = '';
                   }
                 }}

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
 import { useResizable } from '../../hooks/useResizable';
 import PreviewIframe from './PreviewIframe';
@@ -9,6 +10,12 @@ export default function PreviewContainer({ iframeRef }) {
   const viewportHeight = useAppStore((s) => s.viewportHeight);
   const setViewportSize = useAppStore((s) => s.setViewportSize);
   const activeFileContent = useAppStore((s) => s.activeFileContent);
+  const attachments = useAppStore((s) => s.attachments);
+  const detachFile = useAppStore((s) => s.detachFile);
+
+  const imageAttachments = attachments
+    .map((att, idx) => ({ ...att, originalIndex: idx }))
+    .filter((att) => att.type === 'image');
 
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
@@ -88,6 +95,35 @@ export default function PreviewContainer({ iframeRef }) {
           scaledH={scaledH}
         />
       </div>
+
+      {/* Image attachment thumbnails — left margin */}
+      {imageAttachments.length > 0 && (
+        <div className="absolute top-4 left-4 flex flex-col gap-3 z-10">
+          {imageAttachments.map((att) => (
+            <div
+              key={att.originalIndex}
+              className="relative group rounded-lg overflow-hidden shadow-lg border-2 border-white/80 bg-white"
+              style={{ width: 96, height: 96 }}
+            >
+              <img
+                src={`data:${att.mimeType};base64,${att.base64}`}
+                alt={att.fileName}
+                className="w-full h-full object-cover"
+              />
+              <button
+                onClick={() => detachFile(att.originalIndex)}
+                className="absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white hover:bg-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                title="첨부 해제"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+              <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-black/50 text-white text-[9px] truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                {att.fileName}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Dimension label */}
       <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-800/80 text-white text-[10px] font-mono rounded-full backdrop-blur-sm">
