@@ -6,16 +6,13 @@ export function useDocModify() {
   const [modifyPrompt, setModifyPrompt] = useState('');
 
   const modifyDocument = useCallback(async (instruction) => {
-    const { activeFileContent, activeFileId, attachedExcels } = useAppStore.getState();
+    const { activeFileContent, activeFileId, attachments } = useAppStore.getState();
     if (!activeFileContent || !activeFileId || isModifying) return;
 
     setIsModifying(true);
     try {
       const { modifyDocumentHtml } = await import('../utils/geminiApi');
-      const excelContext = attachedExcels.length > 0
-        ? attachedExcels.map(e => e.promptText).join('\n\n')
-        : null;
-      const modifiedHtml = await modifyDocumentHtml(activeFileContent, instruction, excelContext);
+      const modifiedHtml = await modifyDocumentHtml(activeFileContent, instruction, attachments);
       await useAppStore.getState().updateFileContent(modifiedHtml);
     } catch (err) {
       console.error('Document modify failed:', err);

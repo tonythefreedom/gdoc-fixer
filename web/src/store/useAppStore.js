@@ -57,8 +57,8 @@ const useAppStore = create((set, get) => ({
   hwpImporting: false,
   docxImporting: false,
 
-  // Excel attachments (parsed sheet data for Gemini context)
-  attachedExcels: [], // [{ fileName, sheets: [{ name, csv, rowCount, colCount }], promptText }]
+  // File attachments for Gemini context
+  attachments: [], // [{ fileName, type: 'excel'|'image'|'text'|'pdf', promptText?, mimeType?, base64? }]
 
   // Planning mode
   isPlanningMode: false,
@@ -142,29 +142,64 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  attachExcel: async (file) => {
+  attachFile: async (file) => {
     try {
-      const { parseExcelToSheets, formatSheetsForPrompt } = await import('../utils/xlsxParser');
-      const sheets = await parseExcelToSheets(file);
-      if (!sheets.length) {
-        alert('Excel 파일에 데이터가 있는 시트가 없습니다.');
+      const name = file.name;
+      const ext = name.split('.').pop().toLowerCase();
+
+      // Excel files → parse to CSV text
+      if (['xlsx', 'xlsm', 'xls'].includes(ext)) {
+        const { parseExcelToSheets, formatSheetsForPrompt } = await import('../utils/xlsxParser');
+        const sheets = await parseExcelToSheets(file);
+        if (!sheets.length) {
+          alert('Excel 파일에 데이터가 있는 시트가 없습니다.');
+          return;
+        }
+        const promptText = formatSheetsForPrompt(name, sheets);
+        const entry = { fileName: name, type: 'excel', promptText, sheetCount: sheets.length };
+        set({ attachments: [...get().attachments, entry] });
         return;
       }
-      const promptText = formatSheetsForPrompt(file.name, sheets);
-      const entry = { fileName: file.name, sheets, promptText };
-      set({ attachedExcels: [...get().attachedExcels, entry] });
+
+      // Image files → base64
+      const imageMimes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' };
+      if (imageMimes[ext]) {
+        const buf = await file.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const entry = { fileName: name, type: 'image', mimeType: imageMimes[ext], base64 };
+        set({ attachments: [...get().attachments, entry] });
+        return;
+      }
+
+      // PDF files → base64
+      if (ext === 'pdf') {
+        const buf = await file.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const entry = { fileName: name, type: 'pdf', mimeType: 'application/pdf', base64 };
+        set({ attachments: [...get().attachments, entry] });
+        return;
+      }
+
+      // Text-like files → read as text
+      const text = await file.text();
+      if (!text.trim()) {
+        alert('파일에 내용이 없습니다.');
+        return;
+      }
+      const entry = { fileName: name, type: 'text', promptText: `[첨부 파일: ${name}]\n${text}` };
+      set({ attachments: [...get().attachments, entry] });
     } catch (err) {
-      console.error('Excel parse failed:', err);
-      alert(`Excel 파일 파싱 실패: ${err.message || err}`);
+      console.error('File attach failed:', err);
+      alert(`파일 첨부 실패: ${err.message || err}`);
     }
   },
 
-  detachExcel: (index) => {
-    set({ attachedExcels: get().attachedExcels.filter((_, i) => i !== index) });
+  detachFile: (index) => {
+    set({ attachments: get().attachments.filter((_, i) => i !== index) });
   },
 
-  detachAllExcels: () => {
-    set({ attachedExcels: [] });
+  detachAllFiles: () => {
+    set({ attachments: [] });
   },
 
   startPlanning: () => {

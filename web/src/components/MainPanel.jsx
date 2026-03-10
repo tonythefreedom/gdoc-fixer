@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText, FileDown, FileCode, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText, FileDown, FileCode, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X, AtSign } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
 import HtmlEditor from './editor/HtmlEditor';
@@ -29,8 +29,10 @@ export default function MainPanel() {
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
   const isAdminMode = useAppStore((s) => s.isAdminMode);
-  const attachedExcels = useAppStore((s) => s.attachedExcels);
-  const detachExcel = useAppStore((s) => s.detachExcel);
+  const attachFile = useAppStore((s) => s.attachFile);
+  const attachments = useAppStore((s) => s.attachments);
+  const detachFile = useAppStore((s) => s.detachFile);
+  const fileInputRef = useRef(null);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -328,19 +330,19 @@ export default function MainPanel() {
                 페이지 맞춤
               </button>
             </div>
-            {attachedExcels.length > 0 && (
+            {attachments.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 mb-2 px-1">
-                {attachedExcels.map((excel, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-700">
+                {attachments.map((att, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-md text-xs text-indigo-700">
                     <Paperclip className="w-3 h-3" />
-                    <span className="font-medium">{excel.fileName}</span>
-                    <span className="text-emerald-500">
-                      ({excel.sheets.length}개 시트)
-                    </span>
+                    <span className="font-medium truncate max-w-[160px]">{att.fileName}</span>
+                    {att.type === 'excel' && att.sheetCount && (
+                      <span className="text-indigo-400">({att.sheetCount}개 시트)</span>
+                    )}
                     <button
-                      onClick={() => detachExcel(idx)}
-                      className="ml-1 p-0.5 rounded hover:bg-emerald-200 text-emerald-500 hover:text-emerald-700 transition-colors"
-                      title="Excel 첨부 해제"
+                      onClick={() => detachFile(idx)}
+                      className="ml-1 p-0.5 rounded hover:bg-indigo-200 text-indigo-400 hover:text-indigo-700 transition-colors"
+                      title="첨부 해제"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -362,6 +364,30 @@ export default function MainPanel() {
                 className="flex-1 resize-none rounded-lg bg-slate-50 text-slate-800 text-sm px-4 py-2.5 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 border border-slate-200"
                 rows={2}
                 disabled={isModifying}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex items-center justify-center w-10 py-2.5 text-sm font-bold rounded-lg transition-colors shrink-0 ${
+                  attachments.length > 0
+                    ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-500'
+                }`}
+                title="파일 첨부 (Excel, 이미지, PDF, 텍스트 등)"
+              >
+                <AtSign className="w-4 h-4" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xlsm,.xls,.png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.txt,.csv,.json,.xml,.md,.html,.css,.js,.ts,.tsx,.jsx"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    attachFile(file);
+                    e.target.value = '';
+                  }
+                }}
+                className="hidden"
               />
               <button
                 onClick={handleDocModify}

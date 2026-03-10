@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users, Paperclip } from 'lucide-react';
+import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
 import useSlideStore from '../store/useSlideStore';
@@ -43,11 +43,6 @@ export default function Sidebar() {
   const [editName, setEditName] = useState('');
   const hwpInputRef = useRef(null);
   const docxInputRef = useRef(null);
-  const excelInputRef = useRef(null);
-
-  const attachExcel = useAppStore((s) => s.attachExcel);
-  const attachedExcels = useAppStore((s) => s.attachedExcels);
-  const detachAllExcels = useAppStore((s) => s.detachAllExcels);
   const [editingPresId, setEditingPresId] = useState(null);
   const [editPresName, setEditPresName] = useState('');
 
@@ -238,42 +233,6 @@ export default function Sidebar() {
             const file = e.target.files?.[0];
             if (file) {
               createFileFromDocx(file);
-              e.target.value = '';
-            }
-          }}
-          className="hidden"
-        />
-        <button
-          onClick={() => excelInputRef.current?.click()}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            attachedExcels.length > 0
-              ? 'bg-emerald-700 text-white hover:bg-emerald-600'
-              : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-          }`}
-        >
-          <Paperclip className="w-4 h-4" />
-          {attachedExcels.length > 0
-            ? `Excel ${attachedExcels.length}개 첨부됨`
-            : 'Excel 첨부'
-          }
-        </button>
-        {attachedExcels.length > 0 && (
-          <button
-            onClick={detachAllExcels}
-            className="w-full flex items-center justify-center gap-1 px-3 py-1 rounded-lg text-xs text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-3 h-3" />
-            전체 해제
-          </button>
-        )}
-        <input
-          ref={excelInputRef}
-          type="file"
-          accept=".xlsx,.xlsm,.xls"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-              attachExcel(file);
               e.target.value = '';
             }
           }}
