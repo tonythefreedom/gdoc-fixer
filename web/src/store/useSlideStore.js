@@ -290,11 +290,18 @@ const useSlideStore = create((set, get) => ({
       }
 
       set((state) => {
-        const newHistories = state.slideHistories.map((h, i) => [
-          ...(h || []),
-          { instruction: `[전체] ${instruction}`, html: newSlides[i] || state.slides[i], timestamp: Date.now() },
-        ]);
-        return { slides: newSlides, slideHistories: newHistories };
+        // 슬라이드 수가 변경될 수 있으므로 새 배열 크기에 맞춤
+        const newHistories = newSlides.map((slideHtml, i) => {
+          const existing = state.slideHistories[i] || [];
+          return [
+            ...existing,
+            { instruction: `[전체] ${instruction}`, html: slideHtml, timestamp: Date.now() },
+          ];
+        });
+        // currentSlideIndex가 범위를 초과하지 않도록 조정
+        const maxIndex = Math.max(0, newSlides.length - 1);
+        const adjustedIndex = Math.min(state.currentSlideIndex, maxIndex);
+        return { slides: newSlides, slideHistories: newHistories, currentSlideIndex: adjustedIndex };
       });
 
       if (uid && activePresentationId) {

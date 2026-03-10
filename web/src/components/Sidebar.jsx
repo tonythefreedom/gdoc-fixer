@@ -17,6 +17,8 @@ export default function Sidebar() {
   const isImagePanelOpen = useAppStore((s) => s.isImagePanelOpen);
   const createFileFromHwp = useAppStore((s) => s.createFileFromHwp);
   const hwpImporting = useAppStore((s) => s.hwpImporting);
+  const createFileFromDocx = useAppStore((s) => s.createFileFromDocx);
+  const docxImporting = useAppStore((s) => s.docxImporting);
   const startPlanning = useAppStore((s) => s.startPlanning);
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
   const isAdminMode = useAppStore((s) => s.isAdminMode);
@@ -40,6 +42,7 @@ export default function Sidebar() {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const hwpInputRef = useRef(null);
+  const docxInputRef = useRef(null);
   const [editingPresId, setEditingPresId] = useState(null);
   const [editPresName, setEditPresName] = useState('');
 
@@ -196,6 +199,40 @@ export default function Sidebar() {
             const file = e.target.files?.[0];
             if (file) {
               createFileFromHwp(file);
+              e.target.value = '';
+            }
+          }}
+          className="hidden"
+        />
+        <button
+          onClick={() => docxInputRef.current?.click()}
+          disabled={docxImporting}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            docxImporting
+              ? 'bg-slate-700 text-slate-400 cursor-wait'
+              : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+          }`}
+        >
+          {docxImporting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              DOCX 변환 중...
+            </>
+          ) : (
+            <>
+              <FileUp className="w-4 h-4" />
+              MS Word 가져오기
+            </>
+          )}
+        </button>
+        <input
+          ref={docxInputRef}
+          type="file"
+          accept=".docx,.doc"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              createFileFromDocx(file);
               e.target.value = '';
             }
           }}

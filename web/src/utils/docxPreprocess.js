@@ -393,8 +393,68 @@ function walkAndConvertLayout(el, win, doc) {
       ? `${inlineStyle}; max-width: 100%; height: auto;`
       : 'max-width: 100%; height: auto;';
     el.setAttribute('style', imgStyle);
-  } else if (tag === 'table' || tag === 'tr' || tag === 'td' || tag === 'th') {
-    // 이미 변환된 table 요소는 건드리지 않음
+  } else if (tag === 'table') {
+    // table: 기존 인라인 스타일 보존 + computed width 추가
+    const existing = el.getAttribute('style') || '';
+    const computed = win.getComputedStyle(el);
+    const w = computed.width;
+    if (w && w !== 'auto' && !existing.includes('width')) {
+      el.setAttribute('style', existing ? `${existing}; width: ${w}` : `width: ${w}`);
+    }
+  } else if (tag === 'td' || tag === 'th') {
+    // td/th: 기존 인라인 스타일 보존 + computed width, 배경색, 색상 추가
+    const existing = el.getAttribute('style') || '';
+    const computed = win.getComputedStyle(el);
+    const parts = existing ? [existing] : [];
+    const w = computed.width;
+    if (w && w !== 'auto' && !existing.includes('width')) {
+      parts.push(`width: ${w}`);
+    }
+    const bg = computed.backgroundColor;
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent' && !existing.includes('background-color')) {
+      parts.push(`background-color: ${bg}`);
+    }
+    const color = computed.color;
+    if (color && color !== 'rgb(0, 0, 0)' && !existing.includes('color')) {
+      parts.push(`color: ${color}`);
+    }
+    const ta = computed.textAlign;
+    if (ta && ta !== 'start' && ta !== 'left' && !existing.includes('text-align')) {
+      parts.push(`text-align: ${ta}`);
+    }
+    const fs = computed.fontSize;
+    if (fs && fs !== '16px' && !existing.includes('font-size')) {
+      parts.push(`font-size: ${fs}`);
+    }
+    const fw = computed.fontWeight;
+    if (fw && fw !== '400' && fw !== 'normal' && !existing.includes('font-weight')) {
+      parts.push(`font-weight: ${fw}`);
+    }
+    // 패딩
+    const pt = computed.paddingTop, pr = computed.paddingRight, pb = computed.paddingBottom, pl = computed.paddingLeft;
+    if (!existing.includes('padding')) {
+      if (pt && pt !== '0px') parts.push(`padding-top: ${pt}`);
+      if (pr && pr !== '0px') parts.push(`padding-right: ${pr}`);
+      if (pb && pb !== '0px') parts.push(`padding-bottom: ${pb}`);
+      if (pl && pl !== '0px') parts.push(`padding-left: ${pl}`);
+    }
+    // 보더
+    ['Top', 'Right', 'Bottom', 'Left'].forEach((side) => {
+      const bw = computed[`border${side}Width`];
+      const bs = computed[`border${side}Style`];
+      const bc = computed[`border${side}Color`];
+      const kebab = side.toLowerCase();
+      if (bw && bw !== '0px' && bs && bs !== 'none') {
+        if (!existing.includes(`border-${kebab}`)) {
+          parts.push(`border-${kebab}-width: ${bw}`);
+          parts.push(`border-${kebab}-style: ${bs}`);
+          if (bc) parts.push(`border-${kebab}-color: ${bc}`);
+        }
+      }
+    });
+    el.setAttribute('style', parts.join('; '));
+  } else if (tag === 'tr') {
+    // tr은 스킵
   } else {
     const inlineStyle = inlineStylesFromComputed(el, win);
     if (inlineStyle) {

@@ -53,8 +53,9 @@ const useAppStore = create((set, get) => ({
   images: [],
   imageUrls: {},
 
-  // HWP import
+  // HWP / DOCX import
   hwpImporting: false,
+  docxImporting: false,
 
   // Planning mode
   isPlanningMode: false,
@@ -114,6 +115,27 @@ const useAppStore = create((set, get) => ({
       alert(`HWP 파일 가져오기 실패: ${err.message || err}`);
     } finally {
       set({ hwpImporting: false });
+    }
+  },
+
+  createFileFromDocx: async (file) => {
+    const { uid } = get();
+    if (!uid) return;
+    set({ docxImporting: true });
+    try {
+      const { parseDocxToHtml } = await import('../utils/docxParser');
+      const htmlContent = await parseDocxToHtml(file);
+      const name = file.name.replace(/\.docx?$/i, '') || `docx_${Date.now().toString(36)}`;
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const fileDoc = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
+      await createFileDoc(uid, fileDoc, htmlContent);
+      set({ files: [...get().files, fileDoc] });
+      get().setActiveFile(id);
+    } catch (err) {
+      console.error('DOCX import failed:', err);
+      alert(`DOCX 파일 가져오기 실패: ${err.message || err}`);
+    } finally {
+      set({ docxImporting: false });
     }
   },
 
