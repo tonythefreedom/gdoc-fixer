@@ -33,6 +33,9 @@ function applyInlineStyles(el, win) {
   const tag = el.tagName.toLowerCase();
   if (tag === 'script' || tag === 'style' || tag === 'link' || tag === 'br') return;
 
+  // 코멘트 팝업 요소는 이미 인라인 스타일이 설정됨 → 건드리지 않음
+  if (el.hasAttribute('data-comment-idx') || el.hasAttribute('data-comment-popup') || el.hasAttribute('data-comment-wrapper')) return;
+
   // <img>: src 보존, 크기만 보존
   if (tag === 'img') {
     const cs = win.getComputedStyle(el);
@@ -590,6 +593,68 @@ async function renderChartToImage(chartData) {
   return dataUrl;
 }
 
+/**
+ * docx-preview의 코멘트 요소를 클릭 팝업 방식으로 변환.
+ * hover 기반 CSS 팝오버는 인라인 스타일 적용 시 소실되므로,
+ * 인라인 JS + CSS로 독립적인 클릭 팝업 구현.
+ */
+function processComments(container) {
+  // docx-preview className prefix: 'docx-viewer' (renderAsync 옵션에서 설정)
+  const commentRefs = container.querySelectorAll('[class*="comment-ref"]');
+  if (!commentRefs.length) return;
+
+  console.log(`[DOCX Import] 코멘트 ${commentRefs.length}개 처리`);
+
+  commentRefs.forEach((ref, i) => {
+    // 말풍선 아이콘 옆의 popover div 찾기 (sibling)
+    const popover = ref.nextElementSibling;
+    if (!popover || !popover.className?.includes('comment-popover')) return;
+
+    // popover 내용 추출
+    const authorEl = popover.querySelector('[class*="comment-author"]');
+    const dateEl = popover.querySelector('[class*="comment-date"]');
+    const author = authorEl?.textContent || '';
+    const date = dateEl?.textContent || '';
+
+    // popover의 나머지 내용 (코멘트 본문)
+    const bodyParts = [];
+    for (const child of popover.children) {
+      if (child === authorEl || child === dateEl) continue;
+      bodyParts.push(child.textContent?.trim() || '');
+    }
+    const body = bodyParts.filter(Boolean).join('\n') || popover.textContent?.replace(author, '').replace(date, '').trim() || '';
+
+    // 원래 ref + popover를 새로운 인라인 구조로 교체
+    const wrapper = document.createElement('span');
+    wrapper.setAttribute('data-comment-wrapper', '');
+    wrapper.style.cssText = 'position: relative; display: inline;';
+
+    const bubble = document.createElement('span');
+    bubble.textContent = '💬';
+    bubble.setAttribute('data-comment-idx', i);
+    bubble.style.cssText = 'cursor: pointer; font-size: 14px; vertical-align: super; line-height: 1; user-select: none;';
+
+    const popup = document.createElement('span');
+    popup.setAttribute('data-comment-popup', i);
+    popup.style.cssText = 'display: none; position: absolute; left: 0; top: 1.5em; z-index: 9999; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 10px 14px; min-width: 220px; max-width: 320px; font-size: 13px; line-height: 1.5; color: #1e293b;';
+
+    let popupHtml = '';
+    if (author) popupHtml += `<span style="font-weight: 600; color: #475569; font-size: 12px;">${author}</span>`;
+    if (date) popupHtml += `<span style="color: #94a3b8; font-size: 11px; margin-left: 6px;">${date}</span>`;
+    if (author || date) popupHtml += '<br>';
+    popupHtml += `<span style="color: #334155;">${body}</span>`;
+    popup.innerHTML = popupHtml;
+
+    wrapper.appendChild(bubble);
+    wrapper.appendChild(popup);
+
+    // 원래 요소 교체
+    ref.parentNode.insertBefore(wrapper, ref);
+    popover.remove();
+    ref.remove();
+  });
+}
+
 export async function parseDocxToHtml(file) {
   const { renderAsync } = await import('docx-preview');
   const arrayBuffer = await file.arrayBuffer();
@@ -759,6 +824,9 @@ export async function parseDocxToHtml(file) {
       }
     }
 
+    // ── 코멘트 처리: docx-preview의 hover 팝오버 → 클릭 팝업으로 변환 ──
+    processComments(container);
+
     // docx-preview 구조: <section> → <header> + <article> + <footer>
     // 각각에 인라인 스타일 적용 후 합침
     const section = container.querySelector('section') || container;
@@ -822,6 +890,25 @@ export async function parseDocxToHtml(file) {
 </head>
 <body>
 ${bodyHtml}
+<script>
+(function(){
+  var open = null;
+  document.addEventListener('click', function(e) {
+    var bubble = e.target.closest('[data-comment-idx]');
+    if (bubble) {
+      var idx = bubble.getAttribute('data-comment-idx');
+      var popup = document.querySelector('[data-comment-popup="'+idx+'"]');
+      if (!popup) return;
+      if (open && open !== popup) open.style.display = 'none';
+      popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+      open = popup.style.display === 'block' ? popup : null;
+      e.stopPropagation();
+      return;
+    }
+    if (open) { open.style.display = 'none'; open = null; }
+  });
+})();
+<\/script>
 </body>
 </html>`;
   } finally {
