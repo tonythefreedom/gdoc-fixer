@@ -147,6 +147,15 @@ const useAppStore = create((set, get) => ({
       const name = file.name;
       const ext = name.split('.').pop().toLowerCase();
 
+      // Helper: File → base64 via FileReader (no stack overflow)
+      const fileToBase64 = (f) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(f);
+        });
+
       // Excel files → parse to CSV text
       if (['xlsx', 'xlsm', 'xls'].includes(ext)) {
         const { parseExcelToSheets, formatSheetsForPrompt } = await import('../utils/xlsxParser');
@@ -164,8 +173,7 @@ const useAppStore = create((set, get) => ({
       // Image files → base64
       const imageMimes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' };
       if (imageMimes[ext]) {
-        const buf = await file.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const base64 = await fileToBase64(file);
         const entry = { fileName: name, type: 'image', mimeType: imageMimes[ext], base64 };
         set({ attachments: [...get().attachments, entry] });
         return;
@@ -173,8 +181,7 @@ const useAppStore = create((set, get) => ({
 
       // PDF files → base64
       if (ext === 'pdf') {
-        const buf = await file.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const base64 = await fileToBase64(file);
         const entry = { fileName: name, type: 'pdf', mimeType: 'application/pdf', base64 };
         set({ attachments: [...get().attachments, entry] });
         return;

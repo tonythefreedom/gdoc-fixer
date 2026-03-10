@@ -19,6 +19,7 @@ export default function PreviewContainer({ iframeRef }) {
 
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
+  const [lightboxIndex, setLightboxIndex] = useState(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -48,6 +49,8 @@ export default function PreviewContainer({ iframeRef }) {
     setViewportSize,
     scale,
   });
+
+  const lightboxAtt = lightboxIndex !== null ? imageAttachments[lightboxIndex] : null;
 
   return (
     <div
@@ -99,11 +102,12 @@ export default function PreviewContainer({ iframeRef }) {
       {/* Image attachment thumbnails — left margin */}
       {imageAttachments.length > 0 && (
         <div className="absolute top-4 left-4 flex flex-col gap-3 z-10">
-          {imageAttachments.map((att) => (
+          {imageAttachments.map((att, i) => (
             <div
               key={att.originalIndex}
-              className="relative group rounded-lg overflow-hidden shadow-lg border-2 border-white/80 bg-white"
+              className="relative group rounded-lg overflow-hidden shadow-lg border-2 border-white/80 bg-white cursor-pointer"
               style={{ width: 96, height: 96 }}
+              onClick={() => setLightboxIndex(i)}
             >
               <img
                 src={`data:${att.mimeType};base64,${att.base64}`}
@@ -111,7 +115,10 @@ export default function PreviewContainer({ iframeRef }) {
                 className="w-full h-full object-cover"
               />
               <button
-                onClick={() => detachFile(att.originalIndex)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  detachFile(att.originalIndex);
+                }}
                 className="absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white hover:bg-red-500 transition-colors opacity-0 group-hover:opacity-100"
                 title="첨부 해제"
               >
@@ -122,6 +129,34 @@ export default function PreviewContainer({ iframeRef }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Image lightbox */}
+      {lightboxAtt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setLightboxIndex(null)}
+        >
+          <div
+            className="relative max-w-[90vw] max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={`data:${lightboxAtt.mimeType};base64,${lightboxAtt.base64}`}
+              alt={lightboxAtt.fileName}
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            />
+            <button
+              onClick={() => setLightboxIndex(null)}
+              className="absolute -top-3 -right-3 p-1.5 rounded-full bg-black/80 text-white hover:bg-red-500 transition-colors shadow-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="absolute bottom-0 left-0 right-0 px-4 py-2 bg-black/60 text-white text-sm rounded-b-lg truncate">
+              {lightboxAtt.fileName}
+            </div>
+          </div>
         </div>
       )}
 
