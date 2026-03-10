@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "chart.js": "^4.5.1",
     "docx": "^9.6.1",
+    "docx-preview": "^0.3.7",
     "file-saver": "^2.0.5",
     "firebase": "^12.9.0",
     "html-to-docx": "^1.8.0",
