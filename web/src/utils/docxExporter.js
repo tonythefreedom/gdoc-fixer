@@ -250,41 +250,66 @@ async function convertTable(tableEl, win) {
   }
   if (maxCols === 0) maxCols = 1;
 
-  // 2단계: <col> 또는 <colgroup> 에서 명시적 너비 확인
-  const explicitColWidths = [];
-  const colEls = tableEl.querySelectorAll(':scope > colgroup > col, :scope > col');
-  for (const col of colEls) {
-    const cs = win.getComputedStyle(col);
-    const w = parsePx(cs.width);
-    explicitColWidths.push(w > 0 ? w : 0);
+  // ── 열 너비 추출 (우선순위: 인라인 style > width 속성 > <col> > computed > 균등) ──
+
+  // 헬퍼: 요소에서 명시적 너비(px) 추출
+  function getExplicitWidth(el, tableWPx) {
+    // 1) 인라인 style에서 width 추출
+    const style = el.getAttribute('style') || '';
+    const pxMatch = style.match(/(?:^|;\s*)width\s*:\s*([\d.]+)\s*px/i);
+    if (pxMatch) return parseFloat(pxMatch[1]);
+    const pctMatch = style.match(/(?:^|;\s*)width\s*:\s*([\d.]+)\s*%/i);
+    if (pctMatch && tableWPx > 0) return (parseFloat(pctMatch[1]) / 100) * tableWPx;
+    // 2) width HTML 속성
+    const wAttr = el.getAttribute('width');
+    if (wAttr) {
+      if (wAttr.endsWith('%') && tableWPx > 0) return (parseFloat(wAttr) / 100) * tableWPx;
+      const px = parseFloat(wAttr);
+      if (px > 0) return px;
+    }
+    return 0;
   }
 
-  // 3단계: colspan이 없는 행 중 셀 수가 maxCols인 행에서 computed width 수집
+  // 2단계: <col>/<colgroup> 에서 명시적 너비
+  const colEls = tableEl.querySelectorAll(':scope > colgroup > col, :scope > col');
+  const explicitColWidths = [];
+  for (const col of colEls) {
+    const w = getExplicitWidth(col, tableWPx);
+    if (w > 0) { explicitColWidths.push(w); continue; }
+    const cs = win.getComputedStyle(col);
+    const cw = parsePx(cs.width);
+    explicitColWidths.push(cw > 0 ? cw : 0);
+  }
+
+  // 3단계: colspan 없는 행에서 셀별 너비 수집 (인라인 > computed 순)
   let refWidths = null;
   for (const tr of trEls) {
     const tds = tr.querySelectorAll(':scope > td, :scope > th');
-    // colspan 없이 셀 수 == maxCols 인 행 찾기
     let allSingle = true;
     let cnt = 0;
     for (const td of tds) {
-      const cs = parseInt(td.getAttribute('colspan')) || 1;
-      if (cs > 1) { allSingle = false; break; }
+      if ((parseInt(td.getAttribute('colspan')) || 1) > 1) { allSingle = false; break; }
       cnt++;
     }
     if (allSingle && cnt === maxCols) {
       refWidths = [];
-      let total = 0;
+      let hasExplicit = false;
       for (const td of tds) {
-        const w = parsePx(win.getComputedStyle(td).width);
+        // 먼저 인라인/속성 명시적 너비 시도
+        let w = getExplicitWidth(td, tableWPx);
+        if (w > 0) { hasExplicit = true; }
+        else { w = parsePx(win.getComputedStyle(td).width); }
         refWidths.push(w);
-        total += w;
       }
-      // 너비 편차가 너무 크면 (최대/최소 > 10배) 불량 → 균등 분배로 폴백
+      const total = refWidths.reduce((a, b) => a + b, 0);
+      // 명시적 너비가 하나라도 있으면 우선 사용
+      if (hasExplicit && total > 50) break;
+      // computed width 유효성 검증
       const maxW = Math.max(...refWidths);
       const minW = Math.min(...refWidths.filter(w => w > 0));
-      if (minW > 0 && maxW / minW > 10) refWidths = null;
-      else if (total < 50) refWidths = null;
-      else break; // 유효한 행을 찾음
+      if (minW > 0 && maxW / minW > 10) { refWidths = null; continue; }
+      if (total < 50) { refWidths = null; continue; }
+      break;
     }
   }
 
@@ -292,19 +317,16 @@ async function convertTable(tableEl, win) {
   let cellTwips;
 
   if (explicitColWidths.length === maxCols && explicitColWidths.some(w => w > 0)) {
-    // <col> 명시적 너비 사용
     const total = explicitColWidths.reduce((a, b) => a + b, 0) || 1;
     cellTwips = explicitColWidths.map(w =>
       w > 0 ? Math.round((w / total) * tableWidthTwip) : Math.round(tableWidthTwip / maxCols)
     );
   } else if (refWidths && refWidths.length === maxCols) {
-    // 참조 행의 computed width 비율 사용
     const total = refWidths.reduce((a, b) => a + b, 0) || 1;
     cellTwips = refWidths.map(w =>
       Math.max(Math.round((w / total) * tableWidthTwip), 400)
     );
   } else {
-    // 폴백: 균등 분배
     cellTwips = Array(maxCols).fill(Math.round(tableWidthTwip / maxCols));
   }
 
@@ -332,10 +354,15 @@ async function convertTable(tableEl, win) {
       const colspan = parseInt(td.getAttribute('colspan')) || 1;
       const rowspan = parseInt(td.getAttribute('rowspan')) || 1;
 
-      // 셀 너비: columnWidths 맵에서 해당 열들 합산
+      // 셀 너비: 인라인 명시적 너비 > columnWidths 맵 합산 > 균등 분배
       let cellW = 0;
-      for (let c = 0; c < colspan && (colIdx + c) < cellTwips.length; c++) {
-        cellW += cellTwips[colIdx + c];
+      const explicitCellW = getExplicitWidth(td, tableWPx);
+      if (explicitCellW > 0 && colspan === 1) {
+        cellW = pxToTwip(explicitCellW);
+      } else {
+        for (let c = 0; c < colspan && (colIdx + c) < cellTwips.length; c++) {
+          cellW += cellTwips[colIdx + c];
+        }
       }
       if (cellW === 0) cellW = Math.round(tableWidthTwip / maxCols);
 
