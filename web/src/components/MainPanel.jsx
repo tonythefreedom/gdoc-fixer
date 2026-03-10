@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText, FileDown, Send, IndentIncrease, SeparatorHorizontal } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Share2, Check, Loader2, FileText, FileDown, FileCode, Send, IndentIncrease, SeparatorHorizontal } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
 import HtmlEditor from './editor/HtmlEditor';
@@ -7,6 +7,7 @@ import PreviewContainer from './preview/PreviewContainer';
 import ViewportControls from './preview/ViewportControls';
 import ExportButton from './export/ExportButton';
 import SlideEditor from './slide/SlideEditor';
+import SlideGenerationProgress from './slide/SlideGenerationProgress';
 import PlanningEditor from './planning/PlanningEditor';
 import AdminUserManagement from './AdminUserManagement';
 import { useExport } from '../hooks/useExport';
@@ -24,6 +25,7 @@ export default function MainPanel() {
   const { isModifying, modifyPrompt, setModifyPrompt, handleSubmit: handleDocModify, modifyDocument } = useDocModify();
   const generateSlides = useSlideStore((s) => s.generateSlides);
   const isGenerating = useSlideStore((s) => s.isGenerating);
+  const generationProgress = useSlideStore((s) => s.generationProgress);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
   const isAdminMode = useAppStore((s) => s.isAdminMode);
@@ -56,6 +58,21 @@ export default function MainPanel() {
     } finally {
       setSharing(false);
     }
+  };
+
+  const handleExportHtml = () => {
+    const { activeFileContent, activeFileId: fileId, files: allFiles } = useAppStore.getState();
+    if (!activeFileContent) return;
+    const file = allFiles.find((f) => f.id === fileId);
+    const name = (file?.name || 'document').replace(/\.[^.]+$/, '');
+    const fullHtml = `<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>${name}</title>\n</head>\n<body>\n${activeFileContent}\n</body>\n</html>`;
+    const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleGenerateSlides = () => {
@@ -101,6 +118,11 @@ export default function MainPanel() {
   // Planning mode
   if (isPlanningMode) {
     return <PlanningEditor />;
+  }
+
+  // Presentation generation progress
+  if (generationProgress && generationProgress.phase !== 'complete') {
+    return <SlideGenerationProgress />;
   }
 
   // Presentation mode
@@ -209,6 +231,14 @@ export default function MainPanel() {
                 DOCX 내보내기
               </>
             )}
+          </button>
+          <button
+            onClick={handleExportHtml}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-slate-100 hover:bg-slate-200 text-slate-600"
+            title="HTML 파일로 내보내기"
+          >
+            <FileCode className="w-3.5 h-3.5" />
+            HTML 내보내기
           </button>
           <ExportButton onExport={exportPng} />
         </div>

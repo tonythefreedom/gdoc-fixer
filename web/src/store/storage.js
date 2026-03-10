@@ -245,14 +245,23 @@ export async function loadPresentationList(uid) {
 }
 
 export async function createPresentationDoc(uid, pres) {
-  await setDoc(presDoc(uid, pres.id), {
+  const data = {
     name: pres.name,
     sourceFileId: pres.sourceFileId,
     slides: pres.slides,
     slideHistories: serializeHistories(pres.slideHistories),
     createdAt: pres.createdAt,
     updatedAt: pres.updatedAt,
-  });
+  };
+  if (pres.generationStatus) {
+    data.generationStatus = pres.generationStatus;
+    data.viewportFixedCount = pres.viewportFixedCount || 0;
+  }
+  await setDoc(presDoc(uid, pres.id), data);
+}
+
+export async function updatePresentationGenerationProgress(uid, presId, updates) {
+  await updateDoc(presDoc(uid, presId), { ...updates, updatedAt: Date.now() });
 }
 
 export async function updatePresentationSlides(uid, presId, slides, slideHistories) {

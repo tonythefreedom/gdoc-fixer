@@ -102,12 +102,16 @@ export default function Sidebar() {
     }
   };
 
+  const cancelPlanning = useAppStore((s) => s.cancelPlanning);
+
   const handleSelectFile = (fileId) => {
+    cancelPlanning();
     clearActivePresentation();
     setActiveFile(fileId);
   };
 
   const handleSelectPresentation = (presId) => {
+    cancelPlanning();
     setActiveFile(null);
     setActivePresentation(presId);
   };
@@ -147,24 +151,14 @@ export default function Sidebar() {
             clearActivePresentation();
             startPlanning();
           }}
-          disabled={isPlanningMode}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
             isPlanningMode
-              ? 'bg-emerald-700 text-white cursor-default'
+              ? 'bg-emerald-700 text-white'
               : 'bg-emerald-600 hover:bg-emerald-500 text-white'
           }`}
         >
-          {isPlanningMode ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              기획안 작성 중...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4" />
-              새 기획안
-            </>
-          )}
+          <Sparkles className="w-4 h-4" />
+          {isPlanningMode ? '기획안 작성중' : '새 기획안'}
         </button>
         <button
           onClick={handleCreate}

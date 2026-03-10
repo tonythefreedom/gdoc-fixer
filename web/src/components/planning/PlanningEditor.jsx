@@ -1,6 +1,48 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Loader2, Sparkles, X, Search, Image, FileText, Save, CheckCircle2, Mic, MicOff } from 'lucide-react';
+import { Loader2, Sparkles, X, Search, Image, FileText, Save, CheckCircle2, Mic, MicOff, Briefcase, Building2, Package, PenLine } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
+
+const TEMPLATES = [
+  {
+    key: 'business_plan',
+    icon: Briefcase,
+    label: '사업계획서',
+    desc: '시장 분석, 재무 계획, 투자 유치용',
+    color: 'indigo',
+    placeholder: '예시:\n- AI 기반 헬스케어 플랫폼 사업계획서\n- 목표 시장: 국내 디지털 헬스케어\n- 투자 유치 목표: 시리즈A 50억\n- 핵심 기술: 의료 AI 영상 분석',
+  },
+  {
+    key: 'company_intro',
+    icon: Building2,
+    label: '회사 소개서',
+    desc: '기업 개요, 연혁, 핵심 역량 소개',
+    color: 'emerald',
+    placeholder: '예시:\n- 회사명: (주)테크솔루션\n- 설립: 2020년, AI 솔루션 전문 기업\n- 주요 사업: 산업용 AI, 스마트팩토리\n- 직원 수: 50명, 매출 100억',
+  },
+  {
+    key: 'product_intro',
+    icon: Package,
+    label: '제품 소개서',
+    desc: '기능, 경쟁 비교, 고객 사례',
+    color: 'amber',
+    placeholder: '예시:\n- 제품명: SmartDoc AI\n- 문서 자동 작성/편집 SaaS\n- 타겟: 중소기업 마케팅 담당자\n- 핵심 기능: AI 기획안, 프레젠테이션 자동 생성',
+  },
+  {
+    key: 'custom',
+    icon: PenLine,
+    label: '사용자 정의',
+    desc: '자유 형식, 내 기획 내용 그대로 반영',
+    color: 'slate',
+    placeholder: '기획안 주제와 요구사항을 자유롭게 작성하세요.\n\n작성하신 내용의 구성과 순서를 최대한 그대로 반영하여\nAI가 조사 및 보완하여 기획안을 완성합니다.\n\n예시:\n- 2025년 국내 AI 산업 동향 분석 기획안\n- 사내 ESG 경영 도입 제안서',
+  },
+];
+
+const COLOR_MAP = {
+  indigo: { bg: 'bg-indigo-50', border: 'border-indigo-300', text: 'text-indigo-700', icon: 'text-indigo-500', ring: 'ring-indigo-500' },
+  emerald: { bg: 'bg-emerald-50', border: 'border-emerald-300', text: 'text-emerald-700', icon: 'text-emerald-500', ring: 'ring-emerald-500' },
+  amber: { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-700', icon: 'text-amber-500', ring: 'ring-amber-500' },
+  slate: { bg: 'bg-slate-50', border: 'border-slate-300', text: 'text-slate-700', icon: 'text-slate-500', ring: 'ring-slate-500' },
+};
 
 const STEPS = [
   { key: 'researching', icon: Search, label: 'Google 검색으로 주제 조사 및 구조 설계 중...' },
@@ -11,6 +53,7 @@ const STEPS = [
 ];
 
 export default function PlanningEditor() {
+  const [selectedTemplate, setSelectedTemplate] = useState('business_plan');
   const [brief, setBrief] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(null);
@@ -60,7 +103,6 @@ export default function PlanningEditor() {
         }
       }
 
-      // Append final + interim to existing brief
       const base = briefRef.current.endsWith('\n') || !briefRef.current
         ? briefRef.current
         : briefRef.current + ' ';
@@ -68,15 +110,8 @@ export default function PlanningEditor() {
     };
 
     recognition.onend = () => {
-      // Commit only final transcript
       if (finalTranscript) {
-        const base = briefRef.current;
-        // briefRef already has the latest via onresult, just clean up interim
-        setBrief((prev) => {
-          // Remove any trailing interim text by using only base + final
-          const cleanBase = prev.substring(0, prev.length);
-          return cleanBase;
-        });
+        setBrief((prev) => prev.substring(0, prev.length));
       }
       setIsListening(false);
       recognitionRef.current = null;
@@ -103,7 +138,6 @@ export default function PlanningEditor() {
     }
   }, [isListening, stopListening, startListening]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
@@ -129,7 +163,7 @@ export default function PlanningEditor() {
 
       // Step 1: Research + Plan
       setCurrentStep('researching');
-      const plan = await researchAndPlan(brief);
+      const plan = await researchAndPlan(brief, selectedTemplate);
       markStepComplete('researching');
 
       // Step 2: Generate images
@@ -137,7 +171,7 @@ export default function PlanningEditor() {
       const generatedImages = await generateImages(plan.imageDescriptions);
       markStepComplete('generating-images');
 
-      // Step 3: Process images (background removal)
+      // Step 3: Process images
       setCurrentStep('processing-images');
       const processedImages = await processGeneratedImages(generatedImages);
       markStepComplete('processing-images');
@@ -164,10 +198,12 @@ export default function PlanningEditor() {
     }
   };
 
+  const currentTemplate = TEMPLATES.find((t) => t.key === selectedTemplate);
+
   return (
-    <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="w-full max-w-4xl mx-auto p-8">
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+    <div className="flex-1 flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 overflow-y-auto">
+      <div className="w-full flex-1 flex flex-col p-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8 flex-1 flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -176,7 +212,7 @@ export default function PlanningEditor() {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-slate-900">새 기획안</h2>
-                <p className="text-xs text-slate-500">AI가 자동으로 조사하고 기획안을 작성합니다</p>
+                <p className="text-xs text-slate-500">템플릿을 선택하고 내용을 입력하면 AI가 자동으로 작성합니다</p>
               </div>
             </div>
             <button
@@ -188,16 +224,42 @@ export default function PlanningEditor() {
             </button>
           </div>
 
+          {/* Template selector */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {TEMPLATES.map((tpl) => {
+              const Icon = tpl.icon;
+              const colors = COLOR_MAP[tpl.color];
+              const isSelected = selectedTemplate === tpl.key;
+              return (
+                <button
+                  key={tpl.key}
+                  onClick={() => !isGenerating && setSelectedTemplate(tpl.key)}
+                  disabled={isGenerating}
+                  className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
+                    isSelected
+                      ? `${colors.bg} ${colors.border} ring-1 ${colors.ring}`
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  } disabled:opacity-60 disabled:cursor-not-allowed`}
+                >
+                  <Icon className={`w-6 h-6 ${isSelected ? colors.icon : 'text-slate-400'}`} />
+                  <span className={`text-sm font-semibold ${isSelected ? colors.text : 'text-slate-700'}`}>
+                    {tpl.label}
+                  </span>
+                  <span className="text-[10px] text-slate-400 leading-tight">{tpl.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Brief textarea + mic */}
-          <div className="relative mb-4">
+          <div className="relative mb-4 flex-1 flex flex-col min-h-0">
             <textarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
-              placeholder={'기획안 주제와 요구사항을 자세히 작성하세요...\n\n예시:\n- 2025년 국내 AI 산업 동향 분석 기획안\n- 신규 카페 브랜드 론칭 마케팅 전략 기획안\n- 사내 ESG 경영 도입 제안서'}
-              className={`w-full resize-none rounded-xl bg-slate-50 text-slate-800 text-sm px-4 py-3 pr-12 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 border border-slate-200 ${
+              placeholder={currentTemplate?.placeholder}
+              className={`w-full flex-1 min-h-[120px] resize-none rounded-xl bg-slate-50 text-slate-800 text-sm px-4 py-3 pr-12 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 border border-slate-200 ${
                 isListening ? 'ring-2 ring-red-400 border-red-300' : ''
               }`}
-              rows={12}
               disabled={isGenerating}
             />
             <button
@@ -290,7 +352,7 @@ export default function PlanningEditor() {
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                기획안 생성
+                {currentTemplate?.label} 생성
               </>
             )}
           </button>
