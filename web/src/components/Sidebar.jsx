@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
@@ -45,6 +45,38 @@ export default function Sidebar() {
   const docxInputRef = useRef(null);
   const [editingPresId, setEditingPresId] = useState(null);
   const [editPresName, setEditPresName] = useState('');
+
+  // 사이드바 리사이즈
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebarWidth');
+    return saved ? parseInt(saved, 10) : 256;
+  });
+  const isResizing = useRef(false);
+
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (e) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.min(Math.max(e.clientX, 180), 500);
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      setSidebarWidth((w) => { localStorage.setItem('sidebarWidth', w); return w; });
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
 
   const handleCreate = () => {
     const name = `document_${Date.now().toString(36)}`;
@@ -137,7 +169,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-64 bg-slate-900 text-white flex flex-col h-full shrink-0">
+    <div className="bg-slate-900 text-white flex flex-col h-full shrink-0 relative" style={{ width: sidebarWidth }}>
       <div className="p-4 border-b border-slate-700 flex items-center gap-2.5">
         <img src="/icon.png" alt="Logo" className="w-7 h-7" />
         <div>
@@ -461,6 +493,11 @@ export default function Sidebar() {
           </button>
         </div>
       )}
+      {/* 리사이즈 핸들 */}
+      <div
+        onMouseDown={handleMouseDown}
+        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-indigo-500/50 active:bg-indigo-500/70 transition-colors z-20"
+      />
     </div>
   );
 }

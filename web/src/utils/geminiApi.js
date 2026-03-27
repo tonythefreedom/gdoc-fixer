@@ -6,6 +6,47 @@ const FLASH_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemin
 const IMAGE_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${API_KEY}`;
 
 const SLIDE_DELIMITER = '<!--SLIDE_BREAK-->';
+const FILE_UPLOAD_URL = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${API_KEY}`;
+
+/**
+ * base64 데이터를 Gemini File API에 업로드하고 fileUri를 반환.
+ * inlineData 대신 fileData로 참조하여 요청 페이로드 크기를 대폭 줄임.
+ */
+async function uploadToGeminiFileApi(base64Data, mimeType = 'image/png') {
+  // data URI prefix 제거 (예: "data:image/png;base64,...")
+  const pure = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+
+  // base64 → Blob 변환 (fetch 방식이 atob보다 안전)
+  const dataUri = `data:${mimeType};base64,${pure}`;
+  const blobRes = await fetch(dataUri);
+  const blob = await blobRes.blob();
+
+  const res = await fetch(FILE_UPLOAD_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': mimeType },
+    body: blob,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `File upload failed: ${res.status}`);
+  }
+  const { file } = await res.json();
+  return file.uri;
+}
+
+/**
+ * base64를 File API에 업로드 후 fileData part를 반환.
+ * 업로드 실패 시 fallback으로 inlineData를 반환.
+ */
+async function toFilePart(base64Data, mimeType = 'image/png') {
+  try {
+    const fileUri = await uploadToGeminiFileApi(base64Data, mimeType);
+    return { fileData: { fileUri, mimeType } };
+  } catch (e) {
+    console.warn('[toFilePart] File API 업로드 실패, inlineData fallback:', e.message);
+    return { inlineData: { mimeType, data: base64Data } };
+  }
+}
 
 // ─── Prompts ───
 
@@ -356,18 +397,10 @@ function removeImageBackground(dataUri, tolerance = 40) {
 }
 
 export async function processGeneratedImages(images) {
-  return Promise.all(
-    images.map(async (img) => {
-      if (isBackgroundImage(img.label)) {
-        console.log(`이미지 "${img.label}" → 배경 이미지, 투명 처리 생략`);
-        return img;
-      }
-
-      console.log(`이미지 "${img.label}" → 비배경 이미지, 배경 투명 처리`);
-      const processedUri = await removeImageBackground(img.dataUri);
-      return { ...img, dataUri: processedUri };
-    })
-  );
+  // 배경 제거 처리를 비활성화: flood-fill 방식이 이미지 모서리를
+  // 불규칙하게 투명화시켜 흰색 잔상을 만드는 문제가 있음.
+  // Gemini Image 모델이 생성한 이미지를 그대로 사용.
+  return images;
 }
 
 // ─── Step 3: Modify slide HTML ───
@@ -701,37 +734,64 @@ export async function modifyAllSlidesHtml(allSlides, instruction) {
   return logSlideCountChange(slides, allSlides);
 }
 
-export async function modifySlideHtml(currentSlideHtml, instruction, screenshotBase64) {
+export async function modifySlideHtml(currentSlideHtml, instruction, screenshotBase64, attachedImages = []) {
   if (!API_KEY) {
     throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  // 스크린샷을 포함한 multimodal parts 구성 헬퍼
-  const buildParts = (systemPrompt, userText) => {
+  // 첨부 이미지의 dataUri 맵 (플레이스홀더 → 실제 data URI)
+  const attachedImageMap = new Map();
+  if (attachedImages.length > 0) {
+    attachedImages.forEach((img, i) => {
+      attachedImageMap.set(`{{ATTACHED_${i + 1}}}`, img.dataUri);
+    });
+  }
+
+  // 스크린샷 + 첨부 이미지를 Gemini File API에 업로드 후 parts 구성
+  const buildParts = async (systemPrompt, userText) => {
     const parts = [{ text: systemPrompt }, { text: userText }];
+    // 첨부 이미지 업로드 (시각적 참조용) + 플레이스홀더 안내
+    if (attachedImages.length > 0) {
+      for (let i = 0; i < attachedImages.length; i++) {
+        const img = attachedImages[i];
+        const base64 = img.dataUri.split(',')[1] || img.dataUri;
+        const mimeType = img.mimeType || 'image/png';
+        parts.push(await toFilePart(base64, mimeType));
+        parts.push({ text: `위 이미지는 사용자가 첨부한 이미지 #${i + 1}입니다. 이 이미지를 슬라이드에 삽입할 때 src="{{ATTACHED_${i + 1}}}" 플레이스홀더를 사용하세요. 절대 base64 data URI를 직접 생성하지 마세요.` });
+      }
+    }
     if (screenshotBase64) {
-      parts.push({ inlineData: { mimeType: 'image/png', data: screenshotBase64 } });
+      parts.push(await toFilePart(screenshotBase64, 'image/png'));
       parts.push({ text: '위 이미지는 현재 슬라이드의 렌더링 결과입니다. 현재 레이아웃과 시각적 상태를 참고하여 수정하세요.' });
     }
     return parts;
   };
 
   const callProModelWithScreenshot = async (systemPrompt, userText) => {
+    const parts = await buildParts(systemPrompt, userText);
+    const bodyJson = JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 65536 },
+    });
+    console.log('[callProModelWithScreenshot] request body 크기:', bodyJson.length.toLocaleString(), '자');
     const res = await fetch(PRO_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: buildParts(systemPrompt, userText) }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 32768 },
-      }),
+      body: bodyJson,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error?.message || `Gemini API 오류: ${res.status}`);
     }
     const data = await res.json();
+    console.log('[callProModelWithScreenshot] usageMetadata:', JSON.stringify(data.usageMetadata));
+    console.log('[callProModelWithScreenshot] finishReason:', data.candidates?.[0]?.finishReason);
     return stripCodeFences(parseGeminiResponse(data));
   };
+
+  // 슬라이드 HTML 내 base64 이미지를 플레이스홀더로 교체 (토큰 절약)
+  const { stripped: strippedSlideHtml, images: embeddedImages } = stripBase64Images(currentSlideHtml);
+  console.log(`[modifySlideHtml] base64 스트립: ${embeddedImages.size}개 이미지 제거, ${strippedSlideHtml.length.toLocaleString()}자`);
 
   // Check if instruction involves image generation
   if (isImageRelated(instruction)) {
@@ -754,13 +814,20 @@ export async function modifySlideHtml(currentSlideHtml, instruction, screenshotB
           .map((img, i) => `- {{IMAGE_${i + 1}}}: ${img.label}`)
           .join('\n');
 
-        const userText = `현재 슬라이드 HTML:\n\n${currentSlideHtml}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n수정 지시:\n${instruction}`;
+        const userText = `현재 슬라이드 HTML:\n\n${strippedSlideHtml}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n수정 지시:\n${instruction}`;
         let html = await callProModelWithScreenshot(MODIFY_WITH_IMAGES_PROMPT, userText);
 
         processedImages.forEach((img, i) => {
           const placeholder = `{{IMAGE_${i + 1}}}`;
           html = html.replaceAll(placeholder, img.dataUri);
         });
+
+        // 원본 base64 이미지 복원
+        html = restoreBase64Images(html, embeddedImages);
+        // 첨부 이미지 플레이스홀더 복원
+        for (const [ph, dataUri] of attachedImageMap) {
+          html = html.replaceAll(ph, dataUri);
+        }
 
         if (html.includes('<div')) return html;
         throw new Error('유효한 슬라이드 HTML이 반환되지 않았습니다.');
@@ -769,8 +836,15 @@ export async function modifySlideHtml(currentSlideHtml, instruction, screenshotB
   }
 
   // Text-only modification (with screenshot)
-  const userText = `현재 슬라이드 HTML:\n\n${currentSlideHtml}\n\n수정 지시:\n${instruction}`;
-  const html = await callProModelWithScreenshot(MODIFY_SLIDE_PROMPT, userText);
+  const userText = `현재 슬라이드 HTML:\n\n${strippedSlideHtml}\n\n수정 지시:\n${instruction}`;
+  let html = await callProModelWithScreenshot(MODIFY_SLIDE_PROMPT, userText);
+
+  // 원본 base64 이미지 복원
+  html = restoreBase64Images(html, embeddedImages);
+  // 첨부 이미지 플레이스홀더 복원
+  for (const [ph, dataUri] of attachedImageMap) {
+    html = html.replaceAll(ph, dataUri);
+  }
 
   if (!html.includes('<div')) {
     throw new Error('유효한 슬라이드 HTML이 반환되지 않았습니다.');
@@ -936,17 +1010,15 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
     ? `\n\n── 첨부된 파일 데이터 (참조용) ──\n${textAttachments}\n── 첨부 데이터 끝 ──\n`
     : '';
 
-  // 바이너리 첨부 (image, pdf) → Gemini inlineData parts
-  const binaryParts = attachments
-    .filter((a) => a.base64 && a.mimeType)
-    .map((a) => ({
-      inlineData: { mimeType: a.mimeType, data: a.base64 },
-    }));
-  const binaryLabels = attachments
-    .filter((a) => a.base64 && a.mimeType)
+  // 바이너리 첨부 (image, pdf) → Gemini File API 업로드 후 fileData parts
+  const binaryAttachments = attachments.filter((a) => a.base64 && a.mimeType);
+  const binaryParts = await Promise.all(
+    binaryAttachments.map((a) => toFilePart(a.base64, a.mimeType))
+  );
+  const binaryLabels = binaryAttachments
     .map((a) => `[첨부 파일: ${a.fileName}]`)
     .join('\n');
-  const binaryLabelPart = binaryLabels ? `\n\n${binaryLabels}\n위 파일들이 인라인 데이터로 첨부되어 있습니다. 사용자의 지시에 따라 참조하세요.` : '';
+  const binaryLabelPart = binaryLabels ? `\n\n${binaryLabels}\n위 파일들이 첨부되어 있습니다. 사용자의 지시에 따라 참조하세요.` : '';
 
   // callProModel wrapper that supports extra binary parts
   const callWithAttachments = async (systemPrompt, userText) => {
@@ -1340,6 +1412,7 @@ export async function renderSlideToBase64(slideHtml) {
 }
 
 async function fixSlideViewport(slideHtml, imageBase64) {
+  const screenshotPart = await toFilePart(imageBase64, 'image/png');
   const res = await fetch(FLASH_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1349,7 +1422,7 @@ async function fixSlideViewport(slideHtml, imageBase64) {
           parts: [
             { text: VIEWPORT_FIX_PROMPT },
             { text: `수정할 슬라이드 HTML:\n\n${slideHtml}` },
-            { inlineData: { mimeType: 'image/png', data: imageBase64 } },
+            screenshotPart,
           ],
         },
       ],

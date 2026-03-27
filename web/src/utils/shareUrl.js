@@ -1,5 +1,6 @@
 import { doc, setDoc, getDoc, deleteDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { uploadDocumentImages } from '../store/storage';
 
 const SHARE_PATH = '/share/';
 const SHARE_HASH = '#/share/'; // backward compat for old URLs
@@ -16,8 +17,17 @@ function generateId() {
 
 export async function generateShareUrl(html, uid, name) {
   const id = generateId();
+  // base64 이미지를 GCS에 업로드하여 URL로 교체 (Firestore 1MB 제한 우회)
+  let processedHtml = html;
+  if (uid) {
+    try {
+      processedHtml = await uploadDocumentImages(uid, html);
+    } catch (err) {
+      console.warn('공유 이미지 업로드 실패, 원본 사용:', err.message);
+    }
+  }
   await setDoc(doc(db, COLLECTION, id), {
-    html,
+    html: processedHtml,
     createdAt: Date.now(),
     uid,
     name,

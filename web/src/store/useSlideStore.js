@@ -52,9 +52,17 @@ const useSlideStore = create((set, get) => ({
       let slides = await convertHtmlToSlides(html);
       const slideHistories = slides.map(() => []);
 
-      // Phase 2: Firestore에 초안 저장 (페이지 갱신 시 재개 가능)
+      // Phase 2: base64 이미지를 GCS에 업로드 후 Firestore에 초안 저장
+      //   (Firestore 문서 크기 제한 10MB 초과 방지)
       const now = Date.now();
       const presId = now.toString(36) + Math.random().toString(36).slice(2, 6);
+
+      set({ generationProgress: { phase: 'uploading', current: 0, total: slides.length, message: '초안 이미지 업로드 중...' } });
+      for (let i = 0; i < slides.length; i++) {
+        set({ generationProgress: { phase: 'uploading', current: i, total: slides.length, message: `초안 이미지 업로드: 슬라이드 ${i + 1}/${slides.length}` } });
+        slides[i] = await uploadSlideImages(uid, presId, i, slides[i]);
+      }
+
       const pres = {
         id: presId,
         name: `${fileName} 프레젠테이션`,
@@ -82,6 +90,8 @@ const useSlideStore = create((set, get) => ({
         set({ generationProgress: { phase: 'fixing', current: i, total: slides.length, message: `뷰포트 수정: 슬라이드 ${i + 1}/${slides.length}` } });
         try {
           slides[i] = await fixSingleSlideViewport(slides[i]);
+          // 뷰포트 수정 후 새 base64 이미지가 생길 수 있으므로 업로드
+          slides[i] = await uploadSlideImages(uid, presId, i, slides[i]);
         } catch (err) {
           console.warn(`슬라이드 ${i + 1} 뷰포트 수정 실패:`, err);
         }
@@ -91,14 +101,7 @@ const useSlideStore = create((set, get) => ({
         set({ slides: [...slides] });
       }
 
-      // Phase 4: 이미지 업로드
-      set({ generationProgress: { phase: 'uploading', current: 0, total: slides.length, message: '이미지 업로드 준비 중...' } });
-      for (let i = 0; i < slides.length; i++) {
-        set({ generationProgress: { phase: 'uploading', current: i, total: slides.length, message: `이미지 업로드: 슬라이드 ${i + 1}/${slides.length}` } });
-        slides[i] = await uploadSlideImages(uid, presId, i, slides[i]);
-      }
-
-      // Phase 5: 완료 저장
+      // Phase 4: 완료 저장 (이미지는 Phase 2에서 이미 업로드됨)
       set({ generationProgress: { phase: 'saving', current: 0, total: 0, message: '저장 중...' } });
       await updatePresentationSlides(uid, presId, slides, slideHistories);
       await updatePresentationGenerationProgress(uid, presId, { generationStatus: 'complete' });
@@ -148,19 +151,13 @@ const useSlideStore = create((set, get) => ({
         set({ generationProgress: { phase: 'fixing', current: i, total: slides.length, message: `뷰포트 수정: 슬라이드 ${i + 1}/${slides.length}` } });
         try {
           slides[i] = await fixSingleSlideViewport(slides[i]);
+          slides[i] = await uploadSlideImages(uid, presId, i, slides[i]);
         } catch (err) {
           console.warn(`슬라이드 ${i + 1} 뷰포트 수정 실패:`, err);
         }
         await updatePresentationSlides(uid, presId, slides, slideHistories);
         await updatePresentationGenerationProgress(uid, presId, { viewportFixedCount: i + 1 });
         set({ slides: [...slides] });
-      }
-
-      // 이미지 업로드
-      set({ generationProgress: { phase: 'uploading', current: 0, total: slides.length, message: '이미지 업로드 준비 중...' } });
-      for (let i = 0; i < slides.length; i++) {
-        set({ generationProgress: { phase: 'uploading', current: i, total: slides.length, message: `이미지 업로드: 슬라이드 ${i + 1}/${slides.length}` } });
-        slides[i] = await uploadSlideImages(uid, presId, i, slides[i]);
       }
 
       // 완료
@@ -213,7 +210,7 @@ const useSlideStore = create((set, get) => ({
     }
   },
 
-  modifySlide: async (index, instruction) => {
+  modifySlide: async (index, instruction, attachedImages = []) => {
     const { slides, uid, activePresentationId } = get();
     if (!instruction.trim() || index < 0 || index >= slides.length) return;
 
@@ -230,7 +227,7 @@ const useSlideStore = create((set, get) => ({
       } catch (err) {
         console.warn('슬라이드 스크린샷 캡처 실패:', err);
       }
-      let modified = await modifySlideHtml(currentHtml, instruction, screenshotBase64);
+      let modified = await modifySlideHtml(currentHtml, instruction, screenshotBase64, attachedImages);
 
       if (uid && activePresentationId) {
         modified = await uploadSlideImages(uid, activePresentationId, index, modified);
@@ -363,6 +360,54 @@ const useSlideStore = create((set, get) => ({
         presentations: state.presentations.map((p) =>
           p.id === activePresentationId
             ? { ...p, slideHistories: newHistories, updatedAt: Date.now() }
+            : p
+        ),
+      }));
+    }
+  },
+
+  insertImageToSlide: async (index, dataUri) => {
+    const { slides, uid, activePresentationId } = get();
+    if (index < 0 || index >= slides.length || !dataUri) return;
+
+    // Insert image at the end of the slide body
+    let html = slides[index];
+    const imgTag = `<img src="${dataUri}" style="max-width:60%;max-height:50%;display:block;margin:20px auto;" />`;
+
+    // Try to insert before closing </div> or </body>, otherwise append
+    const closeBodyIdx = html.lastIndexOf('</body>');
+    const closeMainDiv = html.lastIndexOf('</div>');
+    if (closeBodyIdx > 0) {
+      html = html.slice(0, closeBodyIdx) + imgTag + html.slice(closeBodyIdx);
+    } else if (closeMainDiv > 0) {
+      html = html.slice(0, closeMainDiv) + imgTag + html.slice(closeMainDiv);
+    } else {
+      html += imgTag;
+    }
+
+    // Upload image to GCS if possible
+    if (uid && activePresentationId) {
+      html = await uploadSlideImages(uid, activePresentationId, index, html);
+    }
+
+    set((state) => {
+      const newSlides = [...state.slides];
+      newSlides[index] = html;
+      const newHistories = newSlides.map((_, i) => state.slideHistories[i] || []);
+      newHistories[index] = [
+        ...newHistories[index],
+        { instruction: '이미지 삽입', html, timestamp: Date.now() },
+      ];
+      return { slides: newSlides, slideHistories: newHistories };
+    });
+
+    if (uid && activePresentationId) {
+      const { slides: latestSlides, slideHistories: latestHistories } = get();
+      await updatePresentationSlides(uid, activePresentationId, latestSlides, latestHistories);
+      set((state) => ({
+        presentations: state.presentations.map((p) =>
+          p.id === activePresentationId
+            ? { ...p, slides: latestSlides, slideHistories: latestHistories, updatedAt: Date.now() }
             : p
         ),
       }));

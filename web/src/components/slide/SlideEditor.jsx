@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus } from 'lucide-react';
 import useSlideStore from '../../store/useSlideStore';
 import { usePdfExport } from '../../hooks/usePdfExport';
+import { usePptxExport } from '../../hooks/usePptxExport';
 
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
@@ -11,6 +12,7 @@ export default function SlideEditor() {
   const slideHistories = useSlideStore((s) => s.slideHistories);
   const currentSlideIndex = useSlideStore((s) => s.currentSlideIndex);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
+  const presentations = useSlideStore((s) => s.presentations);
   const modifyingSlideIndices = useSlideStore((s) => s.modifyingSlideIndices);
   const isModifyingAll = useSlideStore((s) => s.isModifyingAll);
   const setCurrentSlideIndex = useSlideStore((s) => s.setCurrentSlideIndex);
@@ -21,14 +23,20 @@ export default function SlideEditor() {
   const presentationSnapshots = useSlideStore((s) => s.presentationSnapshots);
   const revertToSnapshot = useSlideStore((s) => s.revertToSnapshot);
 
+  const insertImageToSlide = useSlideStore((s) => s.insertImageToSlide);
   const { exportSlidesToPdf, pdfLoading } = usePdfExport();
+  const { exportSlidesToPptx, pptxLoading } = usePptxExport();
 
   const [modifyPrompt, setModifyPrompt] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [isAllMode, setIsAllMode] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [attachedImages, setAttachedImages] = useState([]); // { dataUri, mimeType, name }[]
   const containerRef = useRef(null);
   const textareaRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const exportMenuRef = useRef(null);
   const [scale, setScale] = useState(0.5);
 
   // Calculate scale from container size
@@ -47,6 +55,18 @@ export default function SlideEditor() {
     observer.observe(el);
     return () => observer.disconnect();
   }, [activePresentationId]);
+
+  // 내보내기 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handleClick = (e) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [exportMenuOpen]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -72,16 +92,59 @@ export default function SlideEditor() {
     setHistoryOpen(false);
   }, [currentSlideIndex]);
 
+  // Read file as data URI
+  const readFileAsDataUri = useCallback((file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  // Handle image file attachment
+  const handleImageFiles = useCallback(async (files) => {
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
+    const newImages = await Promise.all(
+      imageFiles.map(async (file) => {
+        const dataUri = await readFileAsDataUri(file);
+        return { dataUri, mimeType: file.type, name: file.name };
+      })
+    );
+    setAttachedImages((prev) => [...prev, ...newImages]);
+  }, [readFileAsDataUri]);
+
+  // Handle paste (images from clipboard)
+  const handlePaste = useCallback((e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const imageFiles = [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      handleImageFiles(imageFiles);
+    }
+  }, [handleImageFiles]);
+
   // Fire-and-forget: don't await so user can navigate and submit more modifications
   const handleModify = useCallback(() => {
-    if (!modifyPrompt.trim()) return;
+    if (!modifyPrompt.trim() && attachedImages.length === 0) return;
+    const instruction = modifyPrompt.trim() || '첨부된 이미지를 슬라이드에 적절히 배치해주세요.';
     if (isAllMode) {
-      modifyAllSlides(modifyPrompt);
+      modifyAllSlides(instruction);
     } else {
-      modifySlide(currentSlideIndex, modifyPrompt);
+      modifySlide(currentSlideIndex, instruction, attachedImages);
     }
     setModifyPrompt('');
-  }, [modifyPrompt, currentSlideIndex, modifySlide, modifyAllSlides, isAllMode]);
+    setAttachedImages([]);
+  }, [modifyPrompt, attachedImages, currentSlideIndex, modifySlide, modifyAllSlides, isAllMode]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -171,27 +234,50 @@ export default function SlideEditor() {
             </div>
           )}
         </div>
-        <button
-          onClick={() => exportSlidesToPdf(slides)}
-          disabled={pdfLoading}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-            pdfLoading
-              ? 'bg-slate-600 text-slate-400 cursor-wait'
-              : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-          }`}
-        >
-          {pdfLoading ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              PDF 변환 중...
-            </>
-          ) : (
-            <>
-              <Download className="w-3.5 h-3.5" />
-              PDF 내보내기
-            </>
+        <div className="relative" ref={exportMenuRef}>
+          <button
+            onClick={() => setExportMenuOpen(!exportMenuOpen)}
+            disabled={pdfLoading || pptxLoading}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              pdfLoading || pptxLoading
+                ? 'bg-slate-600 text-slate-400 cursor-wait'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+            }`}
+          >
+            {pdfLoading || pptxLoading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                {pdfLoading ? 'PDF 변환 중...' : 'PPTX 변환 중...'}
+              </>
+            ) : (
+              <>
+                <Download className="w-3.5 h-3.5" />
+                내보내기
+                <ChevronDown className="w-3 h-3" />
+              </>
+            )}
+          </button>
+          {exportMenuOpen && !pdfLoading && !pptxLoading && (
+            <div className="absolute right-0 mt-1 w-44 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 py-1">
+              <button
+                onClick={() => { setExportMenuOpen(false); exportSlidesToPdf(slides); }}
+                className="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-700 transition-colors"
+              >
+                📄 PDF 내보내기
+              </button>
+              <button
+                onClick={() => {
+                  setExportMenuOpen(false);
+                  const pres = presentations.find(p => p.id === activePresentationId);
+                  exportSlidesToPptx(slides, pres?.name || 'presentation');
+                }}
+                className="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-700 transition-colors"
+              >
+                📊 PPTX 내보내기 (편집 가능)
+              </button>
+            </div>
           )}
-        </button>
+        </div>
       </div>
 
       {/* Slide preview with side navigation arrows */}
@@ -369,15 +455,38 @@ export default function SlideEditor() {
             전체 슬라이드
           </button>
         </div>
+        {/* Attached images preview */}
+        {attachedImages.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            {attachedImages.map((img, idx) => (
+              <div key={idx} className="relative group">
+                <img
+                  src={img.dataUri}
+                  alt={img.name || `이미지 ${idx + 1}`}
+                  className="w-12 h-12 object-cover rounded border border-slate-600"
+                />
+                <button
+                  onClick={() => setAttachedImages((prev) => prev.filter((_, i) => i !== idx))}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="제거"
+                >
+                  <X className="w-2.5 h-2.5 text-white" />
+                </button>
+              </div>
+            ))}
+            <span className="text-xs text-slate-500">{attachedImages.length}개 이미지 첨부</span>
+          </div>
+        )}
         <div className="flex items-end gap-3">
           <textarea
             ref={textareaRef}
             value={modifyPrompt}
             onChange={(e) => setModifyPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={isAllMode
               ? '모든 슬라이드에 적용할 수정 지시를 입력하세요...'
-              : '이 슬라이드에 대한 수정 지시를 입력하세요...'}
+              : '이 슬라이드에 대한 수정 지시를 입력하세요... (이미지 붙여넣기 가능)'}
             className={`flex-1 resize-none rounded-lg bg-slate-700 text-white text-sm px-4 py-2.5 placeholder-slate-500 focus:outline-none focus:ring-2 border ${
               isAllMode
                 ? 'focus:ring-amber-500 border-amber-600/50'
@@ -387,12 +496,34 @@ export default function SlideEditor() {
             disabled={isModifyingAll}
           />
           <button
+            onClick={() => imageInputRef.current?.click()}
+            className={`flex items-center justify-center w-10 py-2.5 rounded-lg transition-colors shrink-0 ${
+              attachedImages.length > 0
+                ? 'bg-indigo-600/30 text-indigo-400 hover:bg-indigo-600/50'
+                : 'bg-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-600'
+            }`}
+            title="이미지 첨부"
+          >
+            <ImagePlus className="w-4 h-4" />
+          </button>
+          <input
+            ref={imageInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={(e) => {
+              if (e.target.files) handleImageFiles(e.target.files);
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
+          <button
             onClick={handleModify}
-            disabled={isModifyingAll || !modifyPrompt.trim()}
+            disabled={isModifyingAll || (!modifyPrompt.trim() && attachedImages.length === 0)}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors shrink-0 ${
               isModifyingAll
                 ? 'bg-slate-600 text-slate-400 cursor-wait'
-                : !modifyPrompt.trim()
+                : (!modifyPrompt.trim() && attachedImages.length === 0)
                   ? 'bg-slate-600 text-slate-500 cursor-not-allowed'
                   : isAllMode
                     ? 'bg-amber-600 hover:bg-amber-500 text-white'
