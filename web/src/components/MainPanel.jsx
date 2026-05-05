@@ -1,7 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Share2, Check, Loader2, FileText, FileDown, FileCode, FileImage, FileType, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X, AtSign, ChevronDown, Download, Code2, ImagePlus } from 'lucide-react';
+import { Share2, Check, Loader2, FileText, FileDown, FileCode, FileImage, FileType, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X, AtSign, ChevronDown, Download, Code2, ImagePlus, Globe } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
+import useAuthStore from '../store/useAuthStore';
+import usePublishStore from '../store/usePublishStore';
 import HtmlEditor from './editor/HtmlEditor';
 import PreviewContainer from './preview/PreviewContainer';
 import ViewportControls from './preview/ViewportControls';
@@ -9,6 +11,7 @@ import SlideEditor from './slide/SlideEditor';
 import SlideGenerationProgress from './slide/SlideGenerationProgress';
 import PlanningEditor from './planning/PlanningEditor';
 import AdminUserManagement from './AdminUserManagement';
+import PublishModal from './PublishModal';
 import { useExport } from '../hooks/useExport';
 import { useDocxExport } from '../hooks/useDocxExport';
 import { useDocModify } from '../hooks/useDocModify';
@@ -41,6 +44,8 @@ export default function MainPanel() {
   const exportMenuRef = useRef(null);
 
   const addShare = useShareStore((s) => s.addShare);
+  const isSuperAdmin = useAuthStore((s) => s.userProfile?.role === 'super_admin');
+  const openPublishModal = usePublishStore((s) => s.openModal);
 
   const handleCopyShareLink = async () => {
     const { activeFileContent, activeFileId: fileId, files: allFiles, uid } = useAppStore.getState();
@@ -327,6 +332,16 @@ export default function MainPanel() {
               </>
             )}
           </button>
+          {isSuperAdmin && (
+            <button
+              onClick={openPublishModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+              title="tony.banya.ai에 게시 (영문 자동 번역)"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              tech-blog 게시
+            </button>
+          )}
           <button
             onClick={handleGenerateSlides}
             disabled={isGenerating}
@@ -625,6 +640,7 @@ export default function MainPanel() {
           <PreviewContainer iframeRef={iframeRef} />
         </div>
       </div>
+      <PublishModal />
     </div>
   );
 }

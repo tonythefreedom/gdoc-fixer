@@ -4,6 +4,8 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 const db = admin.firestore();
 
+exports.publishToTechBlog = require('./publishToTechBlog').publishToTechBlog;
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
