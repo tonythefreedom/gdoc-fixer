@@ -4,10 +4,14 @@ const admin = require('firebase-admin');
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 const TECH_BLOG_SERVICE_ACCOUNT = defineSecret('TECH_BLOG_SERVICE_ACCOUNT');
+const GITHUB_DISPATCH_TOKEN = defineSecret('GITHUB_DISPATCH_TOKEN');
 
 const SUPER_ADMIN_EMAIL = 'tony@banya.ai';
-const TECH_BLOG_COLLECTION = 'banya-official-news';
+const TECH_BLOG_COLLECTION = 'static-wiki';
+const TECH_BLOG_ROUTE = 'report';
 const TECH_BLOG_SITE = 'https://tony.banya.ai';
+const TECH_BLOG_GITHUB_REPO = 'kr-ai-dev-association/tech-blog';
+const SEO_DISPATCH_EVENT = 'deploy-seo';
 const MAX_INPUT_BYTES = 800 * 1024;
 const MAX_DOC_BYTES = 950 * 1024;
 const GEMINI_PRO = 'gemini-2.5-pro';
@@ -117,9 +121,38 @@ async function isAuthorizedAdmin(authCtx) {
   }
 }
 
+async function triggerSeoBuild(token, docId) {
+  if (!token) return false;
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${TECH_BLOG_GITHUB_REPO}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'gdoc-fixer-publishToTechBlog',
+        },
+        body: JSON.stringify({
+          event_type: SEO_DISPATCH_EVENT,
+          client_payload: { id: docId, source: 'gdoc-fixer-publish' },
+        }),
+      }
+    );
+    if (res.status === 204) return true;
+    const text = await res.text();
+    console.error(`SEO dispatch HTTP ${res.status}: ${text.slice(0, 300)}`);
+    return false;
+  } catch (err) {
+    console.error('SEO dispatch error:', err);
+    return false;
+  }
+}
+
 exports.publishToTechBlog = onCall(
   {
-    secrets: [GEMINI_API_KEY, TECH_BLOG_SERVICE_ACCOUNT],
+    secrets: [GEMINI_API_KEY, TECH_BLOG_SERVICE_ACCOUNT, GITHUB_DISPATCH_TOKEN],
     timeoutSeconds: 540,
     memory: '1GiB',
   },
@@ -254,11 +287,14 @@ Output JSON only, no preamble or code fence:`;
       throw new HttpsError('internal', `tech-blog Firestore 쓰기 실패: ${err.message}`);
     }
 
+    const seoDispatched = await triggerSeoBuild(GITHUB_DISPATCH_TOKEN.value(), docId);
+
     return {
       id: docId,
-      url: `${TECH_BLOG_SITE}/news/${docId}`,
+      url: `${TECH_BLOG_SITE}/${TECH_BLOG_ROUTE}/${docId}`,
       titles: doc.titles,
       sizeBytes,
+      seoDispatched,
     };
   }
 );
