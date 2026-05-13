@@ -52,6 +52,14 @@ const STEPS = [
   { key: 'saving', icon: Save, label: '파일 저장 중...' },
 ];
 
+const STEPS_CUSTOM = [
+  { key: 'researching', icon: Search, label: '사용자 원문 분석 및 이미지 추출 중...' },
+  { key: 'generating-images', icon: Image, label: '이미지 생성 중...' },
+  { key: 'processing-images', icon: Image, label: '이미지 후처리 중...' },
+  { key: 'composing', icon: FileText, label: 'HTML 디자인 적용 중...' },
+  { key: 'saving', icon: Save, label: '파일 저장 중...' },
+];
+
 export default function PlanningEditor() {
   const [selectedTemplate, setSelectedTemplate] = useState('business_plan');
   const [brief, setBrief] = useState('');
@@ -157,13 +165,23 @@ export default function PlanningEditor() {
     setCompletedSteps([]);
 
     try {
-      const { researchAndPlan, generateImages, processGeneratedImages, composeDocument } =
-        await import('../../utils/geminiApi');
+      const {
+        researchAndPlan,
+        planUserContentForFormatting,
+        generateImages,
+        processGeneratedImages,
+        composeDocument,
+        composeCustomDocument,
+      } = await import('../../utils/geminiApi');
       const { uploadDocumentImages } = await import('../../store/storage');
 
-      // Step 1: Research + Plan
+      const isCustom = selectedTemplate === 'custom';
+
+      // Step 1: Plan (custom: extract from user content; others: research + structure)
       setCurrentStep('researching');
-      const plan = await researchAndPlan(brief, selectedTemplate);
+      const plan = isCustom
+        ? await planUserContentForFormatting(brief)
+        : await researchAndPlan(brief, selectedTemplate);
       markStepComplete('researching');
 
       // Step 2: Generate images
@@ -176,9 +194,11 @@ export default function PlanningEditor() {
       const processedImages = await processGeneratedImages(generatedImages);
       markStepComplete('processing-images');
 
-      // Step 4: Compose HTML document
+      // Step 4: Compose HTML document (custom: format-only; others: full compose)
       setCurrentStep('composing');
-      let finalHtml = await composeDocument(plan, processedImages);
+      let finalHtml = isCustom
+        ? await composeCustomDocument(plan, processedImages)
+        : await composeDocument(plan, processedImages);
       markStepComplete('composing');
 
       // Step 5: Upload images to GCS + Save file
@@ -285,7 +305,7 @@ export default function PlanningEditor() {
           {/* Progress steps */}
           {isGenerating && (
             <div className="mb-6 space-y-2">
-              {STEPS.map((step) => {
+              {(selectedTemplate === 'custom' ? STEPS_CUSTOM : STEPS).map((step) => {
                 const isActive = currentStep === step.key;
                 const isComplete = completedSteps.includes(step.key);
                 const Icon = step.icon;

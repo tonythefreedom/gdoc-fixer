@@ -241,7 +241,7 @@ async function extractImagePrompts(instruction, slideContext) {
       contents: [
         {
           parts: [
-            { text: EXTRACT_IMAGES_PROMPT },
+            { text: withCurrentDate(EXTRACT_IMAGES_PROMPT) },
             { text: `슬라이드 내용 요약: ${slideContext}\n\n사용자 수정 지시: ${instruction}` },
           ],
         },
@@ -405,6 +405,14 @@ export async function processGeneratedImages(images) {
 
 // ─── Step 3: Modify slide HTML ───
 
+// LLM이 사용하는 "오늘" 기준 날짜를 항상 현재 호스트 시각으로 주입.
+// 모델은 학습 시점의 날짜를 기준으로 추론하는 경향이 있어, 기획안 작성일/발행일 같은
+// 시간 표현이 과거 연도로 출력되는 문제를 막기 위한 강제 주입.
+function withCurrentDate(systemPrompt) {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return `[시스템 컨텍스트] 오늘 날짜는 ${today} (YYYY-MM-DD) 입니다. 작성일, 발행일, "오늘", "최근", "이번 주/달/해" 같은 시간 표현은 모두 이 날짜를 기준으로 계산하세요. 학습 시점의 연도(예: 2024)를 임의로 사용하지 마세요.\n\n${systemPrompt}`;
+}
+
 async function callProModel(systemPrompt, userText) {
   const res = await fetch(PRO_URL, {
     method: 'POST',
@@ -413,7 +421,7 @@ async function callProModel(systemPrompt, userText) {
       contents: [
         {
           parts: [
-            { text: systemPrompt },
+            { text: withCurrentDate(systemPrompt) },
             { text: userText },
           ],
         },
@@ -562,7 +570,7 @@ export async function convertHtmlToSlides(html) {
       contents: [
         {
           parts: [
-            { text: SYSTEM_PROMPT },
+            { text: withCurrentDate(SYSTEM_PROMPT) },
             { text: `다음 HTML을 프레젠테이션 슬라이드로 변환하세요:\n\n${stripped}` },
           ],
         },
@@ -749,7 +757,7 @@ export async function modifySlideHtml(currentSlideHtml, instruction, screenshotB
 
   // 스크린샷 + 첨부 이미지를 Gemini File API에 업로드 후 parts 구성
   const buildParts = async (systemPrompt, userText) => {
-    const parts = [{ text: systemPrompt }, { text: userText }];
+    const parts = [{ text: withCurrentDate(systemPrompt) }, { text: userText }];
     // 첨부 이미지 업로드 (시각적 참조용) + 플레이스홀더 안내
     if (attachedImages.length > 0) {
       for (let i = 0; i < attachedImages.length; i++) {
@@ -1023,7 +1031,7 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
   // callProModel wrapper that supports extra binary parts
   const callWithAttachments = async (systemPrompt, userText) => {
     const parts = [
-      { text: systemPrompt },
+      { text: withCurrentDate(systemPrompt) },
       { text: userText },
       ...binaryParts,
     ];
@@ -1054,7 +1062,7 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
     // Diff 모드는 maxOutputTokens를 65536으로 올림
     const callDiffModel = async (systemPrompt, uText) => {
       const parts = [
-        { text: systemPrompt },
+        { text: withCurrentDate(systemPrompt) },
         { text: uText },
         ...binaryParts,
       ];
@@ -1272,6 +1280,67 @@ ${PLANNING_JSON_FORMAT}`,
 
 const PLANNING_RESEARCH_PROMPT = TEMPLATE_PROMPTS.custom;
 
+// ─── Custom mode: no research, preserve user content verbatim ───
+
+const PLANNING_CUSTOM_EXTRACT_PROMPT = `당신은 사용자가 직접 작성한 기획안 원문을 (1) 섹션 단위로 정리하고 (2) 본문 내용에 어울리는 이미지 description만 추출하는 작업자입니다. 작가가 아닙니다.
+
+절대 규칙:
+- 사용자 원문에 없는 내용을 절대 추가하지 마세요. 외부 지식, 추론, 통계, 출처를 만들어내지 마세요.
+- 사용자 원문의 내용을 요약, 압축, 재구성, 표현 다듬기 하지 마세요.
+- sections[*].content 에는 사용자 원문의 해당 부분을 글자 그대로 옮기세요(줄바꿈, 공백, 오타 모두 보존).
+- 섹션 분할은 사용자 원문이 명확히 그렇게 나뉘어 있을 때만 수행하세요. 분할이 애매하면 하나의 섹션으로 두세요.
+- 사용자가 명시한 제목/소제목이 있으면 그대로 heading 으로 사용하세요. 없으면 해당 본문을 짧게 대표하는 1-3 단어 heading만 만드세요(본문에서 단어를 그대로 가져오는 것을 우선).
+- 이미지는 사용자 원문에서 시각화/도식/일러스트가 명확히 도움이 되는 지점에만 추출하세요. 0개여도 괜찮습니다. 무리해서 만들지 마세요.
+
+반드시 다음 JSON 형식으로만 응답하세요:
+
+{
+  "title": "사용자 원문에서 가장 적합한 제목 (없으면 첫 줄 또는 핵심 주제를 짧게)",
+  "sections": [
+    {
+      "heading": "섹션 제목",
+      "content": "사용자 원문 그대로의 본문 (줄바꿈 포함)"
+    }
+  ],
+  "imageDescriptions": [
+    {
+      "label": "이미지 용도 한글 설명 (어느 섹션의 어떤 역할)",
+      "prompt": "Detailed English image generation prompt. Professional, high-quality style."
+    }
+  ]
+}
+
+이미지 prompt 규칙:
+- 반드시 영문
+- 배경 이미지: label에 "배경" 포함, prompt에 "16:9 aspect ratio, suitable for document header background" 포함
+- 아이콘/로고: prompt에 "simple, clean icon design, flat style, white background" 포함
+- 일반 일러스트: prompt에 "professional illustration, clean style" 포함
+
+JSON만 출력하세요. 다른 텍스트 없이.`;
+
+export async function planUserContentForFormatting(brief) {
+  if (!API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const text = await callProModel(
+    PLANNING_CUSTOM_EXTRACT_PROMPT,
+    `사용자 원문:\n\n${brief}`,
+  );
+
+  try {
+    const plan = JSON.parse(text);
+    if (!plan.title || !Array.isArray(plan.sections) || !Array.isArray(plan.imageDescriptions)) {
+      throw new Error('기획안 구조가 올바르지 않습니다.');
+    }
+    return plan;
+  } catch (parseErr) {
+    if (parseErr.message === '기획안 구조가 올바르지 않습니다.') throw parseErr;
+    console.error('Custom plan JSON parse failed:', text);
+    throw new Error('기획안 구조 파싱에 실패했습니다. 다시 시도해주세요.');
+  }
+}
+
 const PLANNING_COMPOSE_PROMPT = `당신은 전문적인 HTML 기획안 문서를 작성하는 전문가입니다.
 
 주어진 구조화된 기획안 계획과 이미지 플레이스홀더를 사용하여 완성된 HTML 문서를 생성하세요.
@@ -1310,7 +1379,7 @@ export async function researchAndPlan(brief, templateType = 'custom') {
       contents: [
         {
           parts: [
-            { text: systemPrompt },
+            { text: withCurrentDate(systemPrompt) },
             { text: `기획 브리프:\n\n${brief}` },
           ],
         },
@@ -1373,6 +1442,62 @@ export async function composeDocument(plan, processedImages) {
   return html;
 }
 
+const PLANNING_COMPOSE_CUSTOM_PROMPT = `당신은 주어진 사용자 원문 텍스트를 시각적으로 아름다운 HTML 기획안 문서로 포맷팅하는 디자이너입니다. 텍스트 작가가 아닙니다.
+
+절대 규칙:
+- sections[*].content 의 텍스트를 한 글자도 추가/삭제/요약/재구성하지 마세요. 사용자 원문 그대로 HTML 안에 배치하세요.
+- 사용자 원문에 없는 새로운 문장, 데이터, 통계, 출처, 인용을 절대 만들어내지 마세요.
+- 표현을 다듬거나 문법, 띄어쓰기, 오타를 교정하지 마세요. 모두 그대로 유지하세요.
+- 줄바꿈을 의미 있는 단락(<p>) 또는 리스트(<ul>/<ol>)로 시각적으로 분할하는 것은 허용됩니다 — 단, 텍스트 자체를 변경하면 안 됩니다.
+- title 과 sections[*].heading 도 사용자가 작성한 그대로 사용하세요.
+
+HTML 디자인 요구사항:
+- 완전한 HTML 문서를 출력하세요 (<!DOCTYPE html>부터 </html>까지)
+- Tailwind CSS CDN을 포함하세요: <script src="https://cdn.tailwindcss.com"><\\/script>
+- 한국어 폰트: <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+- body에 font-family: 'Noto Sans KR', sans-serif를 적용하세요
+- 전문적이고 깔끔한 기획안 문서 디자인을 적용하세요:
+  - 표지/헤더 섹션 (제목 — title 그대로)
+  - 각 섹션은 명확한 시각적 구분 (배경색, 구분선 등)
+  - 적절한 여백과 타이포그래피
+- A4 또는 웹 문서에 적합한 너비(max-width: 1024px)로 설계하세요
+
+이미지 배치:
+- 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 각 이미지의 label 설명에 맞는 섹션 근처에 자연스럽게 배치하세요.
+- 배경 이미지: style="background-image: url({{IMAGE_1}}); background-size: cover;" 형태
+- 일반 이미지: <img src="{{IMAGE_1}}" class="..." alt="..."> 형태
+- 이미지가 0개일 수 있습니다. 그럴 때는 텍스트만으로 깔끔하게 디자인하세요.
+- 외부 이미지 URL을 절대 사용하지 마세요 (플레이스홀더만 사용)
+
+완성된 HTML 문서만 출력하세요. 다른 설명 텍스트 없이.`;
+
+export async function composeCustomDocument(plan, processedImages) {
+  if (!API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const imageInfo = processedImages.length > 0
+    ? processedImages.map((img, i) => `- {{IMAGE_${i + 1}}}: ${img.label}`).join('\n')
+    : '(이미지 없음)';
+
+  const planText = JSON.stringify(plan, null, 2);
+
+  const userText = `기획안 원문 데이터 (sections[*].content 는 사용자 원문 그대로입니다):\n\n${planText}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n위 sections[*].content 와 sections[*].heading, title 을 한 글자도 변형하지 말고 그대로 HTML 문서에 배치하세요. 디자인과 이미지 배치만 담당하세요.`;
+
+  let html = await callProModel(PLANNING_COMPOSE_CUSTOM_PROMPT, userText);
+
+  processedImages.forEach((img, i) => {
+    const placeholder = `{{IMAGE_${i + 1}}}`;
+    html = html.replaceAll(placeholder, img.dataUri);
+  });
+
+  if (!html.includes('<')) {
+    throw new Error('유효한 HTML이 생성되지 않았습니다.');
+  }
+
+  return html;
+}
+
 // ─── Viewport fix: render → screenshot → Gemini Flash multimodal → fixed HTML ───
 
 export async function renderSlideToBase64(slideHtml) {
@@ -1420,7 +1545,7 @@ async function fixSlideViewport(slideHtml, imageBase64) {
       contents: [
         {
           parts: [
-            { text: VIEWPORT_FIX_PROMPT },
+            { text: withCurrentDate(VIEWPORT_FIX_PROMPT) },
             { text: `수정할 슬라이드 HTML:\n\n${slideHtml}` },
             screenshotPart,
           ],
