@@ -32,6 +32,20 @@ const VISUAL_HTML_RULES = `
 - Use code fences (\`\`\`) ONLY for real programming code (TypeScript, Python, etc.). Never wrap diagrams, tables, structure figures, or example outputs in code fences.
 - These rules apply both to content you generate and to ASCII diagrams / markdown tables that appear in the user's original text. Preserve the user's prose (paragraphs, headings, lists, emphasis) verbatim, but rewrite ASCII diagrams and markdown tables in the HTML/CSS form above while preserving their meaning.
 
+[Inline markdown → HTML conversion]
+- Convert inline markdown syntax to HTML BEFORE emitting it. Never let raw markdown markers reach the rendered output — browsers render \`**bold**\` as literal asterisks.
+  - **bold** / __bold__ → <strong>bold</strong>
+  - *italic* / _italic_ → <em>italic</em>
+  - \`inline code\` → <code class="px-1 py-0.5 bg-gray-100 rounded text-sm">inline code</code>
+  - [link text](https://url) → <a href="https://url" target="_blank" rel="noopener" class="text-blue-600 hover:underline">link text</a>
+  - ~~strike~~ → <s>strike</s>
+  - Markdown headings (#, ##, ###, …) → <h1>, <h2>, <h3>, … with appropriate Tailwind classes
+  - Markdown unordered lists (- item / * item) → <ul class="list-disc list-inside"> with <li>
+  - Markdown ordered lists (1. item) → <ol class="list-decimal list-inside"> with <li>
+  - Blockquotes (> …) → <blockquote class="border-l-4 border-gray-300 pl-4 italic text-gray-600">…</blockquote>
+- This rule applies even in "preserve user content verbatim" modes (custom template). The user's prose stays exactly the same — only the markdown markers themselves are converted to their HTML equivalents (markers are presentation syntax, not content).
+- Inside real code blocks (\`\`\` … \`\`\` or <pre><code>…</code></pre>) leave the content untouched.
+
 [YouTube thumbnail rule]
 - \`maxresdefault.jpg\` only exists for HD (720p+) videos and returns 404 for standard-definition ones.
 - Always include an \`onerror\` fallback that switches to \`hqdefault.jpg\` on 404:
