@@ -201,7 +201,14 @@ function parseGeminiResponse(data) {
       : 'Gemini API에서 응답을 받지 못했습니다.');
   }
 
-  const text = candidate.content?.parts?.[0]?.text;
+  // Gemini 2.5 thinking 모델은 응답을 여러 parts 로 split 한다 (thought part + content part).
+  // parts[0] 만 보면 실제 응답이 누락되어 JSON 이 잘린 것처럼 보이므로,
+  // thought 가 아닌 모든 text part 를 순서대로 합쳐서 반환한다.
+  const parts = candidate.content?.parts || [];
+  const text = parts
+    .filter(p => typeof p?.text === 'string' && !p.thought)
+    .map(p => p.text)
+    .join('');
 
   if (candidate.finishReason && candidate.finishReason !== 'STOP') {
     if (candidate.finishReason === 'MAX_TOKENS' && text) {
