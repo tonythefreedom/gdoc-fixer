@@ -50,137 +50,141 @@ async function toFilePart(base64Data, mimeType = 'image/png') {
 
 // ─── Prompts ───
 
-const SYSTEM_PROMPT = `당신은 HTML 콘텐츠를 16:9 비율의 프레젠테이션 슬라이드로 변환하는 전문가입니다.
+const SYSTEM_PROMPT = `You are an expert who converts HTML content into 16:9 presentation slides.
 
-주어진 HTML을 분석하여 제안서/프레젠테이션 형식의 슬라이드들로 재구성하세요.
+Analyse the given HTML and recompose it into proposal / presentation-style slides.
 
-규칙:
-- 각 슬라이드는 width:1280px, height:720px 크기에 맞는 독립적인 HTML입니다
-- 반드시 인라인 CSS만 사용하세요 (외부 CSS/JS 참조 불가)
-- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태여야 합니다
+Rules:
+- Each slide is a self-contained HTML targeted at width:1280px × height:720px.
+- Use inline CSS ONLY (no external CSS/JS references).
+- The root element of each slide MUST be <div style="width:1280px;height:720px;overflow:hidden;position:relative;...">.
 
-**[필수] 뷰포트 제약 — 반드시 준수하세요:**
-- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
-- 루트 div에 반드시 overflow:hidden을 설정하세요.
-- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
-- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
-- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
-- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
-- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+**[REQUIRED] Viewport constraints — must be followed:**
+- All content must fit completely inside the 1280×720px region. Overflowing content is NOT allowed.
+- The root <div> MUST set overflow:hidden.
+- Position inner elements with position:absolute or position:relative using exact pixel coordinates.
+- All width, height, top, left, padding, margin, font-size values MUST use px units. NEVER use %, vw, vh, em, or rem.
+- If text is long, reduce font-size or shorten it so it fits inside the region.
+- Ensure each element's top + height ≤ 720px and left + width ≤ 1280px.
+- Before finalising, verify each element's position and size against the viewport.
 
-- 깔끔하고 전문적인 프레젠테이션 디자인을 적용하세요
-  - 적절한 여백(padding: 60px 이상)
-  - 가독성 좋은 큰 폰트 크기(제목 40px+, 본문 24px+)
-  - 조화로운 배경색과 텍스트 색상
-  - 시각적 계층 구조(제목, 부제목, 본문)
-- 첫 슬라이드는 제목 슬라이드로 구성
-- 마지막 슬라이드는 감사/마무리 슬라이드로 구성
-- 원본 HTML의 내용을 논리적 단위로 분리하여 슬라이드를 만드세요
-- 한 슬라이드에 너무 많은 내용을 넣지 마세요 (핵심 포인트 위주)
-- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
-- 외부 이미지 URL(http/https)을 절대 사용하지 마세요
-- base64 data URI 이미지(<img src="data:image/png;base64,...">)는 사용 가능합니다
-- 외부 리소스(폰트 CDN 등)를 절대 참조하지 마세요
+- Apply a clean, professional presentation design:
+  - Generous padding (60px+)
+  - Readable, large font sizes (title 40px+, body 24px+)
+  - Harmonious background and text colours
+  - Clear visual hierarchy (title, subtitle, body)
+- Make the first slide a title slide.
+- Make the last slide a closing / thank-you slide.
+- Split the original HTML into logical units across slides.
+- Do not put too much content into a single slide (focus on the key points).
+- Korean font: use font-family: 'Noto Sans KR', sans-serif.
+- NEVER use external image URLs (http/https).
+- base64 data URI images (<img src="data:image/png;base64,..."/>) are allowed.
+- NEVER reference external resources (font CDNs, etc.).
+- All natural-language text inside the slides must remain in Korean (한국어).
 
-응답 형식: 각 슬라이드 HTML을 ${SLIDE_DELIMITER} 구분자로 구분하여 출력하세요.
-다른 설명 텍스트 없이 슬라이드 HTML만 출력하세요.
+Response format: emit each slide's HTML separated by the delimiter ${SLIDE_DELIMITER}.
+Output the slide HTML only — no surrounding prose.
 
-예시:
-<div style="width:1280px;height:720px;overflow:hidden;position:relative;...">슬라이드1</div>
+Example:
+<div style="width:1280px;height:720px;overflow:hidden;position:relative;...">slide 1</div>
 ${SLIDE_DELIMITER}
-<div style="width:1280px;height:720px;overflow:hidden;position:relative;...">슬라이드2</div>`;
+<div style="width:1280px;height:720px;overflow:hidden;position:relative;...">slide 2</div>`;
 
-const MODIFY_SLIDE_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 수정하는 전문가입니다.
+const MODIFY_SLIDE_PROMPT = `You are an expert who modifies HTML presentation slides.
 
-주어진 슬라이드 HTML과 사용자의 수정 지시를 받아 수정된 슬라이드 HTML을 반환하세요.
+Given the slide HTML and the user's modification instruction, return the modified slide HTML.
 
-규칙:
-- 기존 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
-- 반드시 인라인 CSS만 사용하세요
-- 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태를 유지하세요
+Rules:
+- Keep the existing slide size (width:1280px, height:720px).
+- Use inline CSS ONLY.
+- Keep the root element as <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> form.
 
-**[필수] 뷰포트 제약 — 반드시 준수하세요:**
-- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
-- 루트 div에 반드시 overflow:hidden을 설정하세요.
-- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
-- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
-- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
-- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
-- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+**[REQUIRED] Viewport constraints — must be followed:**
+- All content must fit completely inside the 1280×720px region. Overflowing content is NOT allowed.
+- The root <div> MUST set overflow:hidden.
+- Position inner elements with position:absolute or position:relative using exact pixel coordinates.
+- All width, height, top, left, padding, margin, font-size values MUST use px units. NEVER use %, vw, vh, em, or rem.
+- If text is long, reduce font-size or shorten the text so it fits inside the region.
+- For each element, ensure top + height ≤ 720px and left + width ≤ 1280px.
+- Before finalising, mentally verify each element's position and size against the viewport.
 
-- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
-- 외부 이미지 URL(http/https)을 절대 사용하지 마세요
-- base64 data URI 이미지(<img src="data:image/png;base64,...">)는 사용 가능합니다. 이미 슬라이드에 포함된 data URI 이미지는 그대로 유지하세요.
-- 외부 리소스(폰트 CDN 등)를 절대 참조하지 마세요
-- 수정된 슬라이드 HTML만 출력하세요. 다른 설명 텍스트는 없이 HTML만 출력하세요.`;
+- Korean font: use font-family: 'Noto Sans KR', sans-serif.
+- NEVER use external image URLs (http/https).
+- base64 data URI images (<img src="data:image/png;base64,..."/>) are allowed. Keep any existing data URI images in the slide as-is.
+- NEVER reference external resources (font CDNs, etc.).
+- Output the modified slide HTML only — no surrounding prose, HTML only.
+- All natural-language text inside the HTML must remain in Korean (한국어).`;
 
-const MODIFY_WITH_IMAGES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 수정하는 전문가입니다.
+const MODIFY_WITH_IMAGES_PROMPT = `You are an expert who modifies HTML presentation slides.
 
-주어진 슬라이드 HTML과 사용자의 수정 지시를 받아 수정된 슬라이드 HTML을 반환하세요.
-생성된 이미지들이 플레이스홀더로 제공됩니다. 이미지를 배치할 위치에 해당 플레이스홀더를 사용하세요.
+Given the slide HTML and the user's modification instruction, return the modified slide HTML. Generated images are provided as placeholders — use them at the positions where images should appear.
 
-규칙:
-- 기존 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
-- 반드시 인라인 CSS만 사용하세요
-- 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태를 유지하세요
+Rules:
+- Keep the existing slide size (width:1280px, height:720px).
+- Use inline CSS ONLY.
+- Keep the root element as <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> form.
 
-**[필수] 뷰포트 제약 — 반드시 준수하세요:**
-- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
-- 루트 div에 반드시 overflow:hidden을 설정하세요.
-- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
-- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
-- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
-- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
-- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+**[REQUIRED] Viewport constraints — must be followed:**
+- All content must fit completely inside the 1280×720px region. Overflowing content is NOT allowed.
+- The root <div> MUST set overflow:hidden.
+- Position inner elements with position:absolute or position:relative using exact pixel coordinates.
+- All width, height, top, left, padding, margin, font-size values MUST use px units. NEVER use %, vw, vh, em, or rem.
+- If text is long, reduce font-size or shorten the text so it fits inside the region.
+- For each element, ensure top + height ≤ 720px and left + width ≤ 1280px.
+- Before finalising, mentally verify each element's position and size against the viewport.
 
-- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
-- 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 적절한 위치에 배치하세요:
-  - 배경 이미지: background-image: url({{IMAGE_1}}) 형태로 사용
-  - 일반 이미지: <img src="{{IMAGE_1}}" style="..."> 형태로 사용
-- 이미지 크기와 위치를 슬라이드 레이아웃에 맞게 조정하세요
-- 이미 슬라이드에 포함된 기존 data URI 이미지는 그대로 유지하세요
-- 외부 리소스를 절대 참조하지 마세요
-- 수정된 슬라이드 HTML만 출력하세요. 다른 설명 텍스트는 없이 HTML만 출력하세요.`;
+- Korean font: use font-family: 'Noto Sans KR', sans-serif.
+- Place image placeholders ({{IMAGE_1}}, {{IMAGE_2}} …) at appropriate positions:
+  - Background image: use as background-image: url({{IMAGE_1}})
+  - Regular image: use as <img src="{{IMAGE_1}}" style="...">
+- Adjust image size and position to fit the slide layout.
+- Keep any existing data URI images in the slide as-is.
+- NEVER reference external resources.
+- Output the modified slide HTML only — no surrounding prose.
+- All natural-language text inside the HTML must remain in Korean (한국어).`;
 
-const EXTRACT_IMAGES_PROMPT = `사용자의 슬라이드 수정 지시를 분석하여 생성해야 할 이미지 목록을 JSON 배열로 반환하세요.
+const EXTRACT_IMAGES_PROMPT = `Analyse the user's slide modification instruction and return a JSON array of images that need to be generated.
 
-각 이미지는 다음 형식입니다:
-{"label": "이미지 용도 (예: 배경, 로고, 아이콘 등)", "prompt": "이미지 생성을 위한 상세한 영문 프롬프트"}
+Each image follows this format:
+{"label": "이미지 용도 (예: 배경, 로고, 아이콘 등) — Korean", "prompt": "Detailed English prompt for image generation"}
 
-규칙:
-- 이미지 생성이 필요한 항목만 추출하세요
-- 텍스트 변경, 레이아웃 변경 등 이미지가 아닌 지시는 무시하세요
-- prompt는 이미지 생성 AI에게 전달할 구체적이고 상세한 설명이어야 합니다
-- prompt는 영문으로 작성하세요 (이미지 생성 품질을 위해)
-- 배경 이미지인 경우 "16:9 aspect ratio, suitable for presentation background" 를 prompt에 포함하세요
-- 로고인 경우 "simple, clean logo design, transparent background" 를 prompt에 포함하세요
-- 이미지가 필요 없으면 빈 배열 []을 반환하세요
-- JSON 배열만 출력하세요. 다른 텍스트 없이.
+Rules:
+- Extract only items that require image generation.
+- Ignore instructions that are not about images (text changes, layout changes, etc.).
+- The prompt must be a concrete, detailed description to pass to the image-generation AI.
+- The prompt MUST be in English (for image-generation quality).
+- For background images, include "16:9 aspect ratio, suitable for presentation background" in the prompt.
+- For logos, include "simple, clean logo design, transparent background" in the prompt.
+- If no images are needed, return an empty array [].
+- Output the JSON array only. No surrounding text.
+- The "label" field is in Korean (한국어); the "prompt" field is in English.
 
-예시 입력: "관련된 내용으로 슬라이드의 배경 이미지를 생성해서 깔고 로고 이미지도 만들어서 넣어줘"
-예시 출력:
+Example input: "관련된 내용으로 슬라이드의 배경 이미지를 생성해서 깔고 로고 이미지도 만들어서 넣어줘"
+Example output:
 [{"label":"배경 이미지","prompt":"Professional corporate presentation background, abstract blue gradient with subtle geometric patterns, 16:9 aspect ratio, suitable for presentation background"},{"label":"로고","prompt":"Modern minimalist company logo design, simple clean icon, transparent background, professional business style"}]`;
 
-const VIEWPORT_FIX_PROMPT = `당신은 HTML 프레젠테이션 슬라이드의 뷰포트 오버플로우를 수정하는 전문가입니다.
+const VIEWPORT_FIX_PROMPT = `You are an expert who fixes viewport overflow in HTML presentation slides.
 
-첨부된 스크린샷은 이 슬라이드를 1280×720px 뷰포트에서 overflow:hidden으로 렌더링한 결과입니다.
-콘텐츠가 잘려 보인다면 뷰포트(1280×720) 밖으로 넘친 것입니다.
+The attached screenshot shows this slide rendered in a 1280×720px viewport with overflow:hidden.
+If any content appears clipped, it has overflowed the 1280×720 viewport.
 
-주어진 HTML 코드를 분석하고 스크린샷을 참고하여, 모든 콘텐츠가 1280×720px 안에 완전히 들어가도록 수정하세요.
+Analyse the provided HTML and the screenshot, and modify the HTML so that all content fits completely inside 1280×720px.
 
-수정 방법:
-- 폰트 크기를 줄이세요
-- 여백(padding/margin)을 줄이세요
-- 요소 간 간격을 줄이세요
-- 텍스트가 너무 길면 축약하세요
-- 모든 요소의 위치를 재계산하여 top+height ≤ 720px, left+width ≤ 1280px 확인
+How to fix:
+- Reduce font-size.
+- Reduce padding / margin.
+- Reduce spacing between elements.
+- Shorten text that is too long.
+- Recompute element positions so that top + height ≤ 720px and left + width ≤ 1280px.
 
-규칙:
-- 원본의 디자인과 색상 구성을 최대한 유지하세요
-- 콘텐츠를 삭제하지 마세요 — 크기만 조정하세요
-- 루트 div의 width:1280px;height:720px;overflow:hidden을 반드시 유지하세요
-- 인라인 CSS만 사용하세요
-- 수정된 HTML만 출력하세요. 다른 설명 없이.`;
+Rules:
+- Preserve the original design and colour scheme as much as possible.
+- DO NOT delete content — only adjust sizes.
+- Keep the root <div> as width:1280px; height:720px; overflow:hidden.
+- Use inline CSS only.
+- Output the modified HTML only. No surrounding prose.
+- All natural-language text inside the HTML must remain in Korean (한국어).`;
 
 // ─── Helpers ───
 
@@ -412,12 +416,12 @@ export async function processGeneratedImages(images) {
 
 // ─── Step 3: Modify slide HTML ───
 
-// LLM이 사용하는 "오늘" 기준 날짜를 항상 현재 호스트 시각으로 주입.
-// 모델은 학습 시점의 날짜를 기준으로 추론하는 경향이 있어, 기획안 작성일/발행일 같은
-// 시간 표현이 과거 연도로 출력되는 문제를 막기 위한 강제 주입.
+// Force the LLM's notion of "today" to the host's current date.
+// Without this, the model leans on its training-time date and emits stale years
+// (e.g. 2024) for "today / recently / this week" expressions and document dates.
 function withCurrentDate(systemPrompt) {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  return `[시스템 컨텍스트] 오늘 날짜는 ${today} (YYYY-MM-DD) 입니다. 작성일, 발행일, "오늘", "최근", "이번 주/달/해" 같은 시간 표현은 모두 이 날짜를 기준으로 계산하세요. 학습 시점의 연도(예: 2024)를 임의로 사용하지 마세요.\n\n${systemPrompt}`;
+  return `[System context] Today's date is ${today} (YYYY-MM-DD). All time expressions you produce — document dates, publication dates, "today", "recently", "this week / month / year" — must be computed relative to this date. Do not fall back to your training-time year (e.g. 2024).\n\n${systemPrompt}`;
 }
 
 async function callProModel(systemPrompt, userText, options = {}) {
@@ -622,73 +626,75 @@ export async function convertHtmlToSlides(html) {
   return slides.map((s) => restoreBase64Images(s, images));
 }
 
-const MODIFY_ALL_SLIDES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 수정하는 전문가입니다.
+const MODIFY_ALL_SLIDES_PROMPT = `You are an expert who modifies HTML presentation slides.
 
-여러 슬라이드의 HTML이 ${SLIDE_DELIMITER} 구분자로 구분되어 제공됩니다.
-사용자의 수정 지시를 모든 슬라이드에 일관되게 적용하여 수정된 슬라이드들을 반환하세요.
+Multiple slides are provided as HTML separated by the delimiter ${SLIDE_DELIMITER}.
+Apply the user's modification instruction consistently to ALL slides and return the modified slides.
 
-**슬라이드 삭제/추가 규칙:**
-- 사용자가 명시적으로 특정 슬라이드 삭제를 요청하면 해당 슬라이드를 제거하세요.
-- 사용자가 명시적으로 슬라이드 추가를 요청하면 새 슬라이드를 추가하세요.
-- 삭제/추가 요청이 없으면 입력된 슬라이드 수를 유지하세요.
+**Slide add / delete rules:**
+- If the user explicitly requests deleting specific slides, remove them.
+- If the user explicitly requests adding slides, add them.
+- Otherwise, keep the same number of slides as the input.
 
-규칙:
-- 각 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
-- 반드시 인라인 CSS만 사용하세요
-- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태를 유지하세요
+Rules:
+- Keep each slide's size (width:1280px, height:720px).
+- Use inline CSS ONLY.
+- Keep each slide's root element as <div style="width:1280px;height:720px;overflow:hidden;position:relative;...">.
 
-**[필수] 뷰포트 제약 — 반드시 준수하세요:**
-- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
-- 루트 div에 반드시 overflow:hidden을 설정하세요.
-- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
-- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
-- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
-- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
-- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+**[REQUIRED] Viewport constraints — must be followed:**
+- All content must fit completely inside the 1280×720px region. Overflowing content is NOT allowed.
+- The root <div> MUST set overflow:hidden.
+- Position inner elements with position:absolute or position:relative using exact pixel coordinates.
+- All width, height, top, left, padding, margin, font-size values MUST use px units. NEVER use %, vw, vh, em, or rem.
+- If text is long, reduce font-size or shorten it so it fits inside the region.
+- Ensure each element's top + height ≤ 720px and left + width ≤ 1280px.
+- Before finalising, verify each element's position and size against the viewport.
 
-- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
-- 외부 이미지 URL(http/https)을 절대 사용하지 마세요
-- 이미 슬라이드에 포함된 data URI 이미지는 그대로 유지하세요
-- 외부 리소스(폰트 CDN 등)를 절대 참조하지 마세요
-- 모든 슬라이드에 수정 지시를 일관되게 적용하세요 (예: 배경색 변경이면 모든 슬라이드 배경색 변경)
-- 수정된 슬라이드 HTML들을 ${SLIDE_DELIMITER} 구분자로 구분하여 출력하세요
-- 다른 설명 텍스트 없이 슬라이드 HTML만 출력하세요.`;
+- Korean font: use font-family: 'Noto Sans KR', sans-serif.
+- NEVER use external image URLs (http/https).
+- Keep any existing data URI images in the slides as-is.
+- NEVER reference external resources (font CDNs, etc.).
+- Apply the modification consistently to every slide (e.g. if a background-colour change is requested, change every slide's background colour).
+- Emit the modified slide HTMLs separated by ${SLIDE_DELIMITER}.
+- Output the slide HTML only — no surrounding prose.
+- All natural-language text inside the slides must remain in Korean (한국어).`;
 
-const MODIFY_ALL_WITH_IMAGES_PROMPT = `당신은 HTML 프레젠테이션 슬라이드를 수정하는 전문가입니다.
+const MODIFY_ALL_WITH_IMAGES_PROMPT = `You are an expert who modifies HTML presentation slides.
 
-여러 슬라이드의 HTML이 ${SLIDE_DELIMITER} 구분자로 구분되어 제공됩니다.
-사용자의 수정 지시를 모든 슬라이드에 일관되게 적용하여 수정된 슬라이드들을 반환하세요.
-생성된 이미지들이 플레이스홀더로 제공됩니다. 이미지를 배치할 위치에 해당 플레이스홀더를 사용하세요.
+Multiple slides are provided as HTML separated by the delimiter ${SLIDE_DELIMITER}.
+Apply the user's modification instruction consistently to ALL slides and return the modified slides.
+Generated images are provided as placeholders — use them at the positions where images should appear.
 
-**슬라이드 삭제/추가 규칙:**
-- 사용자가 명시적으로 특정 슬라이드 삭제를 요청하면 해당 슬라이드를 제거하세요.
-- 사용자가 명시적으로 슬라이드 추가를 요청하면 새 슬라이드를 추가하세요.
-- 삭제/추가 요청이 없으면 입력된 슬라이드 수를 유지하세요.
+**Slide add / delete rules:**
+- If the user explicitly requests deleting specific slides, remove them.
+- If the user explicitly requests adding slides, add them.
+- Otherwise, keep the same number of slides as the input.
 
-규칙:
-- 각 슬라이드의 크기(width:1280px, height:720px)를 유지하세요
-- 반드시 인라인 CSS만 사용하세요
-- 각 슬라이드의 루트 요소는 <div style="width:1280px;height:720px;overflow:hidden;position:relative;..."> 형태를 유지하세요
+Rules:
+- Keep each slide's size (width:1280px, height:720px).
+- Use inline CSS ONLY.
+- Keep each slide's root element as <div style="width:1280px;height:720px;overflow:hidden;position:relative;...">.
 
-**[필수] 뷰포트 제약 — 반드시 준수하세요:**
-- 모든 콘텐츠는 반드시 1280×720px 영역 안에 완전히 들어가야 합니다. 영역 밖으로 넘치는 콘텐츠는 절대 허용되지 않습니다.
-- 루트 div에 반드시 overflow:hidden을 설정하세요.
-- 내부 요소 배치 시 position:absolute 또는 position:relative를 사용하여 정확한 좌표(px)로 배치하세요.
-- 모든 width, height, top, left, padding, margin, font-size 값은 반드시 px 단위를 사용하세요. %, vw, vh, em, rem 단위는 절대 사용하지 마세요.
-- 텍스트가 길어질 경우 폰트 크기를 줄이거나 내용을 축약하여 반드시 영역 안에 맞추세요.
-- 각 요소의 top + height가 720px를 초과하지 않도록, left + width가 1280px를 초과하지 않도록 계산하세요.
-- 배치 전 각 요소의 위치와 크기를 계산하여 뷰포트를 벗어나지 않는지 검증하세요.
+**[REQUIRED] Viewport constraints — must be followed:**
+- All content must fit completely inside the 1280×720px region. Overflowing content is NOT allowed.
+- The root <div> MUST set overflow:hidden.
+- Position inner elements with position:absolute or position:relative using exact pixel coordinates.
+- All width, height, top, left, padding, margin, font-size values MUST use px units. NEVER use %, vw, vh, em, or rem.
+- If text is long, reduce font-size or shorten it so it fits inside the region.
+- Ensure each element's top + height ≤ 720px and left + width ≤ 1280px.
+- Before finalising, verify each element's position and size against the viewport.
 
-- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
-- 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 적절한 위치에 배치하세요:
-  - 배경 이미지: background-image: url({{IMAGE_1}}) 형태로 사용
-  - 일반 이미지: <img src="{{IMAGE_1}}" style="..."> 형태로 사용
-- 이미지 크기와 위치를 슬라이드 레이아웃에 맞게 조정하세요
-- 이미 슬라이드에 포함된 기존 data URI 이미지는 그대로 유지하세요
-- 외부 리소스를 절대 참조하지 마세요
-- 모든 슬라이드에 수정 지시를 일관되게 적용하세요
-- 수정된 슬라이드 HTML들을 ${SLIDE_DELIMITER} 구분자로 구분하여 출력하세요
-- 다른 설명 텍스트 없이 슬라이드 HTML만 출력하세요.`;
+- Korean font: use font-family: 'Noto Sans KR', sans-serif.
+- Place image placeholders ({{IMAGE_1}}, {{IMAGE_2}} …) at appropriate positions:
+  - Background image: use as background-image: url({{IMAGE_1}})
+  - Regular image: use as <img src="{{IMAGE_1}}" style="...">
+- Adjust image size and position to fit the slide layout.
+- Keep any existing data URI images in the slides as-is.
+- NEVER reference external resources.
+- Apply the modification consistently to every slide.
+- Emit the modified slide HTMLs separated by ${SLIDE_DELIMITER}.
+- Output the slide HTML only — no surrounding prose.
+- All natural-language text inside the slides must remain in Korean (한국어).`;
 
 // 슬라이드 수 변동 로깅
 function logSlideCountChange(result, originals) {
@@ -881,80 +887,82 @@ export async function modifySlideHtml(currentSlideHtml, instruction, screenshotB
 
 // ─── Document-level HTML modification ───
 
-const MODIFY_DOCUMENT_PROMPT = `당신은 HTML 문서를 수정하는 전문가입니다.
+const MODIFY_DOCUMENT_PROMPT = `You are an expert who modifies HTML documents.
 
-주어진 HTML 문서와 사용자의 수정 지시를 받아 수정된 HTML 문서를 반환하세요.
+Given an HTML document and the user's modification instruction, return the modified HTML document.
 
-규칙:
-- 원본 HTML 문서의 전체 구조(<!DOCTYPE html>부터 </html>까지)를 유지하세요
-- <head> 내의 메타 태그, 스타일, 폰트 링크 등을 그대로 유지하세요
-- Tailwind CSS CDN 스크립트가 포함되어 있으면 유지하세요
-- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
-- 사용자의 수정 지시에 따라 <body> 내의 콘텐츠를 수정하세요
-- 문서의 서식(글꼴, 크기, 색상, 정렬 등)을 최대한 유지하면서 지시사항을 반영하세요
-- 표(table), 목록(ul/ol), 이미지(img) 등 기존 HTML 요소를 적절히 활용하세요
-- 첨부된 파일 데이터가 있으면 사용자 지시에 따라 해당 데이터를 참조하여 문서를 수정하세요. Excel 데이터는 시트별 CSV 형식으로, 텍스트 파일은 원본 텍스트로, 이미지/PDF는 인라인 데이터로 제공됩니다.
-- HTML 내에 __B64_IMG_N__ 형태의 플레이스홀더가 있으면 이미지 자리이므로 절대 삭제하지 말고 그대로 유지하세요.
-- 차트/그래프가 필요한 경우: 직접 그리지 말고 아래 형식의 HTML 주석 플레이스홀더를 삽입하세요. 클라이언트에서 Chart.js로 렌더링합니다.
+Rules:
+- Preserve the full structure of the original HTML (from <!DOCTYPE html> to </html>).
+- Keep meta tags, styles, and font links inside <head> intact.
+- If Tailwind CSS CDN script is present, keep it.
+- Korean font: use font-family: 'Noto Sans KR', sans-serif.
+- Apply the user's instruction by editing content inside <body>.
+- Preserve the document's formatting (font, size, color, alignment, etc.) as much as possible while applying the changes.
+- Reuse existing HTML elements where appropriate: <table>, <ul>/<ol>, <img>, etc.
+- When attachment data is provided, reference it according to the user's instruction. Excel comes as CSV per sheet, text files as raw text, images/PDFs as inline data.
+- Placeholders of the form __B64_IMG_N__ are image slots — NEVER delete them, always keep them in place.
+- When a chart/graph is needed, do not draw it yourself. Insert an HTML comment placeholder in this exact form (the client renders it via Chart.js):
   <!--CHART:{"type":"line","title":"차트 제목","labels":["1월","2월"],"datasets":[{"label":"시리즈명","data":[10,20]}],"xLabel":"X축","yLabel":"Y축"}-->
   type: "line" | "bar" | "pie" | "doughnut" | "radar"
-  width/height는 선택사항 (기본 800x500)
-  stacked: true로 누적 차트 가능
-- 수정된 전체 HTML 문서만 출력하세요. 다른 설명 텍스트 없이 HTML만 출력하세요.
+  width/height are optional (default 800x500)
+  stacked: true enables stacked charts
+- Output the complete modified HTML document only — no surrounding prose, HTML only.
+- All natural-language text inside the HTML must remain in Korean (한국어). Chart titles, labels, axis names go in Korean as in the example above.
 ${VISUAL_HTML_RULES}`;
 
-const MODIFY_DOCUMENT_WITH_IMAGES_PROMPT = `당신은 HTML 문서를 수정하는 전문가입니다.
+const MODIFY_DOCUMENT_WITH_IMAGES_PROMPT = `You are an expert who modifies HTML documents.
 
-주어진 HTML 문서와 사용자의 수정 지시를 받아 수정된 HTML 문서를 반환하세요.
-이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)가 제공되며, 이를 적절한 위치에 배치하세요.
+Given an HTML document and the user's modification instruction, return the modified HTML document. Image placeholders ({{IMAGE_1}}, {{IMAGE_2}} …) are provided — place them appropriately.
 
-규칙:
-- 원본 HTML 문서의 전체 구조(<!DOCTYPE html>부터 </html>까지)를 유지하세요
-- <head> 내의 메타 태그, 스타일, 폰트 링크 등을 그대로 유지하세요
-- Tailwind CSS CDN 스크립트가 포함되어 있으면 유지하세요
-- 한국어 폰트: font-family에 'Noto Sans KR', sans-serif를 사용하세요
-- 이미지 플레이스홀더를 적절한 위치에 <img src="{{IMAGE_N}}" ...> 또는 배경 이미지로 배치하세요
-- 배경용 이미지: style="background-image: url({{IMAGE_N}}); background-size: cover;" 형태
-- 삽화/아이콘: <img src="{{IMAGE_N}}" class="..." alt="..."> 형태
-- 외부 이미지 URL을 절대 사용하지 마세요 (플레이스홀더만 사용)
-- 수정된 전체 HTML 문서만 출력하세요. 다른 설명 텍스트 없이 HTML만 출력하세요.
+Rules:
+- Preserve the full structure of the original HTML (from <!DOCTYPE html> to </html>).
+- Keep meta tags, styles, and font links inside <head> intact.
+- If Tailwind CSS CDN script is present, keep it.
+- Korean font: use font-family: 'Noto Sans KR', sans-serif.
+- Place image placeholders appropriately as <img src="{{IMAGE_N}}" ...> or as background images.
+- Background image: style="background-image: url({{IMAGE_N}}); background-size: cover;"
+- Illustration / icon: <img src="{{IMAGE_N}}" class="..." alt="..." />
+- NEVER use external image URLs (placeholders only).
+- Output the complete modified HTML document only — no surrounding prose.
+- All natural-language text inside the HTML must remain in Korean (한국어).
 ${VISUAL_HTML_RULES}`;
 
-// ─── 대형 문서용 Diff 기반 수정 프롬프트 ───
+// ─── Diff-based modification prompt for large documents ───
 
-const MODIFY_DOCUMENT_DIFF_PROMPT = `당신은 HTML 문서를 수정하는 전문가입니다.
+const MODIFY_DOCUMENT_DIFF_PROMPT = `You are an expert who modifies HTML documents.
 
-주어진 HTML 문서와 사용자의 수정 지시를 분석하여, **수정이 필요한 부분만** 구분자 형식으로 반환하세요.
-문서가 매우 크므로 전체를 다시 출력하지 마세요. 변경 사항만 정확히 지정하세요.
+Analyse the given HTML document and the user's modification instruction, and return ONLY the parts that need to change, in the delimited format below.
+Because the document is very large, do not output it in full again — specify only the precise changes.
 
-응답 형식 (아래 구분자 형식만 출력):
+Response format (output only this delimited form):
 ===DIFF_START===
 <<<FIND>>>
-수정할 원본 HTML 텍스트 (원본과 정확히 일치)
+The original HTML text to modify (must match the original exactly)
 <<<REPLACE>>>
-대체할 새 HTML 텍스트
+The replacement HTML text
 ===DIFF_END===
 ===DIFF_START===
 <<<FIND>>>
-다른 수정할 부분
+Another section to modify
 <<<REPLACE>>>
-새 내용
+New content
 ===DIFF_END===
 
-규칙:
-- <<<FIND>>> 아래의 텍스트는 원본 HTML에서 **정확히** 존재해야 합니다. 고유하게 매칭되도록 충분한 컨텍스트를 포함하세요.
-- <<<REPLACE>>> 아래에 수정된 결과 HTML을 넣으세요.
-- 내용을 삭제하려면 <<<REPLACE>>> 아래를 비워두세요 (===DIFF_END=== 바로 전).
-- 내용을 추가하려면 <<<FIND>>>에 삽입 위치의 기존 HTML을 넣고, <<<REPLACE>>>에 기존 내용 + 추가 내용을 넣으세요.
-- 문서의 기존 서식(인라인 style, CSS 클래스 등)을 최대한 유지하세요.
-- 첨부된 파일 데이터가 있으면 사용자 지시에 따라 참조하세요.
-- HTML 내에 __B64_IMG_N__ 형태의 플레이스홀더가 있으면 절대 삭제하지 마세요.
-- 차트/그래프가 필요한 경우: 직접 그리지 말고 아래 형식의 HTML 주석 플레이스홀더를 <<<REPLACE>>> 안에 삽입하세요. 클라이언트에서 Chart.js로 렌더링합니다.
+Rules:
+- The text under <<<FIND>>> must exist in the original HTML EXACTLY. Include enough surrounding context to make the match unique.
+- Put the modified HTML under <<<REPLACE>>>.
+- To delete content, leave <<<REPLACE>>> empty (immediately before ===DIFF_END===).
+- To add content, put the existing HTML at the insertion point under <<<FIND>>>, and put existing + new content under <<<REPLACE>>>.
+- Preserve the document's existing formatting (inline style, CSS classes, etc.) as much as possible.
+- When attachment data is provided, reference it according to the user's instruction.
+- Placeholders of the form __B64_IMG_N__ must never be deleted.
+- When a chart/graph is needed, do not draw it. Insert an HTML comment placeholder inside <<<REPLACE>>> in this form (the client renders it via Chart.js):
   <!--CHART:{"type":"line","title":"차트 제목","labels":["1월","2월"],"datasets":[{"label":"시리즈명","data":[10,20]}],"xLabel":"X축","yLabel":"Y축"}-->
   type: "line" | "bar" | "pie" | "doughnut" | "radar"
-  width/height는 선택사항 (기본 800x500)
-  stacked: true로 누적 차트 가능
-- 위 구분자 형식만 출력하세요. 다른 설명 텍스트 없이.`;
+  width/height are optional (default 800x500)
+  stacked: true enables stacked charts
+- Output the delimited form only — no surrounding prose.
+- All natural-language text inside <<<REPLACE>>> must remain in Korean (한국어).`;
 
 // 대형 문서 판단 기준: 압축 후 이 크기 초과 시 diff 모드 사용
 const LARGE_DOC_THRESHOLD = 100_000; // ~25K 토큰
@@ -1203,130 +1211,134 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
 
 // ─── Planning: Research + Document Generation with Google Search Grounding ───
 
-// ── 모든 기획안 모드 공통: 다이어그램·표는 ASCII 가 아닌 HTML/CSS 로 ──
+// ── Common visualization rules injected into every planning system prompt ──
 //
-// LLM 이 생성하는(또는 사용자 원문이 포함한) 박스 드로잉 ASCII 다이어그램이
-// 문서 디자인 일관성을 깨고, JSON 응답에서 escape 비용도 크다.
-// 다음 규칙을 모든 시스템 프롬프트에 일관되게 주입한다.
+// ASCII box-drawing diagrams produced by the LLM (or pasted by the user)
+// break visual consistency and waste tokens via JSON escaping.
+// This block is appended to all planning/modify system prompts.
 const VISUAL_HTML_RULES = `
-[시각화 규칙 — 모든 기획안 모드 공통]
-- ASCII 박스 드로잉 문자(┌ ┐ │ └ ┘ ├ ┤ ┬ ┴ ┼ ─ ━ ═ 등)로 다이어그램, 플로우 차트, 시스템 구조도를 그리지 마세요.
-  반드시 HTML + Tailwind CSS 로 시각화하세요:
-    - 박스: <div class="border border-gray-400 rounded-lg px-4 py-2 bg-gray-50">텍스트</div>
-    - 계층/그룹: flex/grid 레이아웃 (예: <div class="flex flex-col gap-2 p-4 border-2 border-dashed">…</div>)
-    - 연결선/화살표: 인라인 SVG (<svg viewBox=…><line>·<path>·<polygon>) 또는 단순 화살표 문자 (→ ← ↑ ↓ ▶ ▼ ◀ ▲)
-    - 라벨/캡션: <span class="text-xs text-gray-500">
-- 마크다운 표(| col1 | col2 |…)를 생성하지 말고 반드시 HTML <table> 로 작성하세요:
+[Visualization rules — applied to ALL planning modes]
+- DO NOT draw diagrams, flow charts, or system architecture figures with ASCII box-drawing characters (┌ ┐ │ └ ┘ ├ ┤ ┬ ┴ ┼ ─ ━ ═ etc.).
+  Always render them as HTML + Tailwind CSS instead:
+    - Boxes: <div class="border border-gray-400 rounded-lg px-4 py-2 bg-gray-50">label</div>
+    - Hierarchy / grouping: flex or grid layouts (e.g. <div class="flex flex-col gap-2 p-4 border-2 border-dashed">…</div>)
+    - Connectors / arrows: inline SVG (<svg viewBox=…><line>·<path>·<polygon>) or simple arrow characters (→ ← ↑ ↓ ▶ ▼ ◀ ▲)
+    - Labels / captions: <span class="text-xs text-gray-500">
+- DO NOT emit markdown tables (| col1 | col2 |…). Always emit HTML <table>:
     <table class="w-full border-collapse text-sm">
       <thead class="bg-gray-100"><tr><th class="border px-3 py-2 text-left">…</th></tr></thead>
       <tbody><tr><td class="border px-3 py-2">…</td></tr></tbody>
     </table>
-- 코드 펜스(\`\`\`) 는 실제 프로그래밍 코드(예: TypeScript, Python)에만 사용하세요. 다이어그램, 표, 구조도, 출력 예시는 코드 펜스로 감싸지 마세요.
-- 위 규칙은 생성하는 콘텐츠뿐 아니라 사용자가 원문에 포함한 ASCII 도식·마크다운 표에도 적용됩니다. 사용자 원문의 본문 텍스트(서술문, heading, 리스트, 강조)는 그대로 보존하되, ASCII 도식과 마크다운 표만 의미를 보존하며 위의 HTML/CSS 형식으로 재구성하세요.
+- Use code fences (\`\`\`) ONLY for real programming code (TypeScript, Python, etc.). Never wrap diagrams, tables, structure figures, or example outputs in code fences.
+- These rules apply both to content you generate and to ASCII diagrams / markdown tables that appear in the user's original text. Preserve the user's prose (paragraphs, headings, lists, emphasis) verbatim, but rewrite ASCII diagrams and markdown tables in the HTML/CSS form above while preserving their meaning.
 
-[YouTube 썸네일 규칙]
-- YouTube 영상의 thumbnail 을 표시할 때 \`maxresdefault.jpg\` 는 HD(720p+) 영상에만 존재하므로 표준화질 영상에서 404 가 발생합니다.
-- 반드시 \`onerror\` fallback 을 적용해 404 시 \`hqdefault.jpg\` 로 자동 전환되도록 작성하세요:
+[YouTube thumbnail rule]
+- \`maxresdefault.jpg\` only exists for HD (720p+) videos and returns 404 for standard-definition ones.
+- Always include an \`onerror\` fallback that switches to \`hqdefault.jpg\` on 404:
     <a href="https://www.youtube.com/watch?v=VIDEO_ID" target="_blank" rel="noopener">
       <img src="https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg"
            onerror="this.onerror=null; this.src='https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg';"
            alt="..." class="w-full rounded-lg shadow" />
     </a>
-- 위 패턴이 번거로우면 처음부터 \`hqdefault.jpg\` 만 사용하세요(모든 영상에 항상 존재, 480×360).
+- If you prefer a simpler form, just use \`hqdefault.jpg\` directly — it is always available for every video (480×360).
+
+[Output language]
+- All natural-language text you produce (titles, headings, body text, descriptions, captions) must be written in Korean (한국어).
+- Field names, JSON keys, code identifiers, English-only image prompts, and the image_prompt field stay in English.
 `;
 
-const PLANNING_JSON_FORMAT = `반드시 다음 JSON 형식으로만 응답하세요:
+const PLANNING_JSON_FORMAT = `Respond strictly in the following JSON format:
 
 {
-  "title": "기획안 제목",
+  "title": "기획안 제목 (Korean)",
   "sections": [
     {
-      "heading": "섹션 제목",
+      "heading": "섹션 제목 (Korean)",
       "subsections": [
         {
-          "subheading": "소제목",
-          "contentBrief": "이 소제목 아래에 들어갈 내용 설명 (2-3문장, 조사한 데이터/수치 포함)"
+          "subheading": "소제목 (Korean)",
+          "contentBrief": "이 소제목에 들어갈 내용 설명 — 2-3 문장, 조사한 데이터·수치 포함 (Korean)"
         }
       ]
     }
   ],
   "imageDescriptions": [
     {
-      "label": "이미지 용도 설명 (한글)",
+      "label": "이미지 용도 설명 (Korean)",
       "prompt": "Detailed English prompt for image generation AI. Professional, high-quality style."
     }
   ],
-  "searchFindings": "조사 결과 요약 (핵심 데이터, 통계, 트렌드 등)"
+  "searchFindings": "조사 결과 요약 — 핵심 데이터·통계·트렌드 (Korean)"
 }
 
-공통 규칙:
-- Google 검색으로 최신 정보, 통계, 트렌드를 조사하세요
-- imageDescriptions의 prompt는 반드시 영문으로 작성하세요
-- 배경용 이미지의 label에 "배경"을 포함하고 prompt에 "16:9 aspect ratio, suitable for document header background"를 포함하세요
-- 아이콘/로고 이미지의 prompt에 "simple, clean icon design, flat style, white background"를 포함하세요
-- 일반 삽화 이미지의 prompt에 "professional illustration, clean style"을 포함하세요
-- contentBrief에 조사한 구체적 데이터와 수치를 포함하세요
-- JSON만 출력하세요. 다른 텍스트 없이.
+Common rules:
+- Use Google Search to gather up-to-date information, statistics, and trends.
+- The imageDescriptions[*].prompt MUST be written in English.
+- For background images: include "배경" in the label and "16:9 aspect ratio, suitable for document header background" in the prompt.
+- For icon / logo images: include "simple, clean icon design, flat style, white background" in the prompt.
+- For general illustration images: include "professional illustration, clean style" in the prompt.
+- Include concrete numbers and statistics from your research in each contentBrief.
+- Output JSON only — no surrounding prose.
 ${VISUAL_HTML_RULES}`;
 
 const TEMPLATE_PROMPTS = {
-  business_plan: `당신은 사업계획서 전문 작성자입니다. 사용자의 브리프를 받아 Google 검색을 활용하여 시장과 산업을 조사하고, 투자자 또는 경영진을 설득할 수 있는 전문적인 사업계획서 구조를 설계하세요.
+  business_plan: `You are a professional business-plan writer. Given the user's brief, use Google Search to research the relevant market and industry, and design a business-plan structure that can persuade investors or executives.
 
-필수 포함 섹션:
-- 사업 개요 (Executive Summary): 사업 아이디어, 비전, 미션
-- 시장 분석: 목표 시장 규모(TAM/SAM/SOM), 성장률, 트렌드 (Google 검색으로 최신 시장 데이터 조사)
-- 경쟁 분석: 주요 경쟁사, 경쟁 우위, SWOT 분석
-- 비즈니스 모델: 수익 모델, 가격 전략, 고객 획득 전략
-- 마케팅/영업 전략: 채널 전략, GTM 전략, 핵심 KPI
-- 운영 계획: 조직 구조, 핵심 인력, 기술 인프라
-- 재무 계획: 매출 추정, 손익 전망, 투자 요청 금액 및 사용처
-- 로드맵: 주요 마일스톤, 단계별 실행 계획
+Required sections:
+- Executive Summary: business idea, vision, mission
+- Market Analysis: target market size (TAM/SAM/SOM), growth rate, trends (research up-to-date market data via Google Search)
+- Competitive Analysis: key competitors, competitive advantage, SWOT
+- Business Model: revenue model, pricing strategy, customer-acquisition strategy
+- Marketing / Sales Strategy: channel strategy, GTM plan, key KPIs
+- Operations Plan: org structure, key people, tech infrastructure
+- Financial Plan: revenue projection, P&L outlook, funding ask and intended use
+- Roadmap: major milestones, phased execution plan
 
-섹션은 7-10개, 이미지는 4-6개로 구성하세요.
-
-${PLANNING_JSON_FORMAT}`,
-
-  company_intro: `당신은 회사 소개서 전문 작성자입니다. 사용자의 브리프를 받아 Google 검색을 활용하여 해당 업계 정보를 조사하고, 신뢰감과 전문성을 전달하는 회사 소개서 구조를 설계하세요.
-
-필수 포함 섹션:
-- 회사 개요: 회사명, 설립일, 대표이사, 비전/미션, 핵심 가치
-- CEO 인사말: 경영 철학, 회사 방향성
-- 연혁/주요 성과: 설립부터 현재까지 주요 이정표, 수상 내역
-- 사업 영역: 주요 사업 분야, 서비스/제품 라인업 (Google 검색으로 업계 현황 조사)
-- 핵심 역량/기술력: 보유 기술, 특허, 인증, 차별화 포인트
-- 주요 실적/포트폴리오: 대표 프로젝트, 주요 고객사, 매출 규모
-- 조직/인재: 조직 규모, 핵심 인력, 기업 문화
-- 파트너십/네트워크: 주요 협력사, 제휴 관계
-- 오시는 길/연락처: 본사 및 지사 위치, 연락 정보
-
-섹션은 7-9개, 이미지는 4-6개로 구성하세요. 기업의 신뢰성과 전문성을 강조하는 톤으로 작성하세요.
+Produce 7-10 sections and 4-6 images.
 
 ${PLANNING_JSON_FORMAT}`,
 
-  product_intro: `당신은 제품/서비스 소개서 전문 작성자입니다. 사용자의 브리프를 받아 Google 검색을 활용하여 해당 제품 시장과 경쟁 제품을 조사하고, 고객의 구매 결정을 이끌어내는 제품 소개서 구조를 설계하세요.
+  company_intro: `You are a professional writer of company-introduction documents. Given the user's brief, use Google Search to research the relevant industry context and design a company-intro structure that conveys credibility and expertise.
 
-필수 포함 섹션:
-- 제품 소개/개요: 제품명, 핵심 가치 제안(Value Proposition), 한 줄 설명
-- 문제 정의: 고객이 겪는 핵심 문제/Pain Point 정의
-- 솔루션: 제품이 해결하는 방식, 핵심 메커니즘
-- 주요 기능/특징: 핵심 기능 3-5가지, 각 기능의 고객 혜택 (Google 검색으로 경쟁 제품 대비 차별점 조사)
-- 기술 사양/스펙: 상세 스펙, 지원 환경, 호환성
-- 사용 사례/시나리오: 실제 활용 사례, 고객 사용 시나리오
-- 경쟁 비교: 경쟁 제품 대비 장점, 비교표
-- 고객 후기/성과: 도입 사례, 성과 수치, 고객 추천
-- 가격/플랜: 가격 체계, 플랜별 기능 비교
-- 도입 안내: 도입 절차, 무료 체험, 문의 방법
+Required sections:
+- Company Overview: name, founding date, CEO, vision/mission, core values
+- CEO's Message: management philosophy, company direction
+- History / Milestones: key milestones since founding, awards
+- Business Areas: main business domains, service/product lineup (research industry context via Google Search)
+- Core Capabilities / Technology: owned tech, patents, certifications, differentiators
+- Key Track Record / Portfolio: flagship projects, key clients, revenue scale
+- Organization / People: org size, key people, culture
+- Partnerships / Network: major partners, alliances
+- Directions / Contact: HQ and branch locations, contact info
 
-섹션은 7-10개, 이미지는 4-6개로 구성하세요. 제품의 기능적 장점과 고객 혜택을 명확히 전달하세요.
+Produce 7-9 sections and 4-6 images. Use a tone that emphasises credibility and professionalism.
 
 ${PLANNING_JSON_FORMAT}`,
 
-  custom: `당신은 전문 기획안 작성자입니다. 사용자의 기획 브리프를 받아 Google 검색을 활용하여 주제를 조사하고, 전문적인 기획안 문서의 구조를 설계하세요.
+  product_intro: `You are a professional writer of product/service introduction documents. Given the user's brief, use Google Search to research the target product market and competing products, and design a structure that drives customer purchase decisions.
 
-사용자가 제공한 기획 내용을 최대한 그대로 반영하되, 부족한 부분은 Google 검색으로 보완하세요.
-사용자가 지정한 구성, 순서, 강조 포인트를 우선적으로 따르고, 추가 조사 결과로 내용을 풍부하게 만드세요.
+Required sections:
+- Product Overview: product name, value proposition, one-line description
+- Problem Definition: the customer's core problem / pain point
+- Solution: how the product solves it, the core mechanism
+- Key Features: 3-5 main features and the customer benefit of each (research differentiators vs competitors via Google Search)
+- Tech Specs: detailed specifications, supported environments, compatibility
+- Use Cases / Scenarios: real-world usage examples and scenarios
+- Competitive Comparison: advantages over competing products, comparison table
+- Customer Testimonials / Results: adoption stories, performance numbers, recommendations
+- Pricing / Plans: pricing structure, feature comparison by plan
+- Onboarding: adoption process, free trial, contact
 
-섹션은 5-8개, 이미지는 3-6개로 구성하세요.
+Produce 7-10 sections and 4-6 images. Clearly communicate functional benefits and customer value.
+
+${PLANNING_JSON_FORMAT}`,
+
+  custom: `You are a professional proposal writer. Given the user's planning brief, use Google Search to research the topic and design a structure for a professional proposal document.
+
+Reflect the user-provided content as faithfully as possible, and fill in gaps with Google Search findings.
+Prioritise the user's specified structure, ordering, and emphasis; use research only to enrich, not to override.
+
+Produce 5-8 sections and 3-6 images.
 
 ${PLANNING_JSON_FORMAT}`,
 };
@@ -1335,46 +1347,46 @@ const PLANNING_RESEARCH_PROMPT = TEMPLATE_PROMPTS.custom;
 
 // ─── Custom mode: no research, preserve user content verbatim ───
 
-const PLANNING_CUSTOM_EXTRACT_PROMPT = `당신은 사용자가 직접 작성한 기획안 원문을 (1) 섹션 단위로 정리하고 (2) 본문 내용에 어울리는 이미지 description만 추출하는 작업자입니다. 작가가 아닙니다.
+const PLANNING_CUSTOM_EXTRACT_PROMPT = `You are an operator who (1) organises the user's hand-written proposal into sections and (2) extracts image descriptions that match the body content. You are NOT a writer.
 
-절대 규칙:
-- 사용자 원문에 없는 내용을 절대 추가하지 마세요. 외부 지식, 추론, 통계, 출처를 만들어내지 마세요.
-- 사용자 원문의 본문 텍스트(서술문, heading, 리스트, 강조 표시)는 요약·압축·재구성·표현 다듬기 없이 글자 그대로 옮기세요(줄바꿈·공백·오타 모두 보존).
-- 단, 다음 두 가지는 의미를 보존하면서 형식을 변환합니다 (아래 [시각화 규칙] 참조):
-    (a) ASCII 박스 드로잉으로 그려진 다이어그램·플로우 차트·시스템 구조도 → HTML + Tailwind CSS
-    (b) 마크다운 표(| col | col | …) → HTML <table>
-- 코드 펜스 안의 실제 프로그래밍 코드는 변경하지 말고 그대로 두세요(다이어그램만 변환 대상).
-- 섹션 분할은 사용자 원문이 명확히 그렇게 나뉘어 있을 때만 수행하세요. 분할이 애매하면 하나의 섹션으로 두세요.
-- 사용자가 명시한 제목/소제목이 있으면 그대로 heading 으로 사용하세요. 없으면 해당 본문을 짧게 대표하는 1-3 단어 heading만 만드세요(본문에서 단어를 그대로 가져오는 것을 우선).
-- 이미지는 사용자 원문에서 시각화/도식/일러스트가 명확히 도움이 되는 지점에만 추출하세요. 0개여도 괜찮습니다. 무리해서 만들지 마세요. (이미 HTML/CSS 로 변환한 다이어그램은 별도 이미지로 추출하지 마세요.)
+Absolute rules:
+- Never add anything that is not in the user's original text. Do not invent outside knowledge, reasoning, statistics, or sources.
+- The user's prose (paragraphs, headings, lists, emphasis) must be carried over verbatim — no summarising, compressing, reorganising, or polishing. Preserve line breaks, spacing, and even typos.
+- TWO exceptions are converted in form while preserving meaning (see [Visualization rules] below):
+    (a) ASCII box-drawing diagrams / flow charts / system architecture figures → HTML + Tailwind CSS
+    (b) Markdown tables (| col | col | …) → HTML <table>
+- Real programming code inside code fences must be left exactly as-is (only diagrams are converted).
+- Split sections only where the original is clearly already split. When in doubt, keep one section.
+- If the user supplies explicit titles/subtitles, use them verbatim as headings. Otherwise create a 1-3 word heading that summarises the section (prefer reusing words from the body).
+- Extract images only where a visualisation/diagram/illustration clearly helps. 0 images is fine — do not force them. (Do not re-extract diagrams you already converted to HTML/CSS as images.)
 
 ${VISUAL_HTML_RULES}
 
-반드시 다음 JSON 형식으로만 응답하세요:
+Respond strictly in the following JSON format:
 
 {
-  "title": "사용자 원문에서 가장 적합한 제목 (없으면 첫 줄 또는 핵심 주제를 짧게)",
+  "title": "The most fitting title taken from the user's original text. If absent, use the first line or a short summary of the core topic. (Korean)",
   "sections": [
     {
-      "heading": "섹션 제목",
-      "content": "사용자 원문 그대로의 본문 (줄바꿈 포함)"
+      "heading": "Section heading (Korean)",
+      "content": "Body text taken verbatim from the user's original (line breaks preserved). May contain HTML-converted diagrams/tables. (Korean prose)"
     }
   ],
   "imageDescriptions": [
     {
-      "label": "이미지 용도 한글 설명 (어느 섹션의 어떤 역할)",
+      "label": "Korean description of the image's purpose (which section, what role)",
       "prompt": "Detailed English image generation prompt. Professional, high-quality style."
     }
   ]
 }
 
-이미지 prompt 규칙:
-- 반드시 영문
-- 배경 이미지: label에 "배경" 포함, prompt에 "16:9 aspect ratio, suitable for document header background" 포함
-- 아이콘/로고: prompt에 "simple, clean icon design, flat style, white background" 포함
-- 일반 일러스트: prompt에 "professional illustration, clean style" 포함
+Image prompt rules:
+- The prompt MUST be in English.
+- Background images: include "배경" in the label and "16:9 aspect ratio, suitable for document header background" in the prompt.
+- Icons / logos: include "simple, clean icon design, flat style, white background" in the prompt.
+- General illustrations: include "professional illustration, clean style" in the prompt.
 
-JSON만 출력하세요. 다른 텍스트 없이.`;
+Output JSON only. No surrounding text.`;
 
 export async function planUserContentForFormatting(brief) {
   if (!API_KEY) {
@@ -1383,7 +1395,7 @@ export async function planUserContentForFormatting(brief) {
 
   const text = await callProModel(
     PLANNING_CUSTOM_EXTRACT_PROMPT,
-    `사용자 원문:\n\n${brief}`,
+    `User original text:\n\n${brief}`,
     { maxOutputTokens: 65536, temperature: 0.2, thinkingBudget: 128 },
   );
 
@@ -1400,29 +1412,30 @@ export async function planUserContentForFormatting(brief) {
   }
 }
 
-const PLANNING_COMPOSE_PROMPT = `당신은 전문적인 HTML 기획안 문서를 작성하는 전문가입니다.
+const PLANNING_COMPOSE_PROMPT = `You are an expert who composes professional HTML proposal documents.
 
-주어진 구조화된 기획안 계획과 이미지 플레이스홀더를 사용하여 완성된 HTML 문서를 생성하세요.
+Given the structured plan and image placeholders, produce a complete HTML document.
 
-규칙:
-- 완전한 HTML 문서를 출력하세요 (<!DOCTYPE html>부터 </html>까지)
-- Tailwind CSS CDN을 포함하세요: <script src="https://cdn.tailwindcss.com"><\\/script>
-- 한국어 폰트: <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
-- body에 font-family: 'Noto Sans KR', sans-serif를 적용하세요
-- 전문적이고 깔끔한 기획안 문서 디자인을 적용하세요:
-  - 표지/헤더 섹션 (제목, 날짜, 기획 의도)
-  - 목차
-  - 각 섹션은 명확한 시각적 구분 (배경색, 구분선 등)
-  - 데이터는 표(table) 또는 리스트로 정리
-  - 적절한 여백과 타이포그래피
-  - 인용/출처 표시
-- 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 적절한 위치에 배치하세요:
-  - 배경 이미지: style="background-image: url({{IMAGE_1}}); background-size: cover;" 형태
-  - 삽화/아이콘 이미지: <img src="{{IMAGE_1}}" class="..." alt="..."> 형태
-- 이미지 크기는 문서 레이아웃에 맞게 Tailwind 클래스로 조정하세요
-- 외부 이미지 URL을 절대 사용하지 마세요 (플레이스홀더만 사용)
-- A4 또는 웹 문서에 적합한 너비(max-width: 1024px)로 설계하세요
-- 수정된 전체 HTML 문서만 출력하세요. 다른 설명 텍스트 없이.
+Rules:
+- Emit a full HTML document (from <!DOCTYPE html> to </html>).
+- Include Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"><\\/script>
+- Korean font link: <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+- Apply font-family: 'Noto Sans KR', sans-serif on body.
+- Use a professional, clean proposal document design:
+  - Cover / header section (title, date, planning intent)
+  - Table of contents
+  - Each section visually separated (background colour, dividers, etc.)
+  - Data presented in tables or lists
+  - Appropriate spacing and typography
+  - Citations / sources where present
+- Place image placeholders ({{IMAGE_1}}, {{IMAGE_2}} …) appropriately:
+  - Background image: style="background-image: url({{IMAGE_1}}); background-size: cover;"
+  - Illustration / icon: <img src="{{IMAGE_1}}" class="..." alt="..." />
+- Size images via Tailwind classes to fit the document layout.
+- NEVER use external image URLs (placeholders only).
+- Design for A4 / web width (max-width: 1024px).
+- Output the full modified HTML document only — no surrounding prose.
+- All natural-language text inside the HTML (titles, headings, captions, body) must be in Korean (한국어).
 ${VISUAL_HTML_RULES}`;
 
 export async function researchAndPlan(brief, templateType = 'custom') {
@@ -1440,7 +1453,7 @@ export async function researchAndPlan(brief, templateType = 'custom') {
         {
           parts: [
             { text: withCurrentDate(systemPrompt) },
-            { text: `기획 브리프:\n\n${brief}` },
+            { text: `Planning brief:\n\n${brief}` },
           ],
         },
       ],
@@ -1485,7 +1498,7 @@ export async function composeDocument(plan, processedImages) {
 
   const planText = JSON.stringify(plan, null, 2);
 
-  const userText = `기획안 구조:\n\n${planText}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n위 구조에 따라 전문적인 HTML 기획안 문서를 작성하세요.`;
+  const userText = `Proposal structure:\n\n${planText}\n\nAvailable image placeholders:\n${imageInfo}\n\nBased on the structure above, compose a professional HTML proposal document.`;
 
   let html = await callProModel(PLANNING_COMPOSE_PROMPT, userText);
 
@@ -1502,34 +1515,35 @@ export async function composeDocument(plan, processedImages) {
   return html;
 }
 
-const PLANNING_COMPOSE_CUSTOM_PROMPT = `당신은 주어진 사용자 원문 텍스트를 시각적으로 아름다운 HTML 기획안 문서로 포맷팅하는 디자이너입니다. 텍스트 작가가 아닙니다.
+const PLANNING_COMPOSE_CUSTOM_PROMPT = `You are a designer who formats the user's original text into a visually polished HTML proposal document. You are NOT a writer.
 
-절대 규칙:
-- sections[*].content 의 본문 텍스트(서술문/heading/리스트/강조)는 한 글자도 추가/삭제/요약/재구성/표현 다듬기 하지 마세요. 사용자 원문 그대로 HTML 안에 배치하세요.
-- 사용자 원문에 없는 새로운 문장, 데이터, 통계, 출처, 인용을 절대 만들어내지 마세요.
-- 줄바꿈을 의미 있는 단락(<p>) 또는 리스트(<ul>/<ol>)로 시각적으로 분할하는 것은 허용됩니다 — 텍스트 자체는 변경하지 마세요.
-- title 과 sections[*].heading 도 사용자가 작성한 그대로 사용하세요.
-- 단, sections[*].content 에 이미 포함된 HTML 마크업(특히 <div>/<table>/<svg> 형태로 변환된 다이어그램·표)은 그대로 보존하여 출력 HTML 에 삽입하세요. 다시 ASCII/마크다운 표로 되돌리지 마세요.
+Absolute rules:
+- The body text of sections[*].content (prose / headings / lists / emphasis) must be carried over verbatim — no additions, deletions, summarising, restructuring, or polishing. Place the user's original text into the HTML as-is.
+- Do not invent any new sentences, data, statistics, sources, or citations that are not in the user's text.
+- Splitting line breaks into paragraphs (<p>) or lists (<ul>/<ol>) for visual readability IS allowed — but never change the text itself.
+- title and sections[*].heading must also be used exactly as the user wrote them.
+- HTML markup already embedded in sections[*].content (in particular <div>/<table>/<svg> diagrams/tables that were already converted from ASCII/markdown) MUST be preserved as-is in the output HTML. Never revert them back to ASCII or markdown tables.
 
-HTML 디자인 요구사항:
-- 완전한 HTML 문서를 출력하세요 (<!DOCTYPE html>부터 </html>까지)
-- Tailwind CSS CDN을 포함하세요: <script src="https://cdn.tailwindcss.com"><\\/script>
-- 한국어 폰트: <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
-- body에 font-family: 'Noto Sans KR', sans-serif를 적용하세요
-- 전문적이고 깔끔한 기획안 문서 디자인을 적용하세요:
-  - 표지/헤더 섹션 (제목 — title 그대로)
-  - 각 섹션은 명확한 시각적 구분 (배경색, 구분선 등)
-  - 적절한 여백과 타이포그래피
-- A4 또는 웹 문서에 적합한 너비(max-width: 1024px)로 설계하세요
+HTML design requirements:
+- Emit a full HTML document (from <!DOCTYPE html> to </html>).
+- Include Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"><\\/script>
+- Korean font link: <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+- Apply font-family: 'Noto Sans KR', sans-serif on body.
+- Apply a professional, clean proposal-document design:
+  - Cover / header section (title — exactly as given)
+  - Each section visually separated (background colour, dividers, etc.)
+  - Appropriate spacing and typography
+- Design for A4 / web width (max-width: 1024px).
 
-이미지 배치:
-- 이미지 플레이스홀더({{IMAGE_1}}, {{IMAGE_2}} 등)를 각 이미지의 label 설명에 맞는 섹션 근처에 자연스럽게 배치하세요.
-- 배경 이미지: style="background-image: url({{IMAGE_1}}); background-size: cover;" 형태
-- 일반 이미지: <img src="{{IMAGE_1}}" class="..." alt="..."> 형태
-- 이미지가 0개일 수 있습니다. 그럴 때는 텍스트만으로 깔끔하게 디자인하세요.
-- 외부 이미지 URL을 절대 사용하지 마세요 (플레이스홀더만 사용)
+Image placement:
+- Place image placeholders ({{IMAGE_1}}, {{IMAGE_2}} …) naturally near the section that matches each image's label.
+- Background image: style="background-image: url({{IMAGE_1}}); background-size: cover;"
+- Regular image: <img src="{{IMAGE_1}}" class="..." alt="..." />
+- There may be zero images — in that case design cleanly with text only.
+- NEVER use external image URLs (placeholders only).
 
-완성된 HTML 문서만 출력하세요. 다른 설명 텍스트 없이.
+Output the complete HTML document only. No surrounding text.
+- All natural-language text inside the HTML must remain in Korean (한국어).
 ${VISUAL_HTML_RULES}`;
 
 export async function composeCustomDocument(plan, processedImages) {
@@ -1539,11 +1553,11 @@ export async function composeCustomDocument(plan, processedImages) {
 
   const imageInfo = processedImages.length > 0
     ? processedImages.map((img, i) => `- {{IMAGE_${i + 1}}}: ${img.label}`).join('\n')
-    : '(이미지 없음)';
+    : '(no images)';
 
   const planText = JSON.stringify(plan, null, 2);
 
-  const userText = `기획안 원문 데이터 (sections[*].content 는 사용자 원문 그대로입니다):\n\n${planText}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n위 sections[*].content 와 sections[*].heading, title 을 한 글자도 변형하지 말고 그대로 HTML 문서에 배치하세요. 디자인과 이미지 배치만 담당하세요.`;
+  const userText = `Original plan data (sections[*].content IS the user's original text):\n\n${planText}\n\nAvailable image placeholders:\n${imageInfo}\n\nPlace title, sections[*].heading, and sections[*].content into the HTML without changing a single character of their text. You are only responsible for design and image placement.`;
 
   let html = await callProModel(PLANNING_COMPOSE_CUSTOM_PROMPT, userText, { maxOutputTokens: 65536, temperature: 0.2, thinkingBudget: 128 });
 
