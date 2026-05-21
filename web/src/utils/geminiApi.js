@@ -249,6 +249,26 @@ function stripCodeFences(text) {
   return html.trim();
 }
 
+/**
+ * YouTube의 maxresdefault.jpg 는 HD 영상에만 존재하므로 표준화질 영상에서 404 가 발생한다.
+ * LLM 의 onerror fallback 지시는 LLM 이 누락할 수 있으므로 클라이언트에서 강제 주입한다.
+ * - <img src="...maxresdefault.jpg"> 패턴을 찾아 onerror 속성을 자동 추가
+ * - 이미 onerror 가 있으면 skip (idempotent)
+ * - 문자열·배열 모두 지원
+ */
+function patchYoutubeThumbnails(input) {
+  if (Array.isArray(input)) return input.map(patchYoutubeThumbnails);
+  if (typeof input !== 'string' || !input.includes('maxresdefault.jpg')) return input;
+  return input.replace(
+    /<img\b([^>]*?)\bsrc\s*=\s*(["'])(https?:\/\/img\.youtube\.com\/vi\/([A-Za-z0-9_-]+)\/maxresdefault\.jpg)\2([^>]*)>/gi,
+    (match, before, q, fullUrl, videoId, after) => {
+      if (/\bonerror\s*=/i.test(match)) return match;
+      const fallback = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      return `<img${before}src=${q}${fullUrl}${q} onerror="this.onerror=null;this.src='${fallback}';"${after}>`;
+    },
+  );
+}
+
 function parseGeminiResponse(data) {
   const candidate = data.candidates?.[0];
   if (!candidate) {
@@ -676,7 +696,7 @@ export async function convertHtmlToSlides(html) {
   }
 
   // Gemini가 플레이스홀더를 슬라이드에 포함시킨 경우 원본 이미지로 복원
-  return slides.map((s) => restoreBase64Images(s, images));
+  return patchYoutubeThumbnails(slides.map((s) => restoreBase64Images(s, images)));
 }
 
 const MODIFY_ALL_SLIDES_PROMPT = `You are an expert who modifies HTML presentation slides.
@@ -754,7 +774,7 @@ function logSlideCountChange(result, originals) {
   if (result.length !== originals.length) {
     console.log(`슬라이드 수 변경: ${originals.length}개 → ${result.length}개`);
   }
-  return result;
+  return patchYoutubeThumbnails(result);
 }
 
 export async function modifyAllSlidesHtml(allSlides, instruction) {
@@ -935,7 +955,7 @@ export async function modifySlideHtml(currentSlideHtml, instruction, screenshotB
     throw new Error('유효한 슬라이드 HTML이 반환되지 않았습니다.');
   }
 
-  return html;
+  return patchYoutubeThumbnails(html);
 }
 
 // ─── Document-level HTML modification ───
@@ -1259,7 +1279,7 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
     throw new Error('유효한 HTML이 반환되지 않았습니다.');
   }
 
-  return html;
+  return patchYoutubeThumbnails(html);
 }
 
 // ─── Planning: Research + Document Generation with Google Search Grounding ───
@@ -1528,7 +1548,7 @@ export async function composeDocument(plan, processedImages) {
     throw new Error('유효한 HTML이 생성되지 않았습니다.');
   }
 
-  return html;
+  return patchYoutubeThumbnails(html);
 }
 
 const PLANNING_COMPOSE_CUSTOM_PROMPT = `You are a designer who formats the user's original text into a visually polished HTML proposal document. You are NOT a writer.
@@ -1586,7 +1606,7 @@ export async function composeCustomDocument(plan, processedImages) {
     throw new Error('유효한 HTML이 생성되지 않았습니다.');
   }
 
-  return html;
+  return patchYoutubeThumbnails(html);
 }
 
 // ─── Viewport fix: render → screenshot → Gemini Flash multimodal → fixed HTML ───
