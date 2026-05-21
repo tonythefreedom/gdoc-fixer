@@ -48,13 +48,18 @@ export default function Sidebar() {
   const [editingPresId, setEditingPresId] = useState(null);
   const [editPresName, setEditPresName] = useState('');
 
-  // 사이드바에는 최근 작업한 파일 10 개만 표시. 나머지는 "컨텐츠" 페이지에서 검색·관리.
+  // 사이드바에는 최근 항목 10 개씩만 표시. 나머지는 "컨텐츠" 페이지에서 검색·관리.
   const RECENT_LIMIT = 10;
   const recentFiles = useMemo(() => {
     const list = [...files];
     list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
     return list.slice(0, RECENT_LIMIT);
   }, [files]);
+  const recentShares = useMemo(() => {
+    const list = [...shares];
+    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return list.slice(0, RECENT_LIMIT);
+  }, [shares]);
 
   // 사이드바 리사이즈
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -442,14 +447,25 @@ export default function Sidebar() {
           </div>
         ))}
 
-        {/* Shared section */}
+        {/* Shared section — 최근 10 개만 노출 */}
         {shares.length > 0 && (
           <>
             <div className="my-2" />
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider px-2 mb-2">
-              Shared ({shares.length})
+            <div className="flex items-center justify-between px-2 mb-2">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                Recent Shared ({recentShares.length}{shares.length > RECENT_LIMIT ? ` / ${shares.length}` : ''})
+              </span>
+              {shares.length > RECENT_LIMIT && (
+                <button
+                  onClick={() => setCurrentView('contents')}
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline"
+                  title="전체 공유 링크를 컨텐츠 페이지에서 보기"
+                >
+                  전체 보기 →
+                </button>
+              )}
             </div>
-            {shares.map((share) => (
+            {recentShares.map((share) => (
               <div
                 key={share.id}
                 className="group flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 cursor-pointer text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
