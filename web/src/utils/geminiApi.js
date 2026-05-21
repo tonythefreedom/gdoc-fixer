@@ -416,9 +416,8 @@ function withCurrentDate(systemPrompt) {
 async function callProModel(systemPrompt, userText, options = {}) {
   const { maxOutputTokens = 32768, temperature = 0.7, thinkingBudget } = options;
   const generationConfig = { temperature, maxOutputTokens };
-  // Gemini 2.5 Pro는 thinking 토큰이 maxOutputTokens 안에 포함된다.
-  // thinking이 응답 토큰을 잡아먹어 잘림이 발생할 수 있으므로 단순 변환 작업은
-  // thinkingBudget을 작게 주어 실제 응답 공간을 확보한다 (0 = 비활성).
+  // Gemini 2.5 Pro는 thinking 토큰이 maxOutputTokens 안에 포함되며 thinking 완전 비활성(0)은 불가.
+  // 단순 변환 작업은 최소값(128)을 주어 thinking이 응답 공간을 잡아먹지 못하게 한다.
   if (typeof thinkingBudget === 'number') {
     generationConfig.thinkingConfig = { thinkingBudget };
   }
@@ -1338,7 +1337,7 @@ export async function planUserContentForFormatting(brief) {
   const text = await callProModel(
     PLANNING_CUSTOM_EXTRACT_PROMPT,
     `사용자 원문:\n\n${brief}`,
-    { maxOutputTokens: 65536, temperature: 0.2, thinkingBudget: 0 },
+    { maxOutputTokens: 65536, temperature: 0.2, thinkingBudget: 128 },
   );
 
   try {
@@ -1497,7 +1496,7 @@ export async function composeCustomDocument(plan, processedImages) {
 
   const userText = `기획안 원문 데이터 (sections[*].content 는 사용자 원문 그대로입니다):\n\n${planText}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n위 sections[*].content 와 sections[*].heading, title 을 한 글자도 변형하지 말고 그대로 HTML 문서에 배치하세요. 디자인과 이미지 배치만 담당하세요.`;
 
-  let html = await callProModel(PLANNING_COMPOSE_CUSTOM_PROMPT, userText, { maxOutputTokens: 65536, temperature: 0.2, thinkingBudget: 0 });
+  let html = await callProModel(PLANNING_COMPOSE_CUSTOM_PROMPT, userText, { maxOutputTokens: 65536, temperature: 0.2, thinkingBudget: 128 });
 
   processedImages.forEach((img, i) => {
     const placeholder = `{{IMAGE_${i + 1}}}`;
