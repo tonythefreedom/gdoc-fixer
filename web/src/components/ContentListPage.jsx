@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Search, FileCode, Share2, ExternalLink, Trash2, Copy, Pencil, Check, X } from 'lucide-react';
+import { Search, FileCode, Share2, ExternalLink, Trash2, Copy, Pencil, Check, X, Presentation } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useShareStore from '../store/useShareStore';
+import useSlideStore from '../store/useSlideStore';
 import { filterAndRank } from '../utils/textSearch';
 import { getShareUrl } from '../utils/shareUrl';
 
@@ -28,26 +29,38 @@ export default function ContentListPage() {
   const shares = useShareStore((s) => s.shares);
   const removeShare = useShareStore((s) => s.removeShare);
 
+  const presentations = useSlideStore((s) => s.presentations);
+  const setActivePresentation = useSlideStore((s) => s.setActivePresentation);
+  const deletePresentation = useSlideStore((s) => s.deletePresentation);
+  const renamePresentation = useSlideStore((s) => s.renamePresentation);
+
   // 키워드 검색: IME 조합 중에는 필터링을 보류해 "단어 완성 단위" 동작
   const [rawQuery, setRawQuery] = useState('');
   const [committedQuery, setCommittedQuery] = useState('');
   const [composing, setComposing] = useState(false);
 
-  // 항목 인라인 이름 변경
+  // 항목 인라인 이름 변경 (kind: 'file' | 'presentation')
+  const [editingKind, setEditingKind] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
 
-  const startRename = (file) => {
-    setEditingId(file.id);
-    setEditName(file.name);
+  const startRename = (kind, item) => {
+    setEditingKind(kind);
+    setEditingId(item.id);
+    setEditName(item.name);
   };
   const cancelRename = () => {
+    setEditingKind(null);
     setEditingId(null);
     setEditName('');
   };
   const confirmRename = async () => {
     if (!editingId || !editName.trim()) return cancelRename();
-    await renameFile(editingId, editName.trim());
+    if (editingKind === 'file') {
+      await renameFile(editingId, editName.trim());
+    } else if (editingKind === 'presentation') {
+      await renamePresentation(editingId, editName.trim());
+    }
     cancelRename();
   };
 
@@ -64,6 +77,16 @@ export default function ContentListPage() {
   const handleDeleteShare = async (id) => {
     if (!confirm('이 공유 링크를 삭제할까요?')) return;
     await removeShare(id);
+  };
+
+  const handleOpenPresentation = (id) => {
+    setActivePresentation(id);
+    setCurrentView('editor');
+  };
+
+  const handleDeletePresentation = async (id) => {
+    if (!confirm('이 프리젠테이션을 삭제할까요? 되돌릴 수 없습니다.')) return;
+    await deletePresentation(id);
   };
 
   const handleCopyShareUrl = async (id) => {
@@ -83,6 +106,11 @@ export default function ContentListPage() {
     [files, committedQuery],
   );
 
+  const filteredPresentations = useMemo(
+    () => filterAndRank(presentations, committedQuery, (p) => p.name || ''),
+    [presentations, committedQuery],
+  );
+
   const filteredShares = useMemo(
     () =>
       filterAndRank(
@@ -93,7 +121,7 @@ export default function ContentListPage() {
     [shares, committedQuery],
   );
 
-  const resultCount = filteredFiles.length + filteredShares.length;
+  const resultCount = filteredFiles.length + filteredPresentations.length + filteredShares.length;
 
   return (
     <main className="flex-1 h-full overflow-y-auto bg-slate-50">
@@ -130,7 +158,7 @@ export default function ContentListPage() {
             <div className="text-xs text-slate-500 mt-2">
               {resultCount === 0
                 ? `"${committedQuery}" 에 대한 결과가 없습니다`
-                : `"${committedQuery}" 검색 결과 ${resultCount}건 (Files ${filteredFiles.length} · Shares ${filteredShares.length})`}
+                : `"${committedQuery}" 검색 결과 ${resultCount}건 (Files ${filteredFiles.length} · Presentations ${filteredPresentations.length} · Shares ${filteredShares.length})`}
             </div>
           )}
         </div>
@@ -160,7 +188,7 @@ export default function ContentListPage() {
                   {filteredFiles.map((file) => (
                     <tr key={file.id} className="hover:bg-slate-50">
                       <td className="px-4 py-2.5 text-slate-700">
-                        {editingId === file.id ? (
+                        {editingKind === 'file' && editingId === file.id ? (
                           <div className="flex items-center gap-2">
                             <input
                               className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm outline-none focus:border-indigo-500"
@@ -212,7 +240,7 @@ export default function ContentListPage() {
                             <ExternalLink className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => startRename(file)}
+                            onClick={() => startRename('file', file)}
                             className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
                             title="이름 변경"
                           >
@@ -220,6 +248,110 @@ export default function ContentListPage() {
                           </button>
                           <button
                             onClick={() => handleDeleteFile(file.id)}
+                            className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
+                            title="삭제"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* Presentations 테이블 */}
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <Presentation className="w-4 h-4 text-indigo-400" />
+            Presentations ({filteredPresentations.length} / {presentations.length})
+          </h2>
+          {filteredPresentations.length === 0 ? (
+            <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-lg bg-white">
+              {committedQuery ? '검색된 프리젠테이션이 없습니다.' : '아직 생성된 프리젠테이션이 없습니다.'}
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium">이름</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-24">슬라이드</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-44">생성일</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-44">수정일</th>
+                    <th className="text-right px-4 py-2.5 font-medium w-40">작업</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredPresentations.map((pres) => (
+                    <tr key={pres.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5 text-slate-700">
+                        {editingKind === 'presentation' && editingId === pres.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm outline-none focus:border-indigo-500"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') confirmRename();
+                                if (e.key === 'Escape') cancelRename();
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              onClick={confirmRename}
+                              className="p-1 text-emerald-600 hover:text-emerald-700"
+                              title="확인"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={cancelRename}
+                              className="p-1 text-slate-400 hover:text-slate-600"
+                              title="취소"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenPresentation(pres.id)}
+                            className="text-left text-indigo-600 hover:underline"
+                          >
+                            {pres.name || `프리젠테이션 #${pres.id.slice(0, 6)}`}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600 text-xs">
+                        {Array.isArray(pres.slides) ? pres.slides.length : 0}장
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs">
+                        {formatDate(pres.createdAt)}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs">
+                        {formatDate(pres.updatedAt)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenPresentation(pres.id)}
+                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                            title="열기"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => startRename('presentation', pres)}
+                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                            title="이름 변경"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePresentation(pres.id)}
                             className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
                             title="삭제"
                           >

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users, FolderOpen } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
@@ -47,6 +47,14 @@ export default function Sidebar() {
   const docxInputRef = useRef(null);
   const [editingPresId, setEditingPresId] = useState(null);
   const [editPresName, setEditPresName] = useState('');
+
+  // 사이드바에는 최근 작업한 파일 10 개만 표시. 나머지는 "컨텐츠" 페이지에서 검색·관리.
+  const RECENT_LIMIT = 10;
+  const recentFiles = useMemo(() => {
+    const list = [...files];
+    list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    return list.slice(0, RECENT_LIMIT);
+  }, [files]);
 
   // 사이드바 리사이즈
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -351,11 +359,22 @@ export default function Sidebar() {
           </>
         )}
 
-        {/* Files section */}
-        <div className="text-[10px] text-slate-500 uppercase tracking-wider px-2 mb-2">
-          Files ({files.length})
+        {/* Files section — 최근 작업한 10 개만 노출 */}
+        <div className="flex items-center justify-between px-2 mb-2">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+            Recent Files ({recentFiles.length}{files.length > RECENT_LIMIT ? ` / ${files.length}` : ''})
+          </span>
+          {files.length > RECENT_LIMIT && (
+            <button
+              onClick={() => setCurrentView('contents')}
+              className="text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline"
+              title="전체 파일을 컨텐츠 페이지에서 보기"
+            >
+              전체 보기 →
+            </button>
+          )}
         </div>
-        {files.map((file) => (
+        {recentFiles.map((file) => (
           <div
             key={file.id}
             className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 cursor-pointer transition-colors ${
