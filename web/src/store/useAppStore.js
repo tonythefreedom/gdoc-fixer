@@ -35,6 +35,10 @@ function saveSavedPresets(presets) {
 }
 
 const useAppStore = create((set, get) => ({
+  // View routing ('editor' | 'contents')
+  currentView: 'editor',
+  setCurrentView: (view) => set({ currentView: view }),
+
   // File management
   files: [],
   activeFileId: null,
@@ -292,6 +296,7 @@ const useAppStore = create((set, get) => ({
       imageUrls: {},
       isImagePanelOpen: false,
       isAdminMode: false,
+      currentView: 'editor',
     });
 
     // Load images for this file

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users } from 'lucide-react';
+import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users, FolderOpen } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
 import useSlideStore from '../store/useSlideStore';
@@ -23,6 +23,8 @@ export default function Sidebar() {
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
   const isAdminMode = useAppStore((s) => s.isAdminMode);
   const setAdminMode = useAppStore((s) => s.setAdminMode);
+  const currentView = useAppStore((s) => s.currentView);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   const userProfile = useAuthStore((s) => s.userProfile);
 
@@ -182,18 +184,31 @@ export default function Sidebar() {
 
       <div className="p-3 space-y-2">
         <button
+          onClick={() => setCurrentView('contents')}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            currentView === 'contents'
+              ? 'bg-slate-600 text-white'
+              : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+          }`}
+          title="생성된 파일과 공유 링크를 한 페이지에서 검색·관리"
+        >
+          <FolderOpen className="w-4 h-4" />
+          컨텐츠
+        </button>
+        <button
           onClick={() => {
             clearActivePresentation();
             startPlanning();
+            setCurrentView('editor');
           }}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            isPlanningMode
+            isPlanningMode && currentView !== 'contents'
               ? 'bg-emerald-700 text-white'
               : 'bg-emerald-600 hover:bg-emerald-500 text-white'
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          {isPlanningMode ? '기획안 작성중' : '새 기획안'}
+          {isPlanningMode && currentView !== 'contents' ? '기획안 작성중' : '새 기획안'}
         </button>
         <button
           onClick={handleCreate}
