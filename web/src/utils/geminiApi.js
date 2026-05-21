@@ -8,6 +8,45 @@ const IMAGE_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemin
 const SLIDE_DELIMITER = '<!--SLIDE_BREAK-->';
 const FILE_UPLOAD_URL = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${API_KEY}`;
 
+// ── Common visualization rules injected into every planning / modify system prompt ──
+//
+// Defined at the top of the module so that every prompt const below can safely
+// interpolate it via `${VISUAL_HTML_RULES}` — const has no hoisting, so any
+// reference made before this definition would throw a TDZ ReferenceError.
+//
+// ASCII box-drawing diagrams produced by the LLM (or pasted by the user)
+// break visual consistency and waste tokens via JSON escaping.
+const VISUAL_HTML_RULES = `
+[Visualization rules — applied to ALL planning modes]
+- DO NOT draw diagrams, flow charts, or system architecture figures with ASCII box-drawing characters (┌ ┐ │ └ ┘ ├ ┤ ┬ ┴ ┼ ─ ━ ═ etc.).
+  Always render them as HTML + Tailwind CSS instead:
+    - Boxes: <div class="border border-gray-400 rounded-lg px-4 py-2 bg-gray-50">label</div>
+    - Hierarchy / grouping: flex or grid layouts (e.g. <div class="flex flex-col gap-2 p-4 border-2 border-dashed">…</div>)
+    - Connectors / arrows: inline SVG (<svg viewBox=…><line>·<path>·<polygon>) or simple arrow characters (→ ← ↑ ↓ ▶ ▼ ◀ ▲)
+    - Labels / captions: <span class="text-xs text-gray-500">
+- DO NOT emit markdown tables (| col1 | col2 |…). Always emit HTML <table>:
+    <table class="w-full border-collapse text-sm">
+      <thead class="bg-gray-100"><tr><th class="border px-3 py-2 text-left">…</th></tr></thead>
+      <tbody><tr><td class="border px-3 py-2">…</td></tr></tbody>
+    </table>
+- Use code fences (\`\`\`) ONLY for real programming code (TypeScript, Python, etc.). Never wrap diagrams, tables, structure figures, or example outputs in code fences.
+- These rules apply both to content you generate and to ASCII diagrams / markdown tables that appear in the user's original text. Preserve the user's prose (paragraphs, headings, lists, emphasis) verbatim, but rewrite ASCII diagrams and markdown tables in the HTML/CSS form above while preserving their meaning.
+
+[YouTube thumbnail rule]
+- \`maxresdefault.jpg\` only exists for HD (720p+) videos and returns 404 for standard-definition ones.
+- Always include an \`onerror\` fallback that switches to \`hqdefault.jpg\` on 404:
+    <a href="https://www.youtube.com/watch?v=VIDEO_ID" target="_blank" rel="noopener">
+      <img src="https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg"
+           onerror="this.onerror=null; this.src='https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg';"
+           alt="..." class="w-full rounded-lg shadow" />
+    </a>
+- If you prefer a simpler form, just use \`hqdefault.jpg\` directly — it is always available for every video (480×360).
+
+[Output language]
+- All natural-language text you produce (titles, headings, body text, descriptions, captions) must be written in Korean (한국어).
+- Field names, JSON keys, code identifiers, English-only image prompts, and the image_prompt field stay in English.
+`;
+
 /**
  * base64 데이터를 Gemini File API에 업로드하고 fileUri를 반환.
  * inlineData 대신 fileData로 참조하여 요청 페이로드 크기를 대폭 줄임.
@@ -1210,43 +1249,6 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
 }
 
 // ─── Planning: Research + Document Generation with Google Search Grounding ───
-
-// ── Common visualization rules injected into every planning system prompt ──
-//
-// ASCII box-drawing diagrams produced by the LLM (or pasted by the user)
-// break visual consistency and waste tokens via JSON escaping.
-// This block is appended to all planning/modify system prompts.
-const VISUAL_HTML_RULES = `
-[Visualization rules — applied to ALL planning modes]
-- DO NOT draw diagrams, flow charts, or system architecture figures with ASCII box-drawing characters (┌ ┐ │ └ ┘ ├ ┤ ┬ ┴ ┼ ─ ━ ═ etc.).
-  Always render them as HTML + Tailwind CSS instead:
-    - Boxes: <div class="border border-gray-400 rounded-lg px-4 py-2 bg-gray-50">label</div>
-    - Hierarchy / grouping: flex or grid layouts (e.g. <div class="flex flex-col gap-2 p-4 border-2 border-dashed">…</div>)
-    - Connectors / arrows: inline SVG (<svg viewBox=…><line>·<path>·<polygon>) or simple arrow characters (→ ← ↑ ↓ ▶ ▼ ◀ ▲)
-    - Labels / captions: <span class="text-xs text-gray-500">
-- DO NOT emit markdown tables (| col1 | col2 |…). Always emit HTML <table>:
-    <table class="w-full border-collapse text-sm">
-      <thead class="bg-gray-100"><tr><th class="border px-3 py-2 text-left">…</th></tr></thead>
-      <tbody><tr><td class="border px-3 py-2">…</td></tr></tbody>
-    </table>
-- Use code fences (\`\`\`) ONLY for real programming code (TypeScript, Python, etc.). Never wrap diagrams, tables, structure figures, or example outputs in code fences.
-- These rules apply both to content you generate and to ASCII diagrams / markdown tables that appear in the user's original text. Preserve the user's prose (paragraphs, headings, lists, emphasis) verbatim, but rewrite ASCII diagrams and markdown tables in the HTML/CSS form above while preserving their meaning.
-
-[YouTube thumbnail rule]
-- \`maxresdefault.jpg\` only exists for HD (720p+) videos and returns 404 for standard-definition ones.
-- Always include an \`onerror\` fallback that switches to \`hqdefault.jpg\` on 404:
-    <a href="https://www.youtube.com/watch?v=VIDEO_ID" target="_blank" rel="noopener">
-      <img src="https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg"
-           onerror="this.onerror=null; this.src='https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg';"
-           alt="..." class="w-full rounded-lg shadow" />
-    </a>
-- If you prefer a simpler form, just use \`hqdefault.jpg\` directly — it is always available for every video (480×360).
-
-[Output language]
-- All natural-language text you produce (titles, headings, body text, descriptions, captions) must be written in Korean (한국어).
-- Field names, JSON keys, code identifiers, English-only image prompts, and the image_prompt field stay in English.
-`;
-
 const PLANNING_JSON_FORMAT = `Respond strictly in the following JSON format:
 
 {
