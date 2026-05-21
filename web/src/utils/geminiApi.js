@@ -1406,7 +1406,36 @@ Image prompt rules:
 - Icons / logos: include "simple, clean icon design, flat style, white background" in the prompt.
 - General illustrations: include "professional illustration, clean style" in the prompt.
 
+[CRITICAL — JSON string escaping]
+Any backslash that appears inside a JSON string value (especially LaTeX commands like \\frac, \\mu, \\sigma, \\theta, \\sum, \\pi, \\beta, \\epsilon, \\log, \\min, \\text, etc.) MUST be written as a doubled backslash (\\\\) in the JSON output so that JSON.parse can decode it back to a single backslash. Sequences like \\f, \\t, \\b, \\n are NOT LaTeX commands in JSON — they are control characters. If you write a single backslash in front of LaTeX commands the JSON will be corrupted and the user's request will fail. Always emit \\\\frac, \\\\mu, \\\\sigma, etc. when the rendered content should contain a single backslash.
+
 Output JSON only. No surrounding text.`;
+
+/**
+ * LLM 응답에 LaTeX(\frac, \mu, ...) 같은 단일 백슬래시가 escape 없이 들어오면
+ * JSON.parse 가 invalid escape 으로 실패한다. 표준 JSON escape 가 아닌
+ * 백슬래시(`\` + 비표준 문자)를 모두 doubled-backslash 로 보정한 뒤 재시도.
+ *
+ * 유효한 JSON escape 는 그대로 둔다: \" \\ \/ \b \f \n \r \t \uXXXX
+ *
+ * 일반 텍스트의 \t / \f / \b / \n / \r 자체가 LaTeX 의 \text \frac \beta 등을
+ * 잘못 표현하는 경우도 있어, 그 경우엔 별도 휴리스틱이 필요하지만 이번 단계는
+ * "invalid 한 백슬래시 이스케이프" 만 안전하게 보정한다.
+ */
+function safeParseLlmJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (e1) {
+    const fixed = text.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+    try {
+      const parsed = JSON.parse(fixed);
+      console.warn('[safeParseLlmJson] invalid LaTeX-style backslash 자동 보정으로 parse 성공');
+      return parsed;
+    } catch (e2) {
+      throw e1;
+    }
+  }
+}
 
 export async function planUserContentForFormatting(brief) {
   if (!API_KEY) {
@@ -1420,7 +1449,7 @@ export async function planUserContentForFormatting(brief) {
   );
 
   try {
-    const plan = JSON.parse(text);
+    const plan = safeParseLlmJson(text);
     if (!plan.title || !Array.isArray(plan.sections) || !Array.isArray(plan.imageDescriptions)) {
       throw new Error('기획안 구조가 올바르지 않습니다.');
     }
@@ -1495,7 +1524,7 @@ export async function researchAndPlan(brief, templateType = 'custom') {
   const cleaned = stripCodeFences(text);
 
   try {
-    const plan = JSON.parse(cleaned);
+    const plan = safeParseLlmJson(cleaned);
     if (!plan.title || !plan.sections || !plan.imageDescriptions) {
       throw new Error('기획안 구조가 올바르지 않습니다.');
     }
