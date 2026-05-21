@@ -13,6 +13,11 @@ dist-ssr
 *.local
 .env
 
+# Google Cloud / Firebase service account keys
+banya2025.json
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

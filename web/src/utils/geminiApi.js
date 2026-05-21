@@ -413,7 +413,8 @@ function withCurrentDate(systemPrompt) {
   return `[시스템 컨텍스트] 오늘 날짜는 ${today} (YYYY-MM-DD) 입니다. 작성일, 발행일, "오늘", "최근", "이번 주/달/해" 같은 시간 표현은 모두 이 날짜를 기준으로 계산하세요. 학습 시점의 연도(예: 2024)를 임의로 사용하지 마세요.\n\n${systemPrompt}`;
 }
 
-async function callProModel(systemPrompt, userText) {
+async function callProModel(systemPrompt, userText, options = {}) {
+  const { maxOutputTokens = 32768, temperature = 0.7 } = options;
   const res = await fetch(PRO_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -427,8 +428,8 @@ async function callProModel(systemPrompt, userText) {
         },
       ],
       generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 32768,
+        temperature,
+        maxOutputTokens,
       },
     }),
   });
@@ -1326,6 +1327,7 @@ export async function planUserContentForFormatting(brief) {
   const text = await callProModel(
     PLANNING_CUSTOM_EXTRACT_PROMPT,
     `사용자 원문:\n\n${brief}`,
+    { maxOutputTokens: 65536, temperature: 0.2 },
   );
 
   try {
@@ -1484,7 +1486,7 @@ export async function composeCustomDocument(plan, processedImages) {
 
   const userText = `기획안 원문 데이터 (sections[*].content 는 사용자 원문 그대로입니다):\n\n${planText}\n\n사용 가능한 이미지 플레이스홀더:\n${imageInfo}\n\n위 sections[*].content 와 sections[*].heading, title 을 한 글자도 변형하지 말고 그대로 HTML 문서에 배치하세요. 디자인과 이미지 배치만 담당하세요.`;
 
-  let html = await callProModel(PLANNING_COMPOSE_CUSTOM_PROMPT, userText);
+  let html = await callProModel(PLANNING_COMPOSE_CUSTOM_PROMPT, userText, { maxOutputTokens: 65536, temperature: 0.2 });
 
   processedImages.forEach((img, i) => {
     const placeholder = `{{IMAGE_${i + 1}}}`;
