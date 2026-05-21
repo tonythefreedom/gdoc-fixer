@@ -33,6 +33,14 @@ const VISUAL_HTML_RULES = `
 - Use code fences (\`\`\`) ONLY for real programming code (TypeScript, Python, etc.). Never wrap diagrams, tables, structure figures, or example outputs in code fences.
 - These rules apply both to content you generate and to ASCII diagrams / markdown tables that appear in the user's original text. Preserve the user's prose (paragraphs, headings, lists, emphasis) verbatim, but rewrite ASCII diagrams and markdown tables in the HTML/CSS form above while preserving their meaning.
 
+[Code blocks — survive downstream republishing]
+- Some downstream renderers (notably tech-blog) strip Tailwind classes and override font-family. To keep code blocks readable everywhere, ALWAYS attach inline \`style\` attributes that nail down background, text color, monospace font, padding, and rounded corners. Inline styles survive Tailwind class stripping and tend to win against \`font-family: inherit !important\` cascades when paired with \`!important\` in the style attribute.
+- Block code:
+    <pre style="background:#f6f8fa !important; color:#1f2328 !important; padding:1em; border-radius:6px; overflow-x:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace !important; font-size:0.9em; line-height:1.5;"><code style="background:transparent; color:inherit; padding:0; font-family:inherit !important;">…code…</code></pre>
+- Inline code:
+    <code style="background:#f6f8fa; color:#1f2328; padding:0.2em 0.4em; border-radius:4px; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace !important; font-size:0.9em;">code</code>
+- HTML-escape the code content (\`<\` → \`&lt;\`, \`>\` → \`&gt;\`, \`&\` → \`&amp;\`) so the example renders as text.
+
 [Inline markdown → HTML conversion]
 - Convert inline markdown syntax to HTML BEFORE emitting it. Never let raw markdown markers reach the rendered output — browsers render \`**bold**\` as literal asterisks.
   - **bold** / __bold__ → <strong>bold</strong>
