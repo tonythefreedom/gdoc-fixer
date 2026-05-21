@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Code, AlertTriangle } from 'lucide-react';
 import { parseShareId, fetchSharedHtml } from '../utils/shareUrl';
+import { patchYoutubeThumbnails } from '../utils/youtubeThumbnail.js';
 import useAppStore from '../store/useAppStore';
 
 export default function ShareView() {
@@ -82,7 +83,7 @@ export default function ShareView() {
         </button>
       </div>
       <iframe
-        srcDoc={html}
+        srcDoc={patchYoutubeThumbnails(html)}
         sandbox="allow-scripts allow-same-origin"
         className="flex-1 w-full border-none"
         title="Shared HTML"

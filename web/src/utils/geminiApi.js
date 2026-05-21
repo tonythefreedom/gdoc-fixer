@@ -1,4 +1,5 @@
 import { renderChartPlaceholders } from './chartRenderer.js';
+import { patchYoutubeThumbnails } from './youtubeThumbnail.js';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const PRO_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${API_KEY}`;
@@ -249,25 +250,8 @@ function stripCodeFences(text) {
   return html.trim();
 }
 
-/**
- * YouTube의 maxresdefault.jpg 는 HD 영상에만 존재하므로 표준화질 영상에서 404 가 발생한다.
- * LLM 의 onerror fallback 지시는 LLM 이 누락할 수 있으므로 클라이언트에서 강제 주입한다.
- * - <img src="...maxresdefault.jpg"> 패턴을 찾아 onerror 속성을 자동 추가
- * - 이미 onerror 가 있으면 skip (idempotent)
- * - 문자열·배열 모두 지원
- */
-function patchYoutubeThumbnails(input) {
-  if (Array.isArray(input)) return input.map(patchYoutubeThumbnails);
-  if (typeof input !== 'string' || !input.includes('maxresdefault.jpg')) return input;
-  return input.replace(
-    /<img\b([^>]*?)\bsrc\s*=\s*(["'])(https?:\/\/img\.youtube\.com\/vi\/([A-Za-z0-9_-]+)\/maxresdefault\.jpg)\2([^>]*)>/gi,
-    (match, before, q, fullUrl, videoId, after) => {
-      if (/\bonerror\s*=/i.test(match)) return match;
-      const fallback = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-      return `<img${before}src=${q}${fullUrl}${q} onerror="this.onerror=null;this.src='${fallback}';"${after}>`;
-    },
-  );
-}
+// patchYoutubeThumbnails 는 utils/youtubeThumbnail.js 에서 공유 import.
+// (PreviewIframe / ShareView / SlideEditor 같은 컴포넌트에서도 동일 함수를 사용하기 위함.)
 
 function parseGeminiResponse(data) {
   const candidate = data.candidates?.[0];
