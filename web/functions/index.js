@@ -69,7 +69,7 @@ exports.shareOg = onRequest(async (req, res) => {
     <span class="title">${escapeHtml(name)}</span>
     <a href="https://gdoc-fixer.web.app">에디터로 열기</a>
   </div>
-  <iframe id="preview" sandbox="allow-scripts allow-same-origin"></iframe>
+  <iframe id="preview" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
   <script>document.getElementById('preview').srcdoc=${htmlContent};</script>
 </body>
 </html>`;

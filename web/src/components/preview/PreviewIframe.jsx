@@ -12,7 +12,7 @@ const PreviewIframe = forwardRef(function PreviewIframe(
     <iframe
       ref={ref}
       srcDoc={patchedHtml}
-      sandbox="allow-scripts allow-same-origin"
+      sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       style={{
         width: `${viewportWidth}px`,
         height: `${viewportHeight}px`,

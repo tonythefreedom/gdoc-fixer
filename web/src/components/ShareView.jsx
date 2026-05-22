@@ -84,7 +84,7 @@ export default function ShareView() {
       </div>
       <iframe
         srcDoc={patchYoutubeThumbnails(html)}
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         className="flex-1 w-full border-none"
         title="Shared HTML"
       />

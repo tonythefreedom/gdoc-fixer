@@ -304,7 +304,7 @@ export default function SlideEditor() {
         >
           <iframe
             srcDoc={`<style>html,body{margin:0;padding:0;overflow:hidden}</style>${patchYoutubeThumbnails(currentSlide)}`}
-            sandbox="allow-same-origin allow-scripts"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
             style={{
               width: SLIDE_W,
               height: SLIDE_H,
