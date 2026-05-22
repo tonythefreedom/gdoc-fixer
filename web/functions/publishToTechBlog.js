@@ -174,7 +174,57 @@ exports.publishToTechBlog = onCall(
 
     const apiKey = GEMINI_API_KEY.value();
 
-    // 1. Translate Ko → En
+    // 0. Normalize self-contained HTML → tech-blog semantic article pattern
+    // gdoc-fixer 본체는 <!DOCTYPE>/Tailwind CDN/단락별 사이즈 클래스가 들어간 자기완결 페이지를
+    // 만들지만, tech-blog의 정상 렌더링은 prose prose-slate typography 위에서 동작한다.
+    // 이 단계에서 본문을 시맨틱 article 구조로 정규화한다.
+    const normalizationPrompt = `You are an HTML normalizer for a tech blog. Convert the given self-contained HTML page into a clean semantic article body that follows the EXACT structure below.
+
+REQUIRED output structure:
+<article class="wiki-content">
+    <div class="flex justify-between items-start border-b border-[#a2a9b1] pb-2 mb-6">
+        <h1 class="text-3xl font-sans font-bold text-[#000] leading-tight">{TITLE}</h1>
+    </div>
+    {OPTIONAL_HERO_IMAGE — only if the source has a meaningful figure/illustration. Use:
+        <div class="my-6 rounded-lg overflow-hidden border border-[#a2a9b1] shadow-sm">
+            <img src="{URL}" alt="..." class="w-full h-auto object-cover" style="aspect-ratio: 16/9;">
+        </div>
+    }
+    <div class="wiki-html-content prose prose-slate max-w-none text-[#202122] leading-relaxed">
+        {BODY: plain semantic HTML — h2/h3/p/ul/li/ol/strong/em/a/code/pre/table/blockquote}
+    </div>
+</article>
+
+STRICT rules:
+1. Remove ALL document-level tags: <!DOCTYPE>, <html>, <head>, <body>, <meta>, <title>, <link>, <script>, <style>.
+2. Strip ALL Tailwind utility classes from body elements inside wiki-html-content — especially size/color/spacing/font classes like text-5xl, text-4xl, text-3xl, text-2xl, text-xl, text-lg, text-sm, text-xs, text-gray-*, text-slate-*, text-white, text-black, font-bold, font-semibold, font-medium, font-sans, leading-*, tracking-*, mt-*, mb-*, my-*, px-*, py-*, p-*, bg-*. Let prose handle typography automatically.
+3. KEEP all visible text content in the ORIGINAL language (do NOT translate). Preserve headings, paragraphs, lists, tables, code blocks, images (src), links (href).
+4. If the source has a <header> hero with background image, extract the title into <h1>, the subtitle into one <p> right after the title-row div, and (only if it shows a distinct figure besides the title-decorative bg) keep an <img> below. Do NOT keep the dark hero block itself.
+5. Inside wiki-html-content, output plain semantic HTML. Do NOT add any class attributes to <p>/<ul>/<li>/<h2>/<h3>/<table>. Tables may use simple <table><thead><tbody><tr><th><td> with no classes.
+6. For <img>: keep src, drop width/height/style/class. Inline images stay as <img>; do not wrap.
+7. Preserve <code> and <pre> blocks exactly (including their text content).
+8. Output ONLY the resulting HTML starting with <article. No code fence, no preamble, no commentary.
+
+Input HTML:
+${html}
+
+Normalized HTML:`;
+
+    let normalizedHtml;
+    try {
+      const raw = await callGemini(GEMINI_PRO, normalizationPrompt, apiKey, {
+        maxOutputTokens: 65536,
+        temperature: 0.1,
+      });
+      normalizedHtml = stripCodeFence(raw);
+      if (!/^<article\b/i.test(normalizedHtml.trim())) {
+        throw new Error('정규화 결과가 <article>로 시작하지 않습니다.');
+      }
+    } catch (err) {
+      throw new HttpsError('internal', `HTML 정규화 실패: ${err.message}`);
+    }
+
+    // 1. Translate normalized Ko → En
     const translationPrompt = `You are a precise HTML translator. Translate the following Korean HTML to natural, fluent English.
 
 Strict rules:
@@ -185,7 +235,7 @@ Strict rules:
 - Do not add commentary, preamble, or markdown code fences. Output the translated HTML only.
 
 Korean HTML:
-${html}
+${normalizedHtml}
 
 Translated English HTML:`;
 
@@ -212,7 +262,7 @@ Required JSON shape:
 }
 
 Korean HTML (truncated):
-${html.slice(0, 50000)}
+${normalizedHtml.slice(0, 50000)}
 
 English HTML (truncated):
 ${englishHtml.slice(0, 50000)}
@@ -255,7 +305,7 @@ Output JSON only, no preamble or code fence:`;
     const excerpt = String(meta.excerpt || '').slice(0, 200);
 
     const now = new Date();
-    const wrappedKo = ensureArticleWrap(html);
+    const wrappedKo = ensureArticleWrap(normalizedHtml);
     const wrappedEn = ensureArticleWrap(englishHtml);
 
     const docId = `${slug}-${shortId()}`;
@@ -263,7 +313,7 @@ Output JSON only, no preamble or code fence:`;
       id: docId,
       titles: { ko: koTitle, en: enTitle },
       content: { ko: wrappedKo, en: wrappedEn },
-      thumbnailUrl: extractFirstImageUrl(html),
+      thumbnailUrl: extractFirstImageUrl(normalizedHtml) || extractFirstImageUrl(html),
       excerpt,
       lastUpdated: now.toISOString().slice(0, 10),
       createdAt: now.toISOString(),
