@@ -1,10 +1,16 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const { Storage } = require('@google-cloud/storage');
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 const TECH_BLOG_SERVICE_ACCOUNT = defineSecret('TECH_BLOG_SERVICE_ACCOUNT');
 const GITHUB_DISPATCH_TOKEN = defineSecret('GITHUB_DISPATCH_TOKEN');
+// 클라이언트 GCS 업로드와 같은 service account credentials.
+// .env 의 VITE_GCS_* 와 동일 값을 functions:secrets:set 로 등록.
+const GCS_BUCKET = defineSecret('GCS_BUCKET');
+const GCS_SA_EMAIL = defineSecret('GCS_SA_EMAIL');
+const GCS_PRIVATE_KEY = defineSecret('GCS_PRIVATE_KEY');
 
 const SUPER_ADMIN_EMAIL = 'tony@banya.ai';
 const TECH_BLOG_COLLECTION = 'static-wiki';
@@ -12,8 +18,13 @@ const TECH_BLOG_ROUTE = 'report';
 const TECH_BLOG_SITE = 'https://tony.banya.ai';
 const TECH_BLOG_GITHUB_REPO = 'kr-ai-dev-association/tech-blog';
 const SEO_DISPATCH_EVENT = 'deploy-seo';
-const MAX_INPUT_BYTES = 800 * 1024;
-const MAX_DOC_BYTES = 950 * 1024;
+const MAX_INPUT_BYTES = 1500 * 1024;
+const MAX_DOC_BYTES = 1000 * 1024;
+// 큰 본문은 Firestore 대신 GCS 에 저장 (Firestore 한 doc 한도 1MiB 회피).
+// gdoc-fixer 프로젝트 default bucket 사용 (service account 자동 권한).
+const CONTENT_GCS_PREFIX = 'wiki-content';
+// 한 lang 이라도 이 한도를 넘으면 GCS 로 분리. 그 외에는 inline.
+const INLINE_CONTENT_THRESHOLD = 400 * 1024;
 const GEMINI_PRO = 'gemini-2.5-pro';
 const GEMINI_FLASH = 'gemini-2.5-flash';
 
@@ -37,32 +48,101 @@ function getTechBlogDb() {
   return admin.firestore(techBlogApp);
 }
 
+// Gemini streamGenerateContent 를 사용한다. Cloud Run 의 outbound idle
+// timeout (300s) 을 피하려면 응답이 chunk 로 흘러와야 한다.
+// streamGenerateContent + alt=sse 응답은 "data: {json}\n\n" 형식의 SSE.
 async function callGemini(model, prompt, apiKey, opts = {}) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: {
       temperature: opts.temperature ?? 0.2,
       maxOutputTokens: opts.maxOutputTokens ?? 32768,
+      ...(opts.thinkingBudget !== undefined && {
+        thinkingConfig: { thinkingBudget: opts.thinkingBudget },
+      }),
       ...(opts.responseMimeType && { responseMimeType: opts.responseMimeType }),
       ...(opts.responseSchema && { responseSchema: opts.responseSchema }),
     },
   };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Gemini ${model} HTTP ${res.status}: ${text.slice(0, 500)}`);
+  const timeoutMs = opts.timeoutMs ?? 10 * 60 * 1000;
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Gemini ${model} HTTP ${res.status}: ${text.slice(0, 500)}`);
+    }
+    if (!res.body) {
+      throw new Error(`Gemini ${model} returned no response body`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+    let lastFinishReason = null;
+    let chunkCount = 0;
+    let rawSample = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const decoded = decoder.decode(value, { stream: true });
+      buffer += decoded;
+      chunkCount++;
+      if (rawSample.length < 2000) rawSample += decoded;
+      // SSE 이벤트 구분자는 LF/CRLF 모두 허용해야 한다 (Google SSE 는 \r\n\r\n).
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? '';
+      for (const evt of events) {
+        // 한 이벤트 안에 여러 라인이 있을 수 있으니 data: 로 시작하는 라인들만 모음.
+        const dataLines = evt
+          .split(/\r?\n/)
+          .filter((l) => l.startsWith('data:'))
+          .map((l) => l.replace(/^data:\s*/, ''));
+        const line = dataLines.join('').trim();
+        if (!line || line === '[DONE]') continue;
+        try {
+          const data = JSON.parse(line);
+          const parts = data?.candidates?.[0]?.content?.parts || [];
+          for (const p of parts) {
+            if (typeof p?.text === 'string' && !p?.thought) {
+              fullText += p.text;
+            }
+          }
+          const fr = data?.candidates?.[0]?.finishReason;
+          if (fr) lastFinishReason = fr;
+        } catch (_) {
+          // incomplete chunk
+        }
+      }
+    }
+    if (!fullText) {
+      console.error(
+        `[callGemini] ${model} no text. chunks=${chunkCount}, finishReason=${lastFinishReason}, raw(0..2000):\n${rawSample}`
+      );
+      throw new Error(
+        `Gemini ${model} returned no text (chunks=${chunkCount}, finishReason=${lastFinishReason})`
+      );
+    }
+    console.log(
+      `[callGemini] ${model} OK in ${((Date.now() - startedAt) / 1000).toFixed(1)}s, ${fullText.length}chars, chunks=${chunkCount}, finishReason=${lastFinishReason}`
+    );
+    return fullText;
+  } catch (err) {
+    const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+    console.warn(`[callGemini] ${model} 실패 (${elapsed}s, ${err?.message})`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error(`Gemini ${model} returned no text`);
-  }
-  return text;
 }
 
 function stripCodeFence(text) {
@@ -82,6 +162,198 @@ function ensureArticleWrap(html) {
 function extractFirstImageUrl(html) {
   const match = html.match(/<img\s+[^>]*src=["']([^"']+)["']/i);
   return match ? match[1] : '';
+}
+
+// gdoc-fixer 가 만드는 자기완결 HTML(<!DOCTYPE>+Tailwind CDN+inline style 가득)
+// 을 tech-blog 의 정상 패턴(article.wiki-content > h1 + wiki-html-content prose)
+// 으로 변환한다. Gemini 호출이 maxOutputTokens 한계에 막혀 본문이 잘리는 문제를
+// 회피하기 위해 결정적(정규식) 변환으로 처리.
+function normalizeHtmlDeterministic(rawHtml) {
+  let body = rawHtml;
+  const bodyMatch = rawHtml.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) body = bodyMatch[1];
+
+  // 1) 문서 수준 / 무관한 태그 제거 (script, style, link, meta, title)
+  body = body
+    .replace(/<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<\/?(?:html|head|body)\b[^>]*>/gi, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<link\b[^>]*\/?>/gi, '')
+    .replace(/<meta\b[^>]*\/?>/gi, '')
+    .replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '');
+
+  // 2) 모든 class 와 inline style 제거 — prose 가 typography 책임짐.
+  //    이미지의 src, a 의 href, img 의 alt 등 의미 있는 속성은 유지.
+  body = body
+    .replace(/\s+class="[^"]*"/gi, '')
+    .replace(/\s+class='[^']*'/gi, '')
+    .replace(/\s+style="[^"]*"/gi, '')
+    .replace(/\s+style='[^']*'/gi, '');
+
+  // 3) 첫 <h1> 을 헤더 영역으로 분리
+  let titleText = '';
+  const h1Match = body.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
+  if (h1Match) {
+    titleText = h1Match[1].trim();
+    body = body.replace(h1Match[0], '');
+  }
+
+  // 4) <header> 안에 있던 부제/날짜 등은 그대로 본문 앞에 남기되, 검은 배경
+  //    hero 블록 자체는 의미 없는 wrapper 라 풀어버린다. (header → 그대로 div)
+  body = body.replace(/<header\b[^>]*>([\s\S]*?)<\/header>/gi, '$1');
+  // footer 도 동일
+  body = body.replace(/<footer\b[^>]*>([\s\S]*?)<\/footer>/gi, '$1');
+
+  // 5) 연속 공백 정리 (가독성)
+  body = body.replace(/(\s*\n){3,}/g, '\n\n').trim();
+
+  const titleHtml = titleText || name || '제목 없음';
+  return `<article class="wiki-content"><div class="flex justify-between items-start border-b border-[#a2a9b1] pb-2 mb-6"><h1 class="text-3xl font-sans font-bold text-[#000] leading-tight">${titleHtml}</h1></div><div class="wiki-html-content prose prose-slate max-w-none text-[#202122] leading-relaxed">${body}</div></article>`;
+}
+
+// Gemini 가 번역 중 src 를 가끔 hallucinate 한다 (data:image/jpeg;base64,...
+// 같은 거대한 가짜 URI 로 바꿔버림). 한국어 원본의 <img src> 순서를 그대로
+// 영문 HTML 에 강제 복원해 src 누출/오염을 방지한다.
+function preserveImageSrcsAndHrefs(koHtml, enHtml) {
+  const imgRe = /<img\b([^>]*?)\bsrc\s*=\s*(["'])([^"']*)\2/gi;
+  const koSrcs = [...koHtml.matchAll(imgRe)].map((m) => m[3]);
+  let i = 0;
+  return enHtml.replace(imgRe, (match, before, q, _src) => {
+    const original = koSrcs[i++];
+    if (!original) return match;
+    return `<img${before}src=${q}${original}${q}`;
+  });
+}
+
+// 정규화된 한국어 HTML 을 본문 블록 단위로 잘라 각각 번역 후 합친다.
+// 큰 본문이 한 번의 Gemini 호출에서 토큰 한도/타임아웃에 걸리는 문제 회피.
+async function translateInChunks(normalizedKoHtml, apiKey, opts = {}) {
+  const maxCharsPerChunk = opts.maxCharsPerChunk ?? 18000;
+
+  // article 안에서 header 영역과 본문 영역 분리
+  const m = normalizedKoHtml.match(
+    /^([\s\S]*?<div class="wiki-html-content[^"]*">)([\s\S]*?)(<\/div>\s*<\/article>\s*)$/
+  );
+  if (!m) {
+    // 구조가 예상과 다르면 통째로 번역
+    return await translateFragment(normalizedKoHtml, apiKey, 0, 1);
+  }
+  const [, header, body, footer] = m;
+
+  // 헤더(제목)는 별도로 한 번 번역
+  const translatedHeader = await translateFragment(header, apiKey, 0, 1);
+
+  // 본문이 작으면 한 번에
+  if (body.length <= maxCharsPerChunk) {
+    const translatedBody = await translateFragment(body, apiKey, 0, 1);
+    const enHeader = preserveImageSrcsAndHrefs(header, translatedHeader);
+    const enBody = preserveImageSrcsAndHrefs(body, translatedBody);
+    return enHeader + enBody + footer;
+  }
+
+  // 본문을 top-level 블록 단위로 분할
+  const blockRegex = /(?=<(?:section|article|div|h[1-6]|table|ul|ol|blockquote|pre|figure|hr)\b)/i;
+  const blocks = body.split(blockRegex);
+  const chunks = [];
+  let current = '';
+  for (const b of blocks) {
+    if (current.length + b.length > maxCharsPerChunk && current) {
+      chunks.push(current);
+      current = b;
+    } else {
+      current += b;
+    }
+  }
+  if (current) chunks.push(current);
+
+  console.log(
+    `[translateInChunks] body ${body.length} chars → ${chunks.length} chunks (max ${maxCharsPerChunk} per chunk)`
+  );
+
+  // 동일 분할로 ko chunks 보유 (en chunk 와 1:1 매칭, src 복원에 사용)
+  const koChunks = chunks;
+  // 병렬 처리 — 큰 본문은 순차로는 함수 20분 timeout 초과. Gemini Flash 의
+  // 동시 호출 한도(분당 1000+ RPM) 안에 들어가므로 전체 chunk 를 동시에 발사.
+  const t0 = Date.now();
+  const translatedChunks = await Promise.all(
+    koChunks.map((chunk, i) => translateFragment(chunk, apiKey, i, koChunks.length))
+  );
+  console.log(
+    `[translateInChunks] ${koChunks.length} chunks translated in parallel in ${((Date.now() - t0) / 1000).toFixed(1)}s`
+  );
+
+  // chunk 단위로 src 복원
+  const srcRestored = translatedChunks.map((t, i) =>
+    preserveImageSrcsAndHrefs(koChunks[i], t)
+  );
+
+  const enHeader = preserveImageSrcsAndHrefs(header, translatedHeader);
+  return enHeader + srcRestored.join('') + footer;
+}
+
+async function translateFragment(htmlFragment, apiKey, idx, total) {
+  // <img>, <picture>, <source>, <iframe> 같이 src 가 큰 base64 가 될 수 있는
+  // 태그를 placeholder 로 치환 → Gemini 가 절대 변경 못 하게 한다.
+  // 번역 후 원본 그대로 복원.
+  const placeholders = [];
+  const maskTag = (match) => {
+    const id = placeholders.length;
+    placeholders.push(match);
+    return `__PLACEHOLDER_${id}__`;
+  };
+  const maskedFragment = htmlFragment
+    .replace(/<img\b[^>]*\/?>(?:<\/img>)?/gi, maskTag)
+    .replace(/<picture\b[\s\S]*?<\/picture>/gi, maskTag)
+    .replace(/<source\b[^>]*\/?>(?:<\/source>)?/gi, maskTag)
+    .replace(/<iframe\b[\s\S]*?<\/iframe>/gi, maskTag);
+
+  const prompt = `You are a precise HTML translator. Translate the following Korean HTML fragment to natural, fluent English.
+
+Strict rules:
+- Preserve every HTML tag, attribute, class name, inline style, href, and id EXACTLY.
+- Tokens like __PLACEHOLDER_NN__ are sentinel markers — keep them in the output VERBATIM, in the SAME positions, do NOT translate, modify, expand, or remove them.
+- Translate ONLY user-visible Korean text (text nodes, and meaningful attribute values like alt/title).
+- Keep brand names, code blocks, programming identifiers, URLs, and numeric data as-is.
+- Maintain heading hierarchy, list structure, table layout, and overall semantics.
+- This is fragment ${idx + 1} of ${total}. Do NOT add or remove outer wrapper tags. Output the fragment in the same structure, just with Korean text replaced by English.
+- Do not add commentary, preamble, or markdown code fences. Output the translated HTML fragment only.
+
+Korean HTML fragment:
+${maskedFragment}
+
+Translated English HTML fragment:`;
+
+  // chunk 단위 번역은 transient 실패가 잦으니 자동 1회 재시도.
+  let raw;
+  let lastErr;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      raw = await callGemini(GEMINI_FLASH, prompt, apiKey, {
+        maxOutputTokens: 65536,
+        temperature: 0.2,
+        timeoutMs: 5 * 60 * 1000,
+        thinkingBudget: 0,
+      });
+      // placeholder 복원 (이미지/iframe/source/picture 등 원본 태그 그대로)
+      raw = stripCodeFence(raw).replace(/__PLACEHOLDER_(\d+)__/g, (m, id) => {
+        const i = parseInt(id, 10);
+        return placeholders[i] !== undefined ? placeholders[i] : m;
+      });
+      return raw;
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message || err);
+      const transient = err?.name === 'AbortError' ||
+        /fetch failed|ECONNRESET|ETIMEDOUT|UND_ERR|aborted/i.test(msg);
+      if (attempt < 2 && transient) {
+        console.warn(`[translateFragment] chunk ${idx + 1}/${total} attempt ${attempt} 실패 (${msg}), 재시도`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  return stripCodeFence(raw);
 }
 
 function slugify(text) {
@@ -121,6 +393,40 @@ async function isAuthorizedAdmin(authCtx) {
   }
 }
 
+let _gcsClient;
+function getGcsBucket() {
+  if (!_gcsClient) {
+    _gcsClient = new Storage({
+      credentials: {
+        client_email: GCS_SA_EMAIL.value(),
+        private_key: GCS_PRIVATE_KEY.value().replace(/\\n/g, '\n'),
+      },
+    });
+  }
+  return _gcsClient.bucket(GCS_BUCKET.value());
+}
+
+async function uploadContentToGcs(docId, ko, en) {
+  const bucket = getGcsBucket();
+  const bucketName = bucket.name;
+  const path = `${CONTENT_GCS_PREFIX}/${docId}.json`;
+  const file = bucket.file(path);
+  const payload = JSON.stringify({ ko: ko || '', en: en || '' });
+  await file.save(payload, {
+    contentType: 'application/json; charset=utf-8',
+    metadata: { cacheControl: 'public, max-age=300' },
+    resumable: false,
+  });
+  // banya_public2 는 public read 이미 설정된 bucket. makePublic 시도 후 실패해도
+  // public URL 그대로 사용.
+  try {
+    await file.makePublic();
+  } catch (err) {
+    console.warn(`[uploadContentToGcs] makePublic 실패: ${err.message} (uniform-access bucket 가능)`);
+  }
+  return `https://storage.googleapis.com/${bucketName}/${path}`;
+}
+
 async function triggerSeoBuild(token, docId) {
   if (!token) return false;
   try {
@@ -152,8 +458,15 @@ async function triggerSeoBuild(token, docId) {
 
 exports.publishToTechBlog = onCall(
   {
-    secrets: [GEMINI_API_KEY, TECH_BLOG_SERVICE_ACCOUNT, GITHUB_DISPATCH_TOKEN],
-    timeoutSeconds: 540,
+    secrets: [
+      GEMINI_API_KEY,
+      TECH_BLOG_SERVICE_ACCOUNT,
+      GITHUB_DISPATCH_TOKEN,
+      GCS_BUCKET,
+      GCS_SA_EMAIL,
+      GCS_PRIVATE_KEY,
+    ],
+    timeoutSeconds: 1200,
     memory: '1GiB',
   },
   async (request) => {
@@ -165,87 +478,30 @@ exports.publishToTechBlog = onCall(
     if (!html || typeof html !== 'string') {
       throw new HttpsError('invalid-argument', 'html 문자열이 필요합니다.');
     }
-    if (Buffer.byteLength(html, 'utf-8') > MAX_INPUT_BYTES) {
+    const inputBytes = Buffer.byteLength(html, 'utf-8');
+    if (inputBytes > MAX_INPUT_BYTES) {
       throw new HttpsError(
         'invalid-argument',
-        `문서가 너무 큽니다 (${MAX_INPUT_BYTES / 1024}KB 이내).`
+        `문서가 너무 큽니다 (현재 ${(inputBytes / 1024).toFixed(0)}KB, 한도 ${MAX_INPUT_BYTES / 1024}KB).`
       );
     }
 
     const apiKey = GEMINI_API_KEY.value();
 
-    // 0. Normalize self-contained HTML → tech-blog semantic article pattern
-    // gdoc-fixer 본체는 <!DOCTYPE>/Tailwind CDN/단락별 사이즈 클래스가 들어간 자기완결 페이지를
-    // 만들지만, tech-blog의 정상 렌더링은 prose prose-slate typography 위에서 동작한다.
-    // 이 단계에서 본문을 시맨틱 article 구조로 정규화한다.
-    const normalizationPrompt = `You are an HTML normalizer for a tech blog. Convert the given self-contained HTML page into a clean semantic article body that follows the EXACT structure below.
-
-REQUIRED output structure:
-<article class="wiki-content">
-    <div class="flex justify-between items-start border-b border-[#a2a9b1] pb-2 mb-6">
-        <h1 class="text-3xl font-sans font-bold text-[#000] leading-tight">{TITLE}</h1>
-    </div>
-    {OPTIONAL_HERO_IMAGE — only if the source has a meaningful figure/illustration. Use:
-        <div class="my-6 rounded-lg overflow-hidden border border-[#a2a9b1] shadow-sm">
-            <img src="{URL}" alt="..." class="w-full h-auto object-cover" style="aspect-ratio: 16/9;">
-        </div>
-    }
-    <div class="wiki-html-content prose prose-slate max-w-none text-[#202122] leading-relaxed">
-        {BODY: plain semantic HTML — h2/h3/p/ul/li/ol/strong/em/a/code/pre/table/blockquote}
-    </div>
-</article>
-
-STRICT rules:
-1. Remove ALL document-level tags: <!DOCTYPE>, <html>, <head>, <body>, <meta>, <title>, <link>, <script>, <style>.
-2. Strip ALL Tailwind utility classes from body elements inside wiki-html-content — especially size/color/spacing/font classes like text-5xl, text-4xl, text-3xl, text-2xl, text-xl, text-lg, text-sm, text-xs, text-gray-*, text-slate-*, text-white, text-black, font-bold, font-semibold, font-medium, font-sans, leading-*, tracking-*, mt-*, mb-*, my-*, px-*, py-*, p-*, bg-*. Let prose handle typography automatically.
-3. KEEP all visible text content in the ORIGINAL language (do NOT translate). Preserve headings, paragraphs, lists, tables, code blocks, images (src), links (href).
-4. If the source has a <header> hero with background image, extract the title into <h1>, the subtitle into one <p> right after the title-row div, and (only if it shows a distinct figure besides the title-decorative bg) keep an <img> below. Do NOT keep the dark hero block itself.
-5. Inside wiki-html-content, output plain semantic HTML. Do NOT add any class attributes to <p>/<ul>/<li>/<h2>/<h3>/<table>. Tables may use simple <table><thead><tbody><tr><th><td> with no classes.
-6. For <img>: keep src, drop width/height/style/class. Inline images stay as <img>; do not wrap.
-7. Preserve <code> and <pre> blocks exactly (including their text content).
-8. Output ONLY the resulting HTML starting with <article. No code fence, no preamble, no commentary.
-
-Input HTML:
-${html}
-
-Normalized HTML:`;
-
-    let normalizedHtml;
-    try {
-      const raw = await callGemini(GEMINI_PRO, normalizationPrompt, apiKey, {
-        maxOutputTokens: 65536,
-        temperature: 0.1,
-      });
-      normalizedHtml = stripCodeFence(raw);
-      if (!/^<article\b/i.test(normalizedHtml.trim())) {
-        throw new Error('정규화 결과가 <article>로 시작하지 않습니다.');
-      }
-    } catch (err) {
-      throw new HttpsError('internal', `HTML 정규화 실패: ${err.message}`);
+    // 0. 결정적 정규화 (Gemini 호출 X)
+    // 자기완결 HTML → article.wiki-content + wiki-html-content prose 구조.
+    // 큰 본문도 토큰 한도 영향 없이 안전하게 변환.
+    const normalizedHtml = normalizeHtmlDeterministic(html);
+    if (!/^<article\b/i.test(normalizedHtml.trim())) {
+      throw new HttpsError('internal', '정규화 결과가 article 로 시작하지 않습니다.');
     }
 
     // 1. Translate normalized Ko → En
-    const translationPrompt = `You are a precise HTML translator. Translate the following Korean HTML to natural, fluent English.
-
-Strict rules:
-- Preserve every HTML tag, attribute, class name, inline style, image URL (src), href, and id EXACTLY.
-- Translate ONLY user-visible Korean text (text nodes, and meaningful attribute values like alt/title).
-- Keep brand names, code blocks, programming identifiers, URLs, and numeric data as-is.
-- Maintain heading hierarchy, list structure, table layout, and overall semantics.
-- Do not add commentary, preamble, or markdown code fences. Output the translated HTML only.
-
-Korean HTML:
-${normalizedHtml}
-
-Translated English HTML:`;
-
+    // 큰 본문은 한 번의 Gemini 호출에서 65536 토큰 한도/타임아웃에 걸려 잘리거나
+    // abort 된다. 본문을 의미 단위(섹션/블록) chunk 로 잘라 각각 번역한 뒤 합친다.
     let englishHtml;
     try {
-      const raw = await callGemini(GEMINI_PRO, translationPrompt, apiKey, {
-        maxOutputTokens: 65536,
-        temperature: 0.2,
-      });
-      englishHtml = stripCodeFence(raw);
+      englishHtml = await translateInChunks(normalizedHtml, apiKey);
     } catch (err) {
       throw new HttpsError('internal', `번역 실패: ${err.message}`);
     }
@@ -309,10 +565,34 @@ Output JSON only, no preamble or code fence:`;
     const wrappedEn = ensureArticleWrap(englishHtml);
 
     const docId = `${slug}-${shortId()}`;
+    const koBytes = Buffer.byteLength(wrappedKo, 'utf-8');
+    const enBytes = Buffer.byteLength(wrappedEn, 'utf-8');
+    const needsGcs =
+      koBytes > INLINE_CONTENT_THRESHOLD ||
+      enBytes > INLINE_CONTENT_THRESHOLD ||
+      koBytes + enBytes > MAX_DOC_BYTES - 50 * 1024; // 메타데이터용 50KB 여유
+
+    let contentField;
+    let contentUrl = null;
+    if (needsGcs) {
+      try {
+        contentUrl = await uploadContentToGcs(docId, wrappedKo, wrappedEn);
+        console.log(
+          `[publish] content offloaded to GCS (ko=${(koBytes / 1024).toFixed(0)}KB, en=${(enBytes / 1024).toFixed(0)}KB) → ${contentUrl}`
+        );
+        contentField = {}; // Firestore inline 비움
+      } catch (err) {
+        throw new HttpsError('internal', `GCS 업로드 실패: ${err.message}`);
+      }
+    } else {
+      contentField = { ko: wrappedKo, en: wrappedEn };
+    }
+
     const doc = {
       id: docId,
       titles: { ko: koTitle, en: enTitle },
-      content: { ko: wrappedKo, en: wrappedEn },
+      content: contentField,
+      ...(contentUrl && { contentUrl }),
       thumbnailUrl: extractFirstImageUrl(normalizedHtml) || extractFirstImageUrl(html),
       excerpt,
       lastUpdated: now.toISOString().slice(0, 10),
@@ -326,7 +606,7 @@ Output JSON only, no preamble or code fence:`;
     if (sizeBytes > MAX_DOC_BYTES) {
       throw new HttpsError(
         'resource-exhausted',
-        `문서가 Firestore 한도를 초과합니다 (${(sizeBytes / 1024).toFixed(0)}KB > 950KB).`
+        `문서가 Firestore 한도를 초과합니다 (현재 ${(sizeBytes / 1024).toFixed(0)}KB, 한도 ${MAX_DOC_BYTES / 1024}KB).`
       );
     }
 
