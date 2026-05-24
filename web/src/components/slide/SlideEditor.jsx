@@ -4,6 +4,7 @@ import useSlideStore from '../../store/useSlideStore';
 import { usePdfExport } from '../../hooks/usePdfExport';
 import { usePptxExport } from '../../hooks/usePptxExport';
 import { patchYoutubeThumbnails } from '../../utils/youtubeThumbnail.js';
+import { injectMathJax } from '../../utils/injectMathJax.js';
 
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
@@ -303,7 +304,7 @@ export default function SlideEditor() {
           }}
         >
           <iframe
-            srcDoc={`<style>html,body{margin:0;padding:0;overflow:hidden}</style>${patchYoutubeThumbnails(currentSlide)}`}
+            srcDoc={`<style>html,body{margin:0;padding:0;overflow:hidden}</style>${injectMathJax(patchYoutubeThumbnails(currentSlide))}`}
             sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
             style={{
               width: SLIDE_W,

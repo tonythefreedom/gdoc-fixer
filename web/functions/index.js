@@ -14,6 +14,66 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+// LaTeX 수식이 있는 HTML 에 MathJax 로더를 자동 주입.
+// 클라이언트의 src/utils/injectMathJax.js 와 같은 로직 (server-side 사본).
+const MATHJAX_SNIPPET = `
+<style>
+  mjx-container { display: inline-block !important; vertical-align: middle; line-height: normal; }
+  mjx-container[display="true"] { display: block !important; margin: 1em 0 !important; text-align: center; }
+  mjx-container svg { display: inline-block; vertical-align: middle; }
+</style>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+      displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+      processEscapes: true,
+      packages: {'[+]': ['base', 'ams', 'noerrors', 'noundefined']}
+    },
+    svg: { fontCache: 'global' },
+    options: { renderActions: { addMenu: [] } }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+`;
+
+function normalizeLatexEscapes(html) {
+  return html
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, inner) =>
+      '$$' + inner.replace(/\\\\/g, '\\') + '$$'
+    )
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, inner) =>
+      '\\(' + inner.replace(/\\\\/g, '\\') + '\\)'
+    )
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, inner) =>
+      '\\[' + inner.replace(/\\\\/g, '\\') + '\\]'
+    )
+    .replace(/\$([^\$\n<>]*?\\\\?[a-zA-Z]+[^\$\n<>]*?)\$/g, (_, inner) =>
+      '$' + inner.replace(/\\\\/g, '\\') + '$'
+    );
+}
+
+function injectMathJax(html) {
+  if (!html || typeof html !== 'string') return html;
+  const hasLatex =
+    /\$\$[\s\S]+?\$\$/.test(html) ||
+    /\\\([\s\S]+?\\\)/.test(html) ||
+    /\\\[[\s\S]+?\\\]/.test(html);
+  if (!hasLatex) return html;
+  let out = normalizeLatexEscapes(html);
+  if (/mathjax|tex-svg\.js|tex-chtml\.js|tex-mml/i.test(out)) return out;
+  const headClose = out.search(/<\/head\s*>/i);
+  if (headClose !== -1) {
+    return out.slice(0, headClose) + MATHJAX_SNIPPET + out.slice(headClose);
+  }
+  const bodyOpen = out.search(/<body[^>]*>/i);
+  if (bodyOpen !== -1) {
+    const insertAt = out.indexOf('>', bodyOpen) + 1;
+    return out.slice(0, insertAt) + MATHJAX_SNIPPET + out.slice(insertAt);
+  }
+  return MATHJAX_SNIPPET + out;
+}
+
 exports.shareOg = onRequest(async (req, res) => {
   // Extract share ID from path: /share/ABC12345
   const match = req.path.match(/\/share\/([A-Za-z0-9]{8})$/);
@@ -40,7 +100,7 @@ exports.shareOg = onRequest(async (req, res) => {
       .slice(0, 200);
     const ogUrl = `https://gdoc-fixer.web.app/share/${shareId}`;
     const ogImage = 'https://gdoc-fixer.web.app/icon.png';
-    const htmlContent = JSON.stringify(data.html || '').replace(/<\//g, '<\\/');
+    const htmlContent = JSON.stringify(injectMathJax(data.html || '')).replace(/<\//g, '<\\/');
 
     const page = `<!DOCTYPE html>
 <html lang="ko">
