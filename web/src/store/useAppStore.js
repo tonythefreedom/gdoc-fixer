@@ -36,7 +36,7 @@ function saveSavedPresets(presets) {
 
 const useAppStore = create((set, get) => ({
   // View routing ('editor' | 'contents')
-  currentView: 'editor',
+  currentView: 'contents',
   setCurrentView: (view) => set({ currentView: view }),
 
   // File management

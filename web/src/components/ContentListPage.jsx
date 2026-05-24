@@ -163,6 +163,75 @@ export default function ContentListPage() {
           )}
         </div>
 
+        {/* Shared 테이블 (배포된 링크) */}
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <Share2 className="w-4 h-4 text-emerald-500" />
+            Shared ({filteredShares.length} / {shares.length})
+          </h2>
+          {filteredShares.length === 0 ? (
+            <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-lg bg-white">
+              {committedQuery ? '검색된 공유 링크가 없습니다.' : '아직 생성된 공유 링크가 없습니다.'}
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium">이름</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-44">생성일</th>
+                    <th className="text-left px-4 py-2.5 font-medium">URL</th>
+                    <th className="text-right px-4 py-2.5 font-medium w-40">작업</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredShares.map((share) => {
+                    const url = getShareUrl(share.id);
+                    return (
+                      <tr key={share.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-2.5 text-slate-700">
+                          {share.name || `공유 #${share.id.slice(0, 6)}`}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-500 text-xs">
+                          {formatDate(share.createdAt)}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-500 text-xs truncate max-w-xs">
+                          <span className="font-mono">{url}</span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleCopyShareUrl(share.id)}
+                              className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                              title="URL 복사"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenShare(share.id)}
+                              className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                              title="새 탭에서 열기"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteShare(share.id)}
+                              className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         {/* Files 테이블 */}
         <section className="mb-8">
           <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
@@ -367,74 +436,6 @@ export default function ContentListPage() {
           )}
         </section>
 
-        {/* Shares 테이블 */}
-        <section>
-          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-            <Share2 className="w-4 h-4 text-emerald-500" />
-            Shared ({filteredShares.length} / {shares.length})
-          </h2>
-          {filteredShares.length === 0 ? (
-            <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-lg bg-white">
-              {committedQuery ? '검색된 공유 링크가 없습니다.' : '아직 생성된 공유 링크가 없습니다.'}
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium">이름</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-44">생성일</th>
-                    <th className="text-left px-4 py-2.5 font-medium">URL</th>
-                    <th className="text-right px-4 py-2.5 font-medium w-40">작업</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredShares.map((share) => {
-                    const url = getShareUrl(share.id);
-                    return (
-                      <tr key={share.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-2.5 text-slate-700">
-                          {share.name || `공유 #${share.id.slice(0, 6)}`}
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-500 text-xs">
-                          {formatDate(share.createdAt)}
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-500 text-xs truncate max-w-xs">
-                          <span className="font-mono">{url}</span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleCopyShareUrl(share.id)}
-                              className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
-                              title="URL 복사"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleOpenShare(share.id)}
-                              className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
-                              title="새 탭에서 열기"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteShare(share.id)}
-                              className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
-                              title="삭제"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
       </div>
     </main>
   );
