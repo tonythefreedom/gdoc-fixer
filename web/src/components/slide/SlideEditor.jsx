@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus, Play } from 'lucide-react';
+import SlidePresentMode from './SlidePresentMode';
 import useSlideStore from '../../store/useSlideStore';
 import { usePdfExport } from '../../hooks/usePdfExport';
 import { usePptxExport } from '../../hooks/usePptxExport';
@@ -10,6 +11,7 @@ const SLIDE_W = 1280;
 const SLIDE_H = 720;
 
 export default function SlideEditor() {
+  const [presentMode, setPresentMode] = useState(false);
   const slides = useSlideStore((s) => s.slides);
   const slideHistories = useSlideStore((s) => s.slideHistories);
   const currentSlideIndex = useSlideStore((s) => s.currentSlideIndex);
@@ -76,7 +78,13 @@ export default function SlideEditor() {
 
     const handleKey = (e) => {
       const isTextarea = document.activeElement?.tagName === 'TEXTAREA';
+      if (presentMode) return; // PresentMode 가 자체 핸들러를 사용
 
+      if (e.key === 'F5') {
+        e.preventDefault();
+        setPresentMode(true);
+        return;
+      }
       if (e.key === 'ArrowLeft' && !isTextarea) {
         setCurrentSlideIndex(currentSlideIndex - 1);
       } else if (e.key === 'ArrowRight' && !isTextarea) {
@@ -236,6 +244,16 @@ export default function SlideEditor() {
             </div>
           )}
         </div>
+        <div className="flex items-center gap-2">
+        <button
+          onClick={() => setPresentMode(true)}
+          disabled={!slides.length}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="슬라이드쇼 시작 (F5)"
+        >
+          <Play className="w-3.5 h-3.5" />
+          슬라이드쇼
+        </button>
         <div className="relative" ref={exportMenuRef}>
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
@@ -280,7 +298,16 @@ export default function SlideEditor() {
             </div>
           )}
         </div>
+        </div>
       </div>
+
+      {presentMode && (
+        <SlidePresentMode
+          slides={slides}
+          startIndex={currentSlideIndex}
+          onClose={() => setPresentMode(false)}
+        />
+      )}
 
       {/* Slide preview with side navigation arrows */}
       <div ref={containerRef} className="flex-1 flex items-center justify-center min-h-0 p-4 relative">
