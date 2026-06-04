@@ -41,8 +41,11 @@ export function useDocModify() {
 
   const enqueueModify = useCallback((instruction) => {
     if (!instruction?.trim()) return;
-    const { attachments } = useAppStore.getState();
+    const { attachments, detachAllFiles } = useAppStore.getState();
+    // 큐에 첨부 snapshot 을 보존한 뒤 store 의 첨부 상태는 즉시 비운다.
+    // → 챗 입력창 / 미리보기의 썸네일이 enqueue 직후 사라짐.
     setQueue((prev) => [...prev, { instruction: instruction.trim(), attachments: [...attachments] }]);
+    detachAllFiles();
   }, []);
 
   const handleSubmit = useCallback(() => {

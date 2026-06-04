@@ -152,7 +152,7 @@ async function getGcsAccessToken() {
   return _cachedToken;
 }
 
-async function uploadBlobToGcs(path, blob) {
+export async function uploadBlobToGcs(path, blob) {
   const token = await getGcsAccessToken();
   const res = await fetch(
     `https://storage.googleapis.com/upload/storage/v1/b/${GCS_BUCKET}/o?uploadType=media&name=${encodeURIComponent(path)}`,
@@ -166,7 +166,7 @@ async function uploadBlobToGcs(path, blob) {
   return `https://storage.googleapis.com/${GCS_BUCKET}/${path}`;
 }
 
-function dataUriToBlob(dataUri) {
+export function dataUriToBlob(dataUri) {
   const [header, b64] = dataUri.split(',');
   const mime = header.match(/:(.*?);/)[1];
   const bytes = atob(b64);
