@@ -22,6 +22,13 @@ const useSlideStore = create((set, get) => ({
   presentationSnapshots: [],
   uid: null,
 
+  // 사용자가 선택한 디자인 시스템 ID. 기본 modern-minimal.
+  selectedDesignSystemId: localStorage.getItem('slideDesignSystemId') || 'modern-minimal',
+  setSelectedDesignSystemId: (id) => {
+    localStorage.setItem('slideDesignSystemId', id);
+    set({ selectedDesignSystemId: id });
+  },
+
   // 생성 진행률: { phase, current, total, message } | null
   generationProgress: null,
 
@@ -48,8 +55,9 @@ const useSlideStore = create((set, get) => ({
     set({ isGenerating: true, generationProgress: { phase: 'converting', current: 0, total: 0, message: 'Gemini AI로 슬라이드 생성 중...' } });
 
     try {
-      // Phase 1: HTML → 슬라이드 변환
-      let slides = await convertHtmlToSlides(html);
+      // Phase 1: HTML → 슬라이드 변환 (선택된 디자인 시스템 적용)
+      const designSystemId = get().selectedDesignSystemId;
+      let slides = await convertHtmlToSlides(html, { designSystemId });
       const slideHistories = slides.map(() => []);
 
       // Phase 2: base64 이미지를 GCS에 업로드 후 Firestore에 초안 저장

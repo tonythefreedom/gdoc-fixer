@@ -1,5 +1,8 @@
 import { renderChartPlaceholders } from './chartRenderer.js';
 import { patchYoutubeThumbnails } from './youtubeThumbnail.js';
+import { uploadBlobToGcs, dataUriToBlob } from '../store/storage.js';
+import useAuthStore from '../store/useAuthStore.js';
+import { buildDesignSystemPromptBlock } from './slideDesignSystems.js';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const PRO_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${API_KEY}`;
@@ -642,13 +645,22 @@ function decompressInlineStyles(html) {
   return result;
 }
 
-export async function convertHtmlToSlides(html) {
+export async function convertHtmlToSlides(html, options = {}) {
   if (!API_KEY) {
     throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
+  const { designSystemId } = options;
+
   // base64 이미지를 제거하여 API 요청 크기 축소
   const { stripped, images } = stripBase64Images(html);
+
+  // 선택된 디자인 시스템 가이드를 시스템 프롬프트에 인라인 주입.
+  // 디자인 시스템이 지정되지 않으면 기본 SYSTEM_PROMPT 만 사용.
+  const designBlock = designSystemId ? buildDesignSystemPromptBlock(designSystemId) : '';
+  const systemPrompt = designBlock
+    ? `${SYSTEM_PROMPT}\n\n${designBlock}`
+    : SYSTEM_PROMPT;
 
   const res = await fetch(PRO_URL, {
     method: 'POST',
@@ -657,7 +669,7 @@ export async function convertHtmlToSlides(html) {
       contents: [
         {
           parts: [
-            { text: withCurrentDate(SYSTEM_PROMPT) },
+            { text: withCurrentDate(systemPrompt) },
             { text: `다음 HTML을 프레젠테이션 슬라이드로 변환하세요:\n\n${stripped}` },
           ],
         },
@@ -979,7 +991,15 @@ const MODIFY_DOCUMENT_WITH_IMAGES_PROMPT = `You are an expert who modifies HTML 
 
 Given an HTML document and the user's modification instruction, return the modified HTML document. Image placeholders ({{IMAGE_1}}, {{IMAGE_2}} …) are provided — place them appropriately.
 
-Rules:
+ABSOLUTELY CRITICAL — IMAGE OUTPUT RULES (violation = total failure):
+- You MUST place attached images using ONLY the placeholder format {{IMAGE_N}} (e.g. {{IMAGE_1}}, {{IMAGE_2}}). N starts at 1.
+- NEVER, under any circumstances, output \`data:image/...;base64,...\` strings. They will overflow the token limit and corrupt the response.
+- NEVER output a base64-encoded image. NEVER reproduce, summarise, or invent the actual image bytes.
+- NEVER write \`src="data:image\` or \`src='data:image\` or any data URI. ALWAYS write \`src="{{IMAGE_N}}"\` instead.
+- If you cannot decide where to put an image, append it at the most appropriate visible location with \`<img src="{{IMAGE_N}}" alt="..." />\` — but use the placeholder, never base64.
+- The placeholders {{IMAGE_N}} are short tokens that the client will swap with real URLs. Outputting them KEEPS the response small.
+
+Other rules:
 - Preserve the full structure of the original HTML (from <!DOCTYPE html> to </html>).
 - Keep meta tags, styles, and font links inside <head> intact.
 - If Tailwind CSS CDN script is present, keep it.
@@ -1130,7 +1150,13 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
     ];
     const bodyJson = JSON.stringify({
       contents: [{ parts }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 32768 },
+      // Pro 는 thinking 강제(0 불가) → 최소값 128. maxOutputTokens 는 thinking
+      // 토큰까지 포함되므로 본문 수정 응답 + thinking 을 다 담을 수 있게 65536.
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 65536,
+        thinkingConfig: { thinkingBudget: 128 },
+      },
     });
     console.log('[callWithAttachments] request body 크기:', bodyJson.length.toLocaleString(), '자 (~', Math.round(bodyJson.length / 4).toLocaleString(), '토큰 추정)');
     const res = await fetch(PRO_URL, {
@@ -1164,7 +1190,11 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 65536 },
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 65536,
+            thinkingConfig: { thinkingBudget: 128 },
+          },
         }),
       });
       if (!res.ok) {
@@ -1252,12 +1282,48 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
     }
   }
 
+  // 사용자가 첨부한 이미지(binary)를 GCS 에 업로드 → placeholder {{IMAGE_N}}
+  // 매핑. Gemini 응답이 base64 거대 데이터로 폭주하는 것 차단.
+  const uploadedAttachmentImages = [];
+  for (const a of binaryAttachments) {
+    if (!a.mimeType?.startsWith('image/')) continue;
+    try {
+      const uid = useAuthStore.getState().user?.uid || 'anonymous';
+      const ext = (a.mimeType.split('/')[1] || 'png').replace('+xml', '');
+      const path = `wiki-images/attachments/${uid}/modify_${Date.now()}_${uploadedAttachmentImages.length}.${ext}`;
+      const blob = dataUriToBlob(`data:${a.mimeType};base64,${a.base64}`);
+      const url = await uploadBlobToGcs(path, blob);
+      uploadedAttachmentImages.push({ url, fileName: a.fileName });
+      console.log(`[modifyDocumentHtml] 첨부 이미지 GCS 업로드: ${a.fileName} → ${url}`);
+    } catch (err) {
+      console.warn(`[modifyDocumentHtml] 첨부 이미지 업로드 실패 (${a.fileName}):`, err);
+    }
+  }
+
+  // 첨부 이미지가 있으면 placeholder 안내 prompt 사용
+  let imagePlaceholderSection = '';
+  let useImagePrompt = false;
+  if (uploadedAttachmentImages.length > 0) {
+    const imageInfo = uploadedAttachmentImages
+      .map((img, i) => `- {{IMAGE_${i + 1}}}: ${img.fileName}`)
+      .join('\n');
+    imagePlaceholderSection = `\n\n사용 가능한 이미지 플레이스홀더 (반드시 {{IMAGE_N}} 형태로만 src 에 사용; 절대 data:image/base64 출력 금지):\n${imageInfo}`;
+    useImagePrompt = true;
+  }
+
   // 텍스트만 수정
-  const userText = `현재 HTML 문서:\n\n${strippedHtml}${textSection}${binaryLabelPart}\n\n수정 지시:\n${instruction}`;
+  const userText = `현재 HTML 문서:\n\n${strippedHtml}${textSection}${binaryLabelPart}${imagePlaceholderSection}\n\n수정 지시:\n${instruction}`;
   console.log('[modifyDocumentHtml] FULL 모드 — userText:', userText.length.toLocaleString(), '자');
+  const promptToUse = useImagePrompt ? MODIFY_DOCUMENT_WITH_IMAGES_PROMPT : MODIFY_DOCUMENT_PROMPT;
   let html = binaryParts.length > 0
-    ? await callWithAttachments(MODIFY_DOCUMENT_PROMPT, userText)
-    : await callProModel(MODIFY_DOCUMENT_PROMPT, userText);
+    ? await callWithAttachments(promptToUse, userText)
+    : await callProModel(promptToUse, userText);
+
+  // {{IMAGE_N}} placeholder → 실제 GCS URL 치환
+  uploadedAttachmentImages.forEach((img, i) => {
+    const placeholder = `{{IMAGE_${i + 1}}}`;
+    html = html.replaceAll(placeholder, img.url);
+  });
 
   // 압축된 CSS 클래스를 인라인 스타일로 복원
   html = decompressInlineStyles(html);
@@ -1668,8 +1734,130 @@ export async function renderSlideToBase64(slideHtml) {
   }
 }
 
-async function fixSlideViewport(slideHtml, imageBase64) {
+/**
+ * 슬라이드를 실제 1280×720 iframe 안에 렌더링하고 모든 자식 요소의
+ * bounding rect 를 측정해 viewport 를 벗어나는 요소를 추출한다.
+ * Playwright 를 사용할 수 없는 브라우저 환경에서 동일한 효과(실제 측정 →
+ * 오버플로우 좌표 추출)를 얻기 위한 대안.
+ *
+ * 결과를 Gemini 의 viewport-fix 프롬프트에 직접 주입하면 시각 캡처보다
+ * 훨씬 정확한 수정 지시가 가능하다.
+ */
+export async function measureSlideOverflowInIframe(slideHtml) {
+  const VIEW_W = 1280;
+  const VIEW_H = 720;
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = `position:fixed;left:-99999px;top:-99999px;width:${VIEW_W}px;height:${VIEW_H}px;border:none;`;
+    iframe.setAttribute('sandbox', 'allow-same-origin');
+    document.body.appendChild(iframe);
+
+    const wrap = `<!doctype html><html><head><meta charset="utf-8"><style>
+      html,body{margin:0;padding:0;width:${VIEW_W}px;height:${VIEW_H}px;overflow:hidden;}
+      *{box-sizing:border-box;}
+    </style></head><body>${slideHtml}</body></html>`;
+
+    const cleanup = () => {
+      try { document.body.removeChild(iframe); } catch (_) { /* noop */ }
+    };
+
+    const onLoad = () => {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc) { cleanup(); return resolve({ overflow: [], bodyScroll: null }); }
+
+        const overflow = [];
+        const all = doc.body.querySelectorAll('*');
+        all.forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 && r.height === 0) return;
+          const overRight = Math.max(0, Math.round(r.right - VIEW_W));
+          const overBottom = Math.max(0, Math.round(r.bottom - VIEW_H));
+          const offLeft = Math.max(0, Math.round(-r.left));
+          const offTop = Math.max(0, Math.round(-r.top));
+          if (overRight || overBottom || offLeft || offTop) {
+            overflow.push({
+              tag: el.tagName.toLowerCase(),
+              cls: (el.getAttribute('class') || '').slice(0, 80),
+              text: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+              x: Math.round(r.left),
+              y: Math.round(r.top),
+              w: Math.round(r.width),
+              h: Math.round(r.height),
+              overRight,
+              overBottom,
+              offLeft,
+              offTop,
+              fontSize: doc.defaultView.getComputedStyle(el).fontSize,
+            });
+          }
+        });
+
+        const bodyScroll = {
+          scrollWidth: doc.body.scrollWidth,
+          scrollHeight: doc.body.scrollHeight,
+          viewW: VIEW_W,
+          viewH: VIEW_H,
+          overflowsRight: doc.body.scrollWidth > VIEW_W,
+          overflowsBottom: doc.body.scrollHeight > VIEW_H,
+        };
+
+        cleanup();
+        resolve({ overflow: overflow.slice(0, 25), bodyScroll });
+      } catch (err) {
+        cleanup();
+        resolve({ overflow: [], bodyScroll: null, error: String(err?.message || err) });
+      }
+    };
+
+    iframe.addEventListener('load', onLoad, { once: true });
+    iframe.srcdoc = wrap;
+
+    // 최대 2.5s 대기 (이미지 로드 등)
+    setTimeout(() => {
+      onLoad();
+    }, 2500);
+  });
+}
+
+function formatOverflowReport(measurement) {
+  if (!measurement) return '(no measurement)';
+  const { overflow, bodyScroll } = measurement;
+  const lines = [];
+  if (bodyScroll) {
+    lines.push(`Viewport: ${bodyScroll.viewW}×${bodyScroll.viewH}.`);
+    lines.push(`Body scroll size: ${bodyScroll.scrollWidth}×${bodyScroll.scrollHeight}.`);
+    if (bodyScroll.overflowsRight) lines.push(`→ Body OVERFLOWS RIGHT by ${bodyScroll.scrollWidth - bodyScroll.viewW}px.`);
+    if (bodyScroll.overflowsBottom) lines.push(`→ Body OVERFLOWS BOTTOM by ${bodyScroll.scrollHeight - bodyScroll.viewH}px.`);
+  }
+  if (overflow.length === 0) {
+    lines.push('No element overflows the viewport. Only minor tweaks may be needed.');
+    return lines.join('\n');
+  }
+  lines.push(`\n${overflow.length} elements overflow the 1280×720 viewport:`);
+  overflow.forEach((o, i) => {
+    const where = [];
+    if (o.overRight) where.push(`right by ${o.overRight}px`);
+    if (o.overBottom) where.push(`bottom by ${o.overBottom}px`);
+    if (o.offLeft) where.push(`left by ${o.offLeft}px`);
+    if (o.offTop) where.push(`top by ${o.offTop}px`);
+    lines.push(
+      `  ${i + 1}. <${o.tag}> at (${o.x}, ${o.y}) size ${o.w}×${o.h}, font ${o.fontSize}, overflows ${where.join(' & ')}` +
+      (o.text ? `; text: "${o.text}"` : '')
+    );
+  });
+  return lines.join('\n');
+}
+
+async function fixSlideViewport(slideHtml, imageBase64, measurement = null) {
   const screenshotPart = await toFilePart(imageBase64, 'image/png');
+
+  // iframe 측정 결과를 prompt 에 직접 주입 → 어디가 얼마나 overflow 되는지
+  // 정량 데이터로 Gemini 에게 전달 (시각 캡처만으로는 부정확).
+  const measurementBlock = measurement
+    ? `\n\nMEASURED OVERFLOW REPORT (precise pixel data — TRUST THIS over the screenshot if they disagree):\n${formatOverflowReport(measurement)}\n\nApply minimal, targeted fixes to these specific elements. Reduce font-size or shorten text or reposition so every element fits inside 1280×720.`
+    : '';
+
   const res = await fetch(FLASH_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1678,7 +1866,7 @@ async function fixSlideViewport(slideHtml, imageBase64) {
         {
           parts: [
             { text: withCurrentDate(VIEWPORT_FIX_PROMPT) },
-            { text: `수정할 슬라이드 HTML:\n\n${slideHtml}` },
+            { text: `수정할 슬라이드 HTML:\n\n${slideHtml}${measurementBlock}` },
             screenshotPart,
           ],
         },
@@ -1700,13 +1888,40 @@ async function fixSlideViewport(slideHtml, imageBase64) {
   return stripCodeFences(text);
 }
 
+/**
+ * 슬라이드별 뷰포트 자동 픽스 루프.
+ * 측정 → 픽스 → 재측정 을 maxRounds 번 반복해 overflow 가 없을 때까지 시도.
+ */
+async function fixSlideViewportWithMeasurement(slideHtml, maxRounds = 2) {
+  let current = slideHtml;
+  for (let round = 1; round <= maxRounds; round++) {
+    const measurement = await measureSlideOverflowInIframe(current);
+    const noOverflow =
+      (!measurement.overflow || measurement.overflow.length === 0) &&
+      (!measurement.bodyScroll || (!measurement.bodyScroll.overflowsRight && !measurement.bodyScroll.overflowsBottom));
+    if (noOverflow) {
+      console.log(`[fixSlideViewport] round ${round}: no overflow detected, done`);
+      return current;
+    }
+    console.log(`[fixSlideViewport] round ${round}: ${measurement.overflow?.length || 0} overflows, fixing…`);
+    try {
+      const base64 = await renderSlideToBase64(current);
+      const fixed = await fixSlideViewport(current, base64, measurement);
+      if (fixed.includes('<div')) current = fixed;
+      else break;
+    } catch (err) {
+      console.warn(`[fixSlideViewport] round ${round} 실패:`, err);
+      break;
+    }
+  }
+  return current;
+}
+
 export async function fixAllSlideViewports(slides) {
   const results = [];
   for (let i = 0; i < slides.length; i++) {
     try {
-      const base64 = await renderSlideToBase64(slides[i]);
-      const fixed = await fixSlideViewport(slides[i], base64);
-      results.push(fixed.includes('<div') ? fixed : slides[i]);
+      results.push(await fixSlideViewportWithMeasurement(slides[i]));
     } catch (err) {
       console.warn(`슬라이드 ${i + 1} 뷰포트 픽스 실패:`, err);
       results.push(slides[i]);
@@ -1715,9 +1930,7 @@ export async function fixAllSlideViewports(slides) {
   return results;
 }
 
-/** 단일 슬라이드 뷰포트 수정 (진행률 추적용) */
+/** 단일 슬라이드 뷰포트 수정 (진행률 추적용). 최대 2 라운드. */
 export async function fixSingleSlideViewport(slideHtml) {
-  const base64 = await renderSlideToBase64(slideHtml);
-  const fixed = await fixSlideViewport(slideHtml, base64);
-  return fixed.includes('<div') ? fixed : slideHtml;
+  return await fixSlideViewportWithMeasurement(slideHtml);
 }

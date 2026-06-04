@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Share2, Check, Loader2, FileText, FileDown, FileCode, FileImage, FileType, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X, AtSign, ChevronDown, Download, Code2, ImagePlus, Globe } from 'lucide-react';
+import SlideDesignPicker from './slide/SlideDesignPicker';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
 import useAuthStore from '../store/useAuthStore';
@@ -26,6 +27,8 @@ export default function MainPanel() {
   const { exportDocx, isExportingDocx } = useDocxExport();
   const { isModifying, currentTask, queue, queueCount, modifyPrompt, setModifyPrompt, handleSubmit: handleDocModify, modifyDocument, removeFromQueue } = useDocModify();
   const generateSlides = useSlideStore((s) => s.generateSlides);
+  const selectedDesignSystemId = useSlideStore((s) => s.selectedDesignSystemId);
+  const setSelectedDesignSystemId = useSlideStore((s) => s.setSelectedDesignSystemId);
   const isGenerating = useSlideStore((s) => s.isGenerating);
   const generationProgress = useSlideStore((s) => s.generationProgress);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
@@ -342,6 +345,12 @@ export default function MainPanel() {
               tech-blog 게시
             </button>
           )}
+          {/* 디자인 시스템 picker (미리보기 썸네일 모달) */}
+          <SlideDesignPicker
+            value={selectedDesignSystemId}
+            onChange={setSelectedDesignSystemId}
+            disabled={isGenerating}
+          />
           <button
             onClick={handleGenerateSlides}
             disabled={isGenerating}
