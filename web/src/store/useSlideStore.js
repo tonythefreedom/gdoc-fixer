@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { convertHtmlToSlides, modifySlideHtml, modifyAllSlidesHtml, fixSingleSlideViewport, renderSlideToBase64 } from '../utils/geminiApi';
+import { migrateDesignSystemId } from '../utils/slideDesignSystems';
 import {
   loadPresentationList,
   createPresentationDoc,
@@ -22,8 +23,9 @@ const useSlideStore = create((set, get) => ({
   presentationSnapshots: [],
   uid: null,
 
-  // 사용자가 선택한 디자인 시스템 ID. 기본 modern-minimal.
-  selectedDesignSystemId: localStorage.getItem('slideDesignSystemId') || 'modern-minimal',
+  // 사용자가 선택한 디자인 시스템 ID. 옛 ID(modern-minimal 등) 가 저장되어
+  // 있으면 IR 톤 카탈로그의 첫 항목(executive-navy)으로 자동 마이그레이션.
+  selectedDesignSystemId: migrateDesignSystemId(localStorage.getItem('slideDesignSystemId')),
   setSelectedDesignSystemId: (id) => {
     localStorage.setItem('slideDesignSystemId', id);
     set({ selectedDesignSystemId: id });
