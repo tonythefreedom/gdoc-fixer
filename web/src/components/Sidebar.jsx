@@ -60,6 +60,11 @@ export default function Sidebar() {
     list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     return list.slice(0, RECENT_LIMIT);
   }, [shares]);
+  const recentPresentations = useMemo(() => {
+    const list = [...presentations];
+    list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    return list.slice(0, RECENT_LIMIT);
+  }, [presentations]);
 
   // 사이드바 리사이즈
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -302,12 +307,12 @@ export default function Sidebar() {
 
       <div className="flex-1 overflow-y-auto px-2">
         {/* Presentations section */}
-        {presentations.length > 0 && (
+        {recentPresentations.length > 0 && (
           <>
             <div className="text-[10px] text-slate-500 uppercase tracking-wider px-2 mb-2">
-              Presentations ({presentations.length})
+              Presentations ({recentPresentations.length} / {presentations.length})
             </div>
-            {presentations.map((pres) => (
+            {recentPresentations.map((pres) => (
               <div
                 key={pres.id}
                 className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 cursor-pointer transition-colors ${
