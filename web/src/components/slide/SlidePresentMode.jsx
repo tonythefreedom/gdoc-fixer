@@ -96,12 +96,19 @@ export default function SlidePresentMode({ slides, startIndex = 0, onClose }) {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // 진입 시 자동으로 브라우저 fullscreen 시도
+  // 진입 시 자동으로 브라우저 fullscreen 시도 + root 에 키 포커스 유지.
+  // (iframe 이 포커스를 가져가면 window keydown 이 안 잡혀서 ←/→ 가 먹통이 됨)
   useEffect(() => {
     if (rootRef.current && !document.fullscreenElement) {
       rootRef.current.requestFullscreen?.().catch(() => {});
     }
+    rootRef.current?.focus?.();
   }, []);
+
+  // 슬라이드 전환 시에도 root 에 포커스 되돌려서 다음 키 입력을 보장.
+  useEffect(() => {
+    rootRef.current?.focus?.();
+  }, [index]);
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
@@ -124,7 +131,8 @@ export default function SlidePresentMode({ slides, startIndex = 0, onClose }) {
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 z-[60] bg-black flex items-center justify-center select-none"
+      tabIndex={-1}
+      className="fixed inset-0 z-[60] bg-black flex items-center justify-center select-none outline-none"
       style={{ cursor: controlsVisible ? 'default' : 'none' }}
     >
       {/* 슬라이드 스테이지 */}
@@ -140,6 +148,7 @@ export default function SlidePresentMode({ slides, startIndex = 0, onClose }) {
           key={index}
           srcDoc={srcDoc}
           sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+          tabIndex={-1}
           style={{
             width: SLIDE_W,
             height: SLIDE_H,
@@ -147,6 +156,10 @@ export default function SlidePresentMode({ slides, startIndex = 0, onClose }) {
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
             background: '#fff',
+            // iframe 이 포커스를 가져가면 부모 window keydown 이 안 잡혀
+            // 좌/우 화살표가 먹통이 된다. 슬라이드는 보기 전용이므로 클릭
+            // 자체를 차단. 좌/우 1/4 클릭 영역은 그대로 동작.
+            pointerEvents: 'none',
           }}
           title={`슬라이드 ${index + 1}`}
         />
