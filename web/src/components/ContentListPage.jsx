@@ -101,25 +101,29 @@ export default function ContentListPage() {
     window.open(getShareUrl(id), '_blank', 'noopener');
   };
 
-  const filteredFiles = useMemo(
-    () => filterAndRank(files, committedQuery, (f) => f.name || ''),
-    [files, committedQuery],
-  );
+  // 기본 정렬: updatedAt(없으면 createdAt) 내림차순 = 최신 항목이 위.
+  // 검색어가 있으면 filterAndRank 의 유사도 순서를 그대로 유지.
+  const byRecent = (a, b) =>
+    (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
 
-  const filteredPresentations = useMemo(
-    () => filterAndRank(presentations, committedQuery, (p) => p.name || ''),
-    [presentations, committedQuery],
-  );
+  const filteredFiles = useMemo(() => {
+    const list = filterAndRank(files, committedQuery, (f) => f.name || '');
+    return committedQuery ? list : [...list].sort(byRecent);
+  }, [files, committedQuery]);
 
-  const filteredShares = useMemo(
-    () =>
-      filterAndRank(
-        shares,
-        committedQuery,
-        (s) => s.name || new Date(s.createdAt || 0).toLocaleDateString(),
-      ),
-    [shares, committedQuery],
-  );
+  const filteredPresentations = useMemo(() => {
+    const list = filterAndRank(presentations, committedQuery, (p) => p.name || '');
+    return committedQuery ? list : [...list].sort(byRecent);
+  }, [presentations, committedQuery]);
+
+  const filteredShares = useMemo(() => {
+    const list = filterAndRank(
+      shares,
+      committedQuery,
+      (s) => s.name || new Date(s.createdAt || 0).toLocaleDateString(),
+    );
+    return committedQuery ? list : [...list].sort(byRecent);
+  }, [shares, committedQuery]);
 
   const resultCount = filteredFiles.length + filteredPresentations.length + filteredShares.length;
 
