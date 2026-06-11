@@ -132,41 +132,45 @@ export default function MainPanel() {
         }
       });
 
-      // 문서 viewport = 진짜 콘텐츠 wrapper. body 직접 자식 중 element 노드가
-      // 정확히 1 개면 그것을 viewport 로 본다. (대부분의 self-contained 문서가
-      // <body class="bg-gray-100 p-8"><div class="document-card mx-auto">…</div></body>
-      // 형태라 documentElement 를 그대로 캡처하면 body 의 회색 배경/padding 까지
-      // PDF 외곽으로 들어간다. wrapper 만 캡처해야 viewport 가 PDF 의 최외곽이 됨.)
-      const meaningfulChildren = Array.from(iframeDoc.body.children).filter(
-        (el) => !['SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT', 'META'].includes(el.tagName)
-      );
-      const captureTarget =
-        meaningfulChildren.length === 1
-          ? meaningfulChildren[0]
-          : iframeDoc.documentElement;
+      // 외곽 배경 레이어 = body 의 background/padding/margin. 이것만 임시로
+      // reset 한 뒤 documentElement 전체를 캡처한다. 콘텐츠 wrapper 의
+      // mx-auto 같은 가운데 정렬은 그대로 살아 PDF 에서도 가운데에 표시되고,
+      // wrapper 안에서 overflow 한 큰 표/이미지도 모두 캡처에 포함된다.
+      const origBodyCss = iframeDoc.body.style.cssText;
+      iframeDoc.body.style.setProperty('background', '#ffffff', 'important');
+      iframeDoc.body.style.setProperty('padding', '0', 'important');
+      iframeDoc.body.style.setProperty('margin', '0', 'important');
 
-      // wrapper 의 actual width 와, wrapper 안에서 overflow 된 자식(큰 표/이미지
-      // 등) 의 scrollWidth 둘 중 더 큰 값을 캡처 폭으로 사용해 우측 잘림을 방지.
-      const targetRect = captureTarget.getBoundingClientRect();
+      const captureTarget = iframeDoc.documentElement;
+      // documentElement 와 body 둘 다의 scrollWidth/Height 중 큰 값.
+      // documentElement 의 scrollWidth 는 brower 에 따라 viewport 폭으로
+      // 잘리는 경우가 있어 둘 다 확인.
       const captureW = Math.max(
-        Math.round(targetRect.width),
-        captureTarget.scrollWidth || 0,
+        captureTarget.scrollWidth,
+        iframeDoc.body.scrollWidth,
+        viewportWidth,
         100
       );
       const captureH = Math.max(
         captureTarget.scrollHeight,
-        Math.round(targetRect.height),
+        iframeDoc.body.scrollHeight,
+        captureTarget.offsetHeight,
         1000
       );
 
-      const canvas = await toCanvas(captureTarget, {
-        width: captureW,
-        height: captureH,
-        pixelRatio: 2,
-        cacheBust: true,
-        backgroundColor: '#ffffff',
-        imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-      });
+      let canvas;
+      try {
+        canvas = await toCanvas(captureTarget, {
+          width: captureW,
+          height: captureH,
+          pixelRatio: 2,
+          cacheBust: true,
+          backgroundColor: '#ffffff',
+          imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        });
+      } finally {
+        iframeDoc.body.style.cssText = origBodyCss;
+      }
 
       // Restore original styles
       iframeDoc.head.removeChild(pdfStyle);
