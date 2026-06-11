@@ -145,8 +145,14 @@ export default function MainPanel() {
           ? meaningfulChildren[0]
           : iframeDoc.documentElement;
 
+      // wrapper 의 actual width 와, wrapper 안에서 overflow 된 자식(큰 표/이미지
+      // 등) 의 scrollWidth 둘 중 더 큰 값을 캡처 폭으로 사용해 우측 잘림을 방지.
       const targetRect = captureTarget.getBoundingClientRect();
-      const captureW = Math.max(Math.round(targetRect.width), 100);
+      const captureW = Math.max(
+        Math.round(targetRect.width),
+        captureTarget.scrollWidth || 0,
+        100
+      );
       const captureH = Math.max(
         captureTarget.scrollHeight,
         Math.round(targetRect.height),
