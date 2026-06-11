@@ -132,29 +132,44 @@ export default function MainPanel() {
         }
       });
 
-      // 외곽 배경 레이어 = body 의 background/padding/margin. 이것만 임시로
-      // reset 한 뒤 documentElement 전체를 캡처한다. 콘텐츠 wrapper 의
-      // mx-auto 같은 가운데 정렬은 그대로 살아 PDF 에서도 가운데에 표시되고,
-      // wrapper 안에서 overflow 한 큰 표/이미지도 모두 캡처에 포함된다.
+      // 문서 viewport = body 의 직접 자식이 단일 wrapper 면 그것. 그렇지 않으면
+      // documentElement 폴백. body 의 외곽 background/padding/margin 은 임시
+      // 흰색/0 으로 reset 해 외곽 회색 레이어가 캡처에 안 들어가게 한다.
+      const meaningfulChildren = Array.from(iframeDoc.body.children).filter(
+        (el) => !['SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT', 'META'].includes(el.tagName)
+      );
+      const captureTarget =
+        meaningfulChildren.length === 1
+          ? meaningfulChildren[0]
+          : iframeDoc.documentElement;
+
       const origBodyCss = iframeDoc.body.style.cssText;
       iframeDoc.body.style.setProperty('background', '#ffffff', 'important');
       iframeDoc.body.style.setProperty('padding', '0', 'important');
       iframeDoc.body.style.setProperty('margin', '0', 'important');
 
-      const captureTarget = iframeDoc.documentElement;
-      // documentElement 와 body 둘 다의 scrollWidth/Height 중 큰 값.
-      // documentElement 의 scrollWidth 는 brower 에 따라 viewport 폭으로
-      // 잘리는 경우가 있어 둘 다 확인.
+      // captureTarget 의 모든 자손의 boundingRect 를 측정해 실제 콘텐츠 영역을
+      // 계산. scrollWidth/Height 가 max-width / overflow:visible 조합에서
+      // 자식 overflow 를 정확히 반영하지 못하는 경우가 있어 보완책.
+      const targetRect = captureTarget.getBoundingClientRect();
+      let maxRight = targetRect.right;
+      let maxBottom = targetRect.bottom;
+      captureTarget.querySelectorAll('*').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.right > maxRight) maxRight = r.right;
+        if (r.bottom > maxBottom) maxBottom = r.bottom;
+      });
+
       const captureW = Math.max(
-        captureTarget.scrollWidth,
-        iframeDoc.body.scrollWidth,
-        viewportWidth,
+        Math.round(targetRect.width),
+        captureTarget.scrollWidth || 0,
+        Math.round(maxRight - targetRect.left),
         100
       );
       const captureH = Math.max(
         captureTarget.scrollHeight,
-        iframeDoc.body.scrollHeight,
-        captureTarget.offsetHeight,
+        Math.round(targetRect.height),
+        Math.round(maxBottom - targetRect.top),
         1000
       );
 
