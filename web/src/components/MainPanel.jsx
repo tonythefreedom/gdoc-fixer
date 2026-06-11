@@ -132,15 +132,33 @@ export default function MainPanel() {
         }
       });
 
-      // Capture the full document height
-      const body = iframeDoc.documentElement;
-      const fullHeight = Math.max(body.scrollHeight, body.offsetHeight, 1000);
+      // 문서 viewport = 진짜 콘텐츠 wrapper. body 직접 자식 중 element 노드가
+      // 정확히 1 개면 그것을 viewport 로 본다. (대부분의 self-contained 문서가
+      // <body class="bg-gray-100 p-8"><div class="document-card mx-auto">…</div></body>
+      // 형태라 documentElement 를 그대로 캡처하면 body 의 회색 배경/padding 까지
+      // PDF 외곽으로 들어간다. wrapper 만 캡처해야 viewport 가 PDF 의 최외곽이 됨.)
+      const meaningfulChildren = Array.from(iframeDoc.body.children).filter(
+        (el) => !['SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT', 'META'].includes(el.tagName)
+      );
+      const captureTarget =
+        meaningfulChildren.length === 1
+          ? meaningfulChildren[0]
+          : iframeDoc.documentElement;
 
-      const canvas = await toCanvas(body, {
-        width: viewportWidth,
-        height: fullHeight,
+      const targetRect = captureTarget.getBoundingClientRect();
+      const captureW = Math.max(Math.round(targetRect.width), 100);
+      const captureH = Math.max(
+        captureTarget.scrollHeight,
+        Math.round(targetRect.height),
+        1000
+      );
+
+      const canvas = await toCanvas(captureTarget, {
+        width: captureW,
+        height: captureH,
         pixelRatio: 2,
         cacheBust: true,
+        backgroundColor: '#ffffff',
         imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
       });
 
@@ -154,9 +172,9 @@ export default function MainPanel() {
       const margin = 10; // mm
       const contentW = a4W - margin * 2;
 
-      // Scale canvas to fit A4 width
-      const scale = contentW / viewportWidth;
-      const scaledH = fullHeight * scale;
+      // viewport 의 actual width 기준으로 A4 안에 맞춤
+      const scale = contentW / captureW;
+      const scaledH = captureH * scale;
 
       // Calculate pages
       const pageContentH = a4H - margin * 2;
@@ -169,19 +187,19 @@ export default function MainPanel() {
 
         // Source region from canvas
         const srcY = (page * pageContentH) / scale;
-        const srcH = Math.min(pageContentH / scale, fullHeight - srcY);
+        const srcH = Math.min(pageContentH / scale, captureH - srcY);
         if (srcH <= 0) break;
 
         // Create a page-sized canvas slice
         const sliceCanvas = document.createElement('canvas');
         sliceCanvas.width = canvas.width;
-        sliceCanvas.height = Math.ceil(srcH * (canvas.width / viewportWidth));
+        sliceCanvas.height = Math.ceil(srcH * (canvas.width / captureW));
         const ctx = sliceCanvas.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
         ctx.drawImage(
           canvas,
-          0, Math.floor(srcY * (canvas.width / viewportWidth)),
+          0, Math.floor(srcY * (canvas.width / captureW)),
           canvas.width, sliceCanvas.height,
           0, 0,
           sliceCanvas.width, sliceCanvas.height
