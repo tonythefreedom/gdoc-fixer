@@ -132,44 +132,54 @@ export default function MainPanel() {
         }
       });
 
-      // 문서 viewport = body 의 직접 자식이 단일 wrapper 면 그것. 그렇지 않으면
-      // documentElement 폴백. body 의 외곽 background/padding/margin 은 임시
-      // 흰색/0 으로 reset 해 외곽 회색 레이어가 캡처에 안 들어가게 한다.
-      const meaningfulChildren = Array.from(iframeDoc.body.children).filter(
-        (el) => !['SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT', 'META'].includes(el.tagName)
-      );
-      const captureTarget =
-        meaningfulChildren.length === 1
-          ? meaningfulChildren[0]
-          : iframeDoc.documentElement;
-
+      // 전략:
+      // (1) documentElement 전체를 캡처 (외곽 배경/패딩만 reset). 자손 overflow
+      //     까지 한 픽셀도 안 잘림.
+      // (2) wrapper 영역의 viewport 좌표(좌·우·아래) 를 자손 boundingRect 까지
+      //     훑어 산출.
+      // (3) PDF 슬라이스 단계에서 wrapper 영역만 잘라 contentW 에 fit-to-width.
+      //     → 가운데 정렬(자동) + 페이지 폭 100% + 자손 overflow 까지 포함.
       const origBodyCss = iframeDoc.body.style.cssText;
       iframeDoc.body.style.setProperty('background', '#ffffff', 'important');
       iframeDoc.body.style.setProperty('padding', '0', 'important');
       iframeDoc.body.style.setProperty('margin', '0', 'important');
 
-      // captureTarget 의 모든 자손의 boundingRect 를 측정해 실제 콘텐츠 영역을
-      // 계산. scrollWidth/Height 가 max-width / overflow:visible 조합에서
-      // 자식 overflow 를 정확히 반영하지 못하는 경우가 있어 보완책.
-      const targetRect = captureTarget.getBoundingClientRect();
-      let maxRight = targetRect.right;
-      let maxBottom = targetRect.bottom;
-      captureTarget.querySelectorAll('*').forEach((el) => {
-        const r = el.getBoundingClientRect();
-        if (r.right > maxRight) maxRight = r.right;
-        if (r.bottom > maxBottom) maxBottom = r.bottom;
-      });
+      // wrapper 영역 결정: body 의 단일 자식이 있으면 그것, 없으면 body.
+      const meaningfulChildren = Array.from(iframeDoc.body.children).filter(
+        (el) => !['SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT', 'META'].includes(el.tagName)
+      );
+      const wrapperEl =
+        meaningfulChildren.length === 1 ? meaningfulChildren[0] : iframeDoc.body;
 
+      const wRect = wrapperEl.getBoundingClientRect();
+      let wMinLeft = wRect.left;
+      let wMaxRight = wRect.right;
+      let wMaxBottom = wRect.bottom;
+      wrapperEl.querySelectorAll('*').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.left < wMinLeft) wMinLeft = r.left;
+        if (r.right > wMaxRight) wMaxRight = r.right;
+        if (r.bottom > wMaxBottom) wMaxBottom = r.bottom;
+      });
+      const wrapperLeft = Math.max(0, Math.floor(wMinLeft));
+      const wrapperWidth = Math.max(50, Math.ceil(wMaxRight - wMinLeft));
+
+      // documentElement 전체를 캡처. 폭/높이는 wrapper 범위 + 자손 maxBottom
+      // 보다 작지 않도록.
+      const captureTarget = iframeDoc.documentElement;
+      const docRect = captureTarget.getBoundingClientRect();
       const captureW = Math.max(
-        Math.round(targetRect.width),
-        captureTarget.scrollWidth || 0,
-        Math.round(maxRight - targetRect.left),
+        captureTarget.scrollWidth,
+        iframeDoc.body.scrollWidth,
+        viewportWidth,
+        Math.ceil(docRect.right),
+        Math.ceil(wMaxRight),
         100
       );
       const captureH = Math.max(
         captureTarget.scrollHeight,
-        Math.round(targetRect.height),
-        Math.round(maxBottom - targetRect.top),
+        iframeDoc.body.scrollHeight,
+        Math.ceil(wMaxBottom),
         1000
       );
 
@@ -191,43 +201,57 @@ export default function MainPanel() {
       iframeDoc.head.removeChild(pdfStyle);
       heightRestoreFns.forEach((fn) => fn());
 
+      // CSS px → canvas px 변환비
+      const pxRatio = canvas.width / captureW;
+      // wrapper 영역의 canvas px 좌표
+      const cropX = Math.max(0, Math.round(wrapperLeft * pxRatio));
+      const cropW = Math.max(1, Math.min(canvas.width - cropX, Math.round(wrapperWidth * pxRatio)));
+      // wrapper 영역의 전체 높이 (CSS px). 자손 maxBottom 까지 포함.
+      const wrapperHeightCss = Math.max(
+        50,
+        Math.ceil(wMaxBottom - wRect.top)
+      );
+
       // A4 dimensions in mm
       const a4W = 210;
       const a4H = 297;
       const margin = 10; // mm
       const contentW = a4W - margin * 2;
 
-      // viewport 의 actual width 기준으로 A4 안에 맞춤
-      const scale = contentW / captureW;
-      const scaledH = captureH * scale;
+      // wrapper 폭이 PDF contentW 전체를 채우게 fit-to-width.
+      const scale = contentW / wrapperWidth;
 
       // Calculate pages
       const pageContentH = a4H - margin * 2;
-      const totalPages = Math.ceil(scaledH / pageContentH);
+      const totalPages = Math.max(1, Math.ceil((wrapperHeightCss * scale) / pageContentH));
 
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      // wrapper 영역의 시작 Y (CSS px, iframe viewport 좌표계 기준)
+      const wrapperTopCss = Math.max(0, Math.floor(wRect.top));
 
       for (let page = 0; page < totalPages; page++) {
         if (page > 0) pdf.addPage();
 
-        // Source region from canvas
-        const srcY = (page * pageContentH) / scale;
-        const srcH = Math.min(pageContentH / scale, captureH - srcY);
+        // wrapper 안에서의 페이지 시작 Y (CSS px)
+        const pageStartInWrapper = (page * pageContentH) / scale;
+        const srcH = Math.min(pageContentH / scale, wrapperHeightCss - pageStartInWrapper);
         if (srcH <= 0) break;
 
-        // Create a page-sized canvas slice
+        // canvas 안에서 잘라낼 영역 (canvas px)
+        const cropY = Math.floor((wrapperTopCss + pageStartInWrapper) * pxRatio);
+        const cropH = Math.max(1, Math.min(canvas.height - cropY, Math.ceil(srcH * pxRatio)));
+
         const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = Math.ceil(srcH * (canvas.width / captureW));
+        sliceCanvas.width = cropW;
+        sliceCanvas.height = cropH;
         const ctx = sliceCanvas.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
         ctx.drawImage(
           canvas,
-          0, Math.floor(srcY * (canvas.width / captureW)),
-          canvas.width, sliceCanvas.height,
-          0, 0,
-          sliceCanvas.width, sliceCanvas.height
+          cropX, cropY, cropW, cropH,
+          0, 0, sliceCanvas.width, sliceCanvas.height
         );
 
         pdf.addImage(
