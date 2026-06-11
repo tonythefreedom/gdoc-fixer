@@ -9,6 +9,72 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * 슬라이드 HTML 에서 "문서 뷰포트 레이어" 만 추출한다.
+ *
+ * 슬라이드의 표준 구조는 `<div style="width:1280px;height:720px;...">` 단일
+ * viewport. 하지만 디자인 시스템 (특히 Dark Tech / Burgundy / FT pink 등)
+ * 의 promptHint 를 따르면서 Gemini 가 root div 바깥에
+ *   <style>body{background:#1a0b10; padding:60px;}</style>
+ *   <body class="page-bg">
+ *     <div style="width:1280px;height:720px;...">…</div>
+ *   </body>
+ * 형태로 "배경 레이어 + viewport 레이어" 2 단 구조를 만들어내는 경우가 있다.
+ *
+ * 이 함수는 1280×720 viewport div 를 찾아 그것을 최외곽으로 사용한다.
+ * head 의 <style>/<link> 도 같이 모아서 폰트·내부 셀렉터가 살아남게 한다.
+ */
+function extractSlideViewport(html) {
+  let doc;
+  try {
+    doc = new DOMParser().parseFromString(html, 'text/html');
+  } catch {
+    return { viewportHtml: html, styles: '' };
+  }
+
+  // 1) 1280×720 인라인 사이즈를 가진 첫 번째 element
+  const sized = doc.querySelectorAll('div, section, article, main');
+  let viewport = null;
+  for (const el of sized) {
+    const style = (el.getAttribute('style') || '').replace(/\s+/g, '');
+    if (/width:1280px/i.test(style) && /height:720px/i.test(style)) {
+      viewport = el;
+      break;
+    }
+  }
+
+  // 2) 폴백: body 의 첫 직접 자식 (= 가장 외곽 컨테이너)
+  if (!viewport && doc.body) {
+    const firstChild = Array.from(doc.body.children).find(
+      (c) => c.tagName !== 'SCRIPT' && c.tagName !== 'STYLE' && c.tagName !== 'LINK'
+    );
+    viewport = firstChild || doc.body;
+  }
+
+  // head 의 스타일/링크/스크립트(폰트 import 등) 보존. 단,
+  // 메인 document 의 body 셀렉터에 영향을 주는 글로벌 `body{...}` 룰은
+  // viewport 캡처에 무의미하므로 제거한다.
+  const headEls = doc.head
+    ? Array.from(doc.head.querySelectorAll('style, link[rel="stylesheet"]'))
+    : [];
+  const styleHtml = headEls
+    .map((el) => {
+      if (el.tagName === 'STYLE') {
+        // `body { ... }` 룰을 `.slide-viewport-root { ... }` 로 대체.
+        const css = el.textContent || '';
+        const rewritten = css.replace(/(^|[}\s])body(\s*[{,])/g, '$1.slide-viewport-root$2');
+        return `<style>${rewritten}</style>`;
+      }
+      return el.outerHTML;
+    })
+    .join('\n');
+
+  return {
+    viewportHtml: viewport ? viewport.outerHTML : html,
+    styles: styleHtml,
+  };
+}
+
 // Convert external image URLs to data URIs so html-to-image can render them
 async function inlineExternalImages(html) {
   const urlRegex = /https:\/\/storage\.googleapis\.com\/[^\s"')]+/g;
@@ -75,9 +141,32 @@ export function usePdfExport() {
 
       for (let i = 0; i < slides.length; i++) {
         const inlinedHtml = await inlineExternalImages(slides[i]);
+
+        // 슬라이드 HTML 에서 1280×720 viewport 만 추출 → PDF 의 최외곽으로 사용
+        const { viewportHtml, styles } = extractSlideViewport(inlinedHtml);
+
         const slideEl = document.createElement('div');
-        slideEl.style.cssText = `width:${SLIDE_W}px;height:${SLIDE_H}px;overflow:hidden;background:#fff;`;
-        slideEl.innerHTML = inlinedHtml;
+        // 이 컨테이너 자체가 PDF 의 1280×720 페이지 박스다. overflow:hidden
+        // 으로 viewport 바깥 잔여 픽셀을 차단.
+        slideEl.style.cssText = `position:relative;width:${SLIDE_W}px;height:${SLIDE_H}px;overflow:hidden;background:#fff;`;
+        slideEl.innerHTML = styles + viewportHtml;
+
+        // 추출한 viewport 를 좌상단(0,0) 에 강제로 고정. 외곽 wrapper/배경
+        // 레이어가 있어도 캡처는 viewport 안만 보게 된다.
+        const innerViewport =
+          slideEl.querySelector('[style*="width:1280px"]') ||
+          slideEl.firstElementChild;
+        if (innerViewport && innerViewport instanceof HTMLElement) {
+          innerViewport.classList.add('slide-viewport-root');
+          innerViewport.style.position = 'absolute';
+          innerViewport.style.left = '0';
+          innerViewport.style.top = '0';
+          innerViewport.style.width = `${SLIDE_W}px`;
+          innerViewport.style.height = `${SLIDE_H}px`;
+          innerViewport.style.margin = '0';
+          innerViewport.style.transform = 'none';
+        }
+
         container.appendChild(slideEl);
 
         await delay(300);
