@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Share2, Check, Loader2, FileText, FileDown, FileCode, FileImage, FileType, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X, AtSign, ChevronDown, Download, Code2, ImagePlus, Globe } from 'lucide-react';
+import { Share2, Check, Loader2, FileText, FileDown, FileCode, FileType, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X, AtSign, ChevronDown, Download, Code2, ImagePlus, Globe } from 'lucide-react';
 import SlideDesignPicker from './slide/SlideDesignPicker';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
@@ -13,7 +13,6 @@ import SlideGenerationProgress from './slide/SlideGenerationProgress';
 import PlanningEditor from './planning/PlanningEditor';
 import AdminUserManagement from './AdminUserManagement';
 import PublishModal from './PublishModal';
-import { useExport } from '../hooks/useExport';
 import { useDocxExport } from '../hooks/useDocxExport';
 import { useDocModify } from '../hooks/useDocModify';
 import { generateShareUrl } from '../utils/shareUrl';
@@ -23,7 +22,6 @@ export default function MainPanel() {
   const activeFileId = useAppStore((s) => s.activeFileId);
   const files = useAppStore((s) => s.files);
   const iframeRef = useRef(null);
-  const { exportPng } = useExport(iframeRef);
   const { exportDocx, isExportingDocx } = useDocxExport();
   const { isModifying, currentTask, queue, queueCount, modifyPrompt, setModifyPrompt, handleSubmit: handleDocModify, modifyDocument, removeFromQueue } = useDocModify();
   const generateSlides = useSlideStore((s) => s.generateSlides);
@@ -221,26 +219,79 @@ export default function MainPanel() {
       // wrapper 폭이 PDF contentW 전체를 채우게 fit-to-width.
       const scale = contentW / wrapperWidth;
 
-      // Calculate pages
       const pageContentH = a4H - margin * 2;
-      const totalPages = Math.max(1, Math.ceil((wrapperHeightCss * scale) / pageContentH));
-
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
       // wrapper 영역의 시작 Y (CSS px, iframe viewport 좌표계 기준)
       const wrapperTopCss = Math.max(0, Math.floor(wRect.top));
 
-      for (let page = 0; page < totalPages; page++) {
-        if (page > 0) pdf.addPage();
+      // 페이지 경계 잘림 방지: 다음 페이지 시작 후보 위치에서 위쪽으로 일정
+      // 범위 안의 가장 가까운 "공백 라인"(=거의 흰 픽셀만 있는 가로 라인) 으로
+      // 경계를 시프트한다. 텍스트/표 라인 한가운데가 잘리는 현상을 막음.
+      const sourceCtx = canvas.getContext('2d', { willReadFrequently: true });
+      // wrapper 영역 전체에 대한 픽셀 데이터 한 번에 읽어 캐싱.
+      const wrapperPixelTop = Math.max(0, Math.floor(wrapperTopCss * pxRatio));
+      const wrapperPixelBottom = Math.min(
+        canvas.height,
+        Math.ceil((wrapperTopCss + wrapperHeightCss) * pxRatio)
+      );
+      const fullData = sourceCtx.getImageData(
+        cropX,
+        wrapperPixelTop,
+        cropW,
+        wrapperPixelBottom - wrapperPixelTop
+      );
+      const pxData = fullData.data;
+      const isMostlyWhiteLine = (yLocal) => {
+        if (yLocal < 0 || yLocal >= fullData.height) return false;
+        const rowStart = yLocal * fullData.width * 4;
+        let nonWhite = 0;
+        const tolerance = Math.max(2, Math.floor(fullData.width * 0.005));
+        for (let x = 0; x < fullData.width; x++) {
+          const i = rowStart + x * 4;
+          if (pxData[i] < 240 || pxData[i + 1] < 240 || pxData[i + 2] < 240) {
+            nonWhite++;
+            if (nonWhite > tolerance) return false;
+          }
+        }
+        return true;
+      };
+      // 후보 위치 (전역 canvas px) → 안전한 경계 위치로 시프트
+      const findSafeBreak = (canvasY) => {
+        const localY = canvasY - wrapperPixelTop;
+        const maxBacktrack = Math.min(
+          Math.floor(150 * pxRatio), // 최대 150 CSS px 위쪽까지
+          Math.max(0, localY - 1)
+        );
+        for (let dy = 0; dy <= maxBacktrack; dy++) {
+          if (isMostlyWhiteLine(localY - dy)) {
+            return canvasY - dy;
+          }
+        }
+        return canvasY;
+      };
 
-        // wrapper 안에서의 페이지 시작 Y (CSS px)
-        const pageStartInWrapper = (page * pageContentH) / scale;
-        const srcH = Math.min(pageContentH / scale, wrapperHeightCss - pageStartInWrapper);
-        if (srcH <= 0) break;
+      const wrapperPixelHeight = wrapperPixelBottom - wrapperPixelTop;
+      let cursorY = wrapperPixelTop; // 현재 페이지 시작 (전역 canvas px)
+      let pageIdx = 0;
+      while (cursorY < wrapperPixelBottom) {
+        if (pageIdx > 0) pdf.addPage();
 
-        // canvas 안에서 잘라낼 영역 (canvas px)
-        const cropY = Math.floor((wrapperTopCss + pageStartInWrapper) * pxRatio);
-        const cropH = Math.max(1, Math.min(canvas.height - cropY, Math.ceil(srcH * pxRatio)));
+        // 페이지 끝 후보 (전역 canvas px)
+        const idealEnd = cursorY + (pageContentH / scale) * pxRatio;
+        let pageEnd;
+        if (idealEnd >= wrapperPixelBottom) {
+          pageEnd = wrapperPixelBottom; // 마지막 페이지
+        } else {
+          pageEnd = findSafeBreak(Math.floor(idealEnd));
+          // 최소 진행량 보장 (페이지 무한 분할 방지)
+          if (pageEnd <= cursorY + 10) {
+            pageEnd = Math.floor(idealEnd);
+          }
+        }
+
+        const cropH = Math.max(1, pageEnd - cursorY);
+        const srcH = cropH / pxRatio; // CSS px 단위 페이지 콘텐츠 높이
 
         const sliceCanvas = document.createElement('canvas');
         sliceCanvas.width = cropW;
@@ -250,7 +301,7 @@ export default function MainPanel() {
         ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
         ctx.drawImage(
           canvas,
-          cropX, cropY, cropW, cropH,
+          cropX, cursorY, cropW, cropH,
           0, 0, sliceCanvas.width, sliceCanvas.height
         );
 
@@ -260,7 +311,14 @@ export default function MainPanel() {
           margin, margin, contentW, srcH * scale,
           undefined, 'FAST'
         );
+
+        cursorY = pageEnd;
+        pageIdx++;
+        // 안전 가드 (최대 200 페이지)
+        if (pageIdx > 200) break;
       }
+      // wrapperPixelHeight 는 진단 변수, 미사용 시 lint 가 경고하지 않도록 명시적으로 무시.
+      void wrapperPixelHeight;
 
       const { activeFileId: fileId, files: allFiles } = useAppStore.getState();
       const file = allFiles.find((f) => f.id === fileId);
@@ -462,13 +520,6 @@ export default function MainPanel() {
             </button>
             {exportMenuOpen && (
               <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
-                <button
-                  onClick={() => { setExportMenuOpen(false); exportPng(); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  <FileImage className="w-3.5 h-3.5 text-indigo-500" />
-                  PNG 이미지
-                </button>
                 <button
                   onClick={() => { setExportMenuOpen(false); handleExportPdf(); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
