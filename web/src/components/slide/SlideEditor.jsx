@@ -18,11 +18,6 @@ export default function SlideEditor() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
-  // 슬라이드 내용이 바뀌면 캐시된 share URL 무효화 (사용자가 다음에 공유 버튼
-  // 누르면 최신 내용으로 새 링크 생성됨)
-  useEffect(() => {
-    setShareUrl(null);
-  }, [slides, activePresentationId]);
   const slides = useSlideStore((s) => s.slides);
   const slideHistories = useSlideStore((s) => s.slideHistories);
   const currentSlideIndex = useSlideStore((s) => s.currentSlideIndex);
@@ -41,6 +36,13 @@ export default function SlideEditor() {
   const insertImageToSlide = useSlideStore((s) => s.insertImageToSlide);
   const { exportSlidesToPdf, pdfLoading } = usePdfExport();
   const { exportSlidesToPptx, pptxLoading } = usePptxExport();
+
+  // 슬라이드 내용이 바뀌면 캐시된 share URL 무효화 (사용자가 다음에 공유 버튼
+  // 누르면 최신 내용으로 새 링크 생성됨). slides / activePresentationId 가
+  // 이미 선언된 뒤에 위치해야 한다 (const 는 hoist 되지 않아 TDZ 가 발생).
+  useEffect(() => {
+    setShareUrl(null);
+  }, [slides, activePresentationId]);
 
   const [modifyPrompt, setModifyPrompt] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);

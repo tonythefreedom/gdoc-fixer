@@ -11,4 +11,7 @@ export default defineConfig({
       include: ['events', 'buffer', 'process', 'stream', 'util', 'crypto'],
     }),
   ],
+  build: {
+    sourcemap: true,
+  },
 })
