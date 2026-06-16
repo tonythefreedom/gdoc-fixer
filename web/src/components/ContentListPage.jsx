@@ -236,107 +236,7 @@ export default function ContentListPage() {
           )}
         </section>
 
-        {/* Files 테이블 */}
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-            <FileCode className="w-4 h-4 text-slate-400" />
-            Files ({filteredFiles.length} / {files.length})
-          </h2>
-          {filteredFiles.length === 0 ? (
-            <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-lg bg-white">
-              {committedQuery ? '검색된 파일이 없습니다.' : '아직 생성된 파일이 없습니다.'}
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium">이름</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-44">생성일</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-44">수정일</th>
-                    <th className="text-right px-4 py-2.5 font-medium w-40">작업</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredFiles.map((file) => (
-                    <tr key={file.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5 text-slate-700">
-                        {editingKind === 'file' && editingId === file.id ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm outline-none focus:border-indigo-500"
-                              value={editName}
-                              onChange={(e) => setEditName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') confirmRename();
-                                if (e.key === 'Escape') cancelRename();
-                              }}
-                              autoFocus
-                            />
-                            <button
-                              onClick={confirmRename}
-                              className="p-1 text-emerald-600 hover:text-emerald-700"
-                              title="확인"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={cancelRename}
-                              className="p-1 text-slate-400 hover:text-slate-600"
-                              title="취소"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleOpenFile(file.id)}
-                            className="text-left text-indigo-600 hover:underline"
-                          >
-                            {file.name}
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-500 text-xs">
-                        {formatDate(file.createdAt)}
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-500 text-xs">
-                        {formatDate(file.updatedAt)}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleOpenFile(file.id)}
-                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
-                            title="열기"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => startRename('file', file)}
-                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
-                            title="이름 변경"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteFile(file.id)}
-                            className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
-                            title="삭제"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {/* Presentations 테이블 */}
+        {/* Presentations 테이블 (Files 보다 먼저 표시) */}
         <section className="mb-8">
           <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
             <Presentation className="w-4 h-4 text-indigo-400" />
@@ -425,6 +325,106 @@ export default function ContentListPage() {
                           </button>
                           <button
                             onClick={() => handleDeletePresentation(pres.id)}
+                            className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
+                            title="삭제"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* Files 테이블 */}
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <FileCode className="w-4 h-4 text-slate-400" />
+            Files ({filteredFiles.length} / {files.length})
+          </h2>
+          {filteredFiles.length === 0 ? (
+            <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-lg bg-white">
+              {committedQuery ? '검색된 파일이 없습니다.' : '아직 생성된 파일이 없습니다.'}
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium">이름</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-44">생성일</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-44">수정일</th>
+                    <th className="text-right px-4 py-2.5 font-medium w-40">작업</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredFiles.map((file) => (
+                    <tr key={file.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5 text-slate-700">
+                        {editingKind === 'file' && editingId === file.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm outline-none focus:border-indigo-500"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') confirmRename();
+                                if (e.key === 'Escape') cancelRename();
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              onClick={confirmRename}
+                              className="p-1 text-emerald-600 hover:text-emerald-700"
+                              title="확인"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={cancelRename}
+                              className="p-1 text-slate-400 hover:text-slate-600"
+                              title="취소"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenFile(file.id)}
+                            className="text-left text-indigo-600 hover:underline"
+                          >
+                            {file.name}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs">
+                        {formatDate(file.createdAt)}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs">
+                        {formatDate(file.updatedAt)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenFile(file.id)}
+                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                            title="열기"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => startRename('file', file)}
+                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                            title="이름 변경"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFile(file.id)}
                             className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
                             title="삭제"
                           >
