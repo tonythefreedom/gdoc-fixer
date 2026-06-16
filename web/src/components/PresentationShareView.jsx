@@ -159,7 +159,11 @@ export default function PresentationShareView() {
   const displayH = SLIDE_H * scale;
 
   const slide = slides[index] || '';
-  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:${SLIDE_W}px;height:${SLIDE_H}px;overflow:hidden;background:#fff;}</style></head><body>${injectMathJax(patchYoutubeThumbnails(slide))}</body></html>`;
+  // SlideEditor / SlidePresentMode 와 동일한 reset 만 적용. body 에 폭/높이를
+  // 강제하면 슬라이드 root div 의 자체 width:1280px / height:720px 와 충돌해
+  // 우측이 잘려나가는 슬라이드가 생긴다 (Strategy Dashboard 등에서 우상단
+  // 'Last updated' 라벨이 잘리는 현상).
+  const srcDoc = `<style>html,body{margin:0;padding:0;overflow:hidden}</style>${injectMathJax(patchYoutubeThumbnails(slide))}`;
 
   const title = data?.name || '공유된 프리젠테이션';
 
