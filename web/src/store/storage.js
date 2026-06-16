@@ -168,7 +168,12 @@ export async function uploadBlobToGcs(path, blob) {
 
 export function dataUriToBlob(dataUri) {
   const [header, b64] = dataUri.split(',');
-  const mime = header.match(/:(.*?);/)[1];
+  if (!header || !b64) throw new Error('invalid data URI: missing header or payload');
+  const mimeMatch = header.match(/:(.*?);/);
+  if (!mimeMatch) throw new Error('invalid data URI: missing mime');
+  const mime = mimeMatch[1];
+  // 일부 LLM 결과는 base64 가 잘리거나 비-base64 문자가 섞여서 atob 가 실패.
+  // 호출측이 try/catch 로 잡고 원본 dataUri 를 유지하도록 throw 한다.
   const bytes = atob(b64);
   const arr = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
@@ -183,11 +188,18 @@ export async function uploadSlideImages(uid, presId, slideIndex, html) {
 
   let result = html;
   const uploads = matches.map(async (dataUri, i) => {
-    const blob = dataUriToBlob(dataUri);
-    const ext = blob.type.split('/')[1].replace('+xml', '');
-    const path = `wiki-images/slides/${uid}/${presId}/s${slideIndex}_${i}_${Date.now()}.${ext}`;
-    const url = await uploadBlobToGcs(path, blob);
-    result = result.replaceAll(dataUri, url);
+    try {
+      const blob = dataUriToBlob(dataUri);
+      const ext = blob.type.split('/')[1].replace('+xml', '');
+      const path = `wiki-images/slides/${uid}/${presId}/s${slideIndex}_${i}_${Date.now()}.${ext}`;
+      const url = await uploadBlobToGcs(path, blob);
+      result = result.replaceAll(dataUri, url);
+    } catch (err) {
+      // 손상된 base64 (LLM 결과에서 truncated / 잘못된 char 포함) 는 업로드
+      // 스킵하고 원본 dataUri 를 슬라이드에 그대로 남겨둔다. 전체 modify
+      // 흐름이 깨지지 않도록.
+      console.warn('[uploadSlideImages] 손상된 dataUri 업로드 스킵:', err.message);
+    }
   });
 
   await Promise.all(uploads);
@@ -202,11 +214,15 @@ export async function uploadDocumentImages(uid, html) {
 
   let result = html;
   const uploads = matches.map(async (dataUri, i) => {
-    const blob = dataUriToBlob(dataUri);
-    const ext = blob.type.split('/')[1].replace('+xml', '');
-    const path = `wiki-images/docs/${uid}/doc_${Date.now()}_${i}.${ext}`;
-    const url = await uploadBlobToGcs(path, blob);
-    result = result.replaceAll(dataUri, url);
+    try {
+      const blob = dataUriToBlob(dataUri);
+      const ext = blob.type.split('/')[1].replace('+xml', '');
+      const path = `wiki-images/docs/${uid}/doc_${Date.now()}_${i}.${ext}`;
+      const url = await uploadBlobToGcs(path, blob);
+      result = result.replaceAll(dataUri, url);
+    } catch (err) {
+      console.warn('[uploadDocumentImages] 손상된 dataUri 업로드 스킵:', err.message);
+    }
   });
 
   await Promise.all(uploads);
