@@ -493,12 +493,20 @@ function withCurrentDate(systemPrompt) {
 }
 
 async function callProModel(systemPrompt, userText, options = {}) {
-  const { maxOutputTokens = 32768, temperature = 0.7, thinkingBudget } = options;
+  const {
+    maxOutputTokens = 32768,
+    temperature = 0.7,
+    thinkingBudget,
+    responseMimeType, // 'application/json' 으로 강제 가능 (구조화 응답)
+  } = options;
   const generationConfig = { temperature, maxOutputTokens };
   // Gemini 2.5 Pro는 thinking 토큰이 maxOutputTokens 안에 포함되며 thinking 완전 비활성(0)은 불가.
   // 단순 변환 작업은 최소값(128)을 주어 thinking이 응답 공간을 잡아먹지 못하게 한다.
   if (typeof thinkingBudget === 'number') {
     generationConfig.thinkingConfig = { thinkingBudget };
+  }
+  if (responseMimeType) {
+    generationConfig.responseMimeType = responseMimeType;
   }
   const res = await fetch(PRO_URL, {
     method: 'POST',
@@ -1497,18 +1505,49 @@ Output JSON only. No surrounding text.`;
  * "invalid 한 백슬래시 이스케이프" 만 안전하게 보정한다.
  */
 function safeParseLlmJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch (e1) {
-    const fixed = text.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
-    try {
-      const parsed = JSON.parse(fixed);
-      console.warn('[safeParseLlmJson] invalid LaTeX-style backslash 자동 보정으로 parse 성공');
-      return parsed;
-    } catch (e2) {
-      throw e1;
+  const tryParse = (s) => {
+    try { return [true, JSON.parse(s)]; } catch (e) { return [false, e]; }
+  };
+
+  // 1) 원본 그대로
+  let [ok, result] = tryParse(text);
+  if (ok) return result;
+
+  // 2) 코드 펜스 / leading prose / trailing prose 제거 — 첫 `{` 부터 마지막 `}` 까지만
+  //    (`[` ~ `]` 도 시도)
+  const first = Math.min(
+    ...['{', '['].map((c) => {
+      const i = text.indexOf(c);
+      return i === -1 ? Infinity : i;
+    })
+  );
+  const last = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+  if (Number.isFinite(first) && last > first) {
+    const trimmed = text.slice(first, last + 1);
+    [ok, result] = tryParse(trimmed);
+    if (ok) {
+      console.warn('[safeParseLlmJson] prose 제거 후 parse 성공');
+      return result;
+    }
+    // 3) trimmed 위에 LaTeX-style invalid backslash 보정
+    const fixed = trimmed.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+    [ok, result] = tryParse(fixed);
+    if (ok) {
+      console.warn('[safeParseLlmJson] invalid backslash 보정 후 parse 성공');
+      return result;
     }
   }
+
+  // 4) 원본에 invalid backslash 보정만 적용
+  const fixedOnly = text.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+  [ok, result] = tryParse(fixedOnly);
+  if (ok) {
+    console.warn('[safeParseLlmJson] invalid backslash 보정 후 parse 성공');
+    return result;
+  }
+
+  // 모든 시도 실패 — 원본 에러 던짐
+  throw result instanceof Error ? result : new Error('JSON parse failed');
 }
 
 export async function planUserContentForFormatting(brief) {
@@ -1519,7 +1558,12 @@ export async function planUserContentForFormatting(brief) {
   const text = await callProModel(
     PLANNING_CUSTOM_EXTRACT_PROMPT,
     `User original text:\n\n${brief}`,
-    { maxOutputTokens: 65536, temperature: 0.2, thinkingBudget: 128 },
+    {
+      maxOutputTokens: 65536,
+      temperature: 0.2,
+      thinkingBudget: 128,
+      responseMimeType: 'application/json',
+    },
   );
 
   try {
@@ -1530,8 +1574,9 @@ export async function planUserContentForFormatting(brief) {
     return plan;
   } catch (parseErr) {
     if (parseErr.message === '기획안 구조가 올바르지 않습니다.') throw parseErr;
-    console.error('Custom plan JSON parse failed:', text);
-    throw new Error('기획안 구조 파싱에 실패했습니다. 다시 시도해주세요.');
+    console.error('Custom plan JSON parse failed. Raw response:\n', text);
+    const preview = (text || '').slice(0, 200).replace(/\s+/g, ' ');
+    throw new Error(`기획안 구조 파싱에 실패했습니다. 다시 시도해주세요. (응답 미리보기: ${preview}…)`);
   }
 }
 
