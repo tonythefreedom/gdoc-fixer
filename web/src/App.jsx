@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import ShareView from './components/ShareView';
+import PresentationShareView from './components/PresentationShareView';
 import LoginPage from './components/LoginPage';
 import PendingApprovalPage from './components/PendingApprovalPage';
 import { isShareUrl } from './utils/shareUrl';
+import { isPresentationShareUrl } from './utils/presentationShareUrl';
 import useAuthStore from './store/useAuthStore';
 import useAppStore from './store/useAppStore';
 import useSlideStore from './store/useSlideStore';
@@ -12,6 +14,7 @@ import { Loader2 } from 'lucide-react';
 
 function App() {
   const [isShare, setIsShare] = useState(() => isShareUrl());
+  const [isPresShare] = useState(() => isPresentationShareUrl());
   const user = useAuthStore((s) => s.user);
   const userProfile = useAuthStore((s) => s.userProfile);
   const loading = useAuthStore((s) => s.loading);
@@ -43,7 +46,10 @@ function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Share view is publicly accessible
+  // 공유 뷰는 인증 없이 접근 가능
+  if (isPresShare) {
+    return <PresentationShareView />;
+  }
   if (isShare) {
     return <ShareView />;
   }

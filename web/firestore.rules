@@ -14,6 +14,13 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
+    // 공유 프리젠테이션: 누구나 읽기, 인증된 사용자 생성, 소유자만 삭제
+    match /presentations-shared/{shareId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
     // 유저 프로필
     match /userProfiles/{uid} {
       // 수퍼관리자: 전체 프로필 읽기/수정 가능

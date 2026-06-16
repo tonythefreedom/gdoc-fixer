@@ -1,17 +1,31 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus, Play, Share2, Copy, Check, ExternalLink } from 'lucide-react';
 import SlidePresentMode from './SlidePresentMode';
 import useSlideStore from '../../store/useSlideStore';
+import useAuthStore from '../../store/useAuthStore';
 import { usePdfExport } from '../../hooks/usePdfExport';
 import { usePptxExport } from '../../hooks/usePptxExport';
 import { patchYoutubeThumbnails } from '../../utils/youtubeThumbnail.js';
 import { injectMathJax } from '../../utils/injectMathJax.js';
+import { generatePresentationShareUrl } from '../../utils/presentationShareUrl';
 
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
 
 export default function SlideEditor() {
   const [presentMode, setPresentMode] = useState(false);
+  // 공유 링크 생성 모달 상태
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const user = useAuthStore((s) => s.user);
+  // 슬라이드 내용이 바뀌면 캐시된 share URL 무효화 (사용자가 다음에 공유 버튼
+  // 누르면 최신 내용으로 새 링크 생성됨)
+  useEffect(() => {
+    setShareUrl(null);
+  }, [slides, activePresentationId]);
   const slides = useSlideStore((s) => s.slides);
   const slideHistories = useSlideStore((s) => s.slideHistories);
   const currentSlideIndex = useSlideStore((s) => s.currentSlideIndex);
@@ -254,6 +268,37 @@ export default function SlideEditor() {
           <Play className="w-3.5 h-3.5" />
           슬라이드쇼
         </button>
+        <button
+          onClick={async () => {
+            if (shareLoading || !slides.length) return;
+            setShareModalOpen(true);
+            setShareError(null);
+            setShareCopied(false);
+            // 이미 생성된 URL 이 있으면 재사용 (모달 재오픈 시 즉시 표시)
+            if (shareUrl) return;
+            setShareLoading(true);
+            try {
+              const pres = presentations.find((p) => p.id === activePresentationId);
+              const url = await generatePresentationShareUrl(
+                slides,
+                user?.uid,
+                pres?.name || '프리젠테이션'
+              );
+              setShareUrl(url);
+            } catch (err) {
+              console.error('Presentation share failed:', err);
+              setShareError(err?.message || '공유 링크 생성 실패');
+            } finally {
+              setShareLoading(false);
+            }
+          }}
+          disabled={!slides.length}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="공유 링크 생성"
+        >
+          <Share2 className="w-3.5 h-3.5" />
+          공유 링크
+        </button>
         <div className="relative" ref={exportMenuRef}>
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
@@ -300,6 +345,77 @@ export default function SlideEditor() {
         </div>
         </div>
       </div>
+
+      {shareModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setShareModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-emerald-500" />
+                <h2 className="text-base font-semibold text-slate-800">프리젠테이션 공유 링크</h2>
+              </div>
+              <button
+                onClick={() => setShareModalOpen(false)}
+                className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-5">
+              {shareLoading && (
+                <div className="flex flex-col items-center py-6">
+                  <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-3" />
+                  <p className="text-sm text-slate-700 font-medium">공유 링크 생성 중...</p>
+                  <p className="text-xs text-slate-500 mt-1">이미지 GCS 업로드 → Firestore 저장</p>
+                </div>
+              )}
+              {!shareLoading && shareError && (
+                <div className="text-sm text-red-600 break-words">{shareError}</div>
+              )}
+              {!shareLoading && !shareError && shareUrl && (
+                <>
+                  <p className="text-xs text-slate-500 mb-2">
+                    링크를 가진 누구나 슬라이드뷰로 볼 수 있습니다. (인증 불필요)
+                  </p>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-700 break-all font-mono">
+                    {shareUrl}
+                  </div>
+                  <div className="mt-4 flex gap-2 justify-end">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(shareUrl);
+                          setShareCopied(true);
+                          setTimeout(() => setShareCopied(false), 2000);
+                        } catch (e) { /* clipboard 차단 시 무시 */ }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                    >
+                      {shareCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                      {shareCopied ? '복사됨' : 'URL 복사'}
+                    </button>
+                    <a
+                      href={shareUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      새 탭에서 열기
+                    </a>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {presentMode && (
         <SlidePresentMode
