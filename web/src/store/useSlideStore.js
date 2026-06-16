@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { convertHtmlToSlides, modifySlideHtml, modifyAllSlidesHtml, fixSingleSlideViewport, renderSlideToBase64 } from '../utils/geminiApi';
+import { convertHtmlToSlides, modifySlideHtml, modifyAllSlidesHtml, fixSingleSlideViewport, renderSlideToBase64, generateSingleSlide } from '../utils/geminiApi';
 import { migrateDesignSystemId } from '../utils/slideDesignSystems';
 import {
   loadPresentationList,
@@ -20,6 +20,7 @@ const useSlideStore = create((set, get) => ({
   isGenerating: false,
   modifyingSlideIndices: [],
   isModifyingAll: false,
+  isInsertingSlide: false,
   presentationSnapshots: [],
   uid: null,
 
@@ -328,6 +329,77 @@ const useSlideStore = create((set, get) => ({
       alert(`전체 슬라이드 수정 실패: ${msg}`);
     } finally {
       set({ isModifyingAll: false });
+    }
+  },
+
+  /**
+   * 현재 슬라이드 앞/뒤에 새 슬라이드를 Gemini 로 생성해 삽입한다.
+   * - currentIndex 의 'before' = currentIndex 위치, 'after' = currentIndex + 1.
+   * - 새 슬라이드는 deck 의 selectedDesignSystemId 와 인접 슬라이드를
+   *   참조해 동일한 톤으로 생성.
+   * - slideHistories 도 같은 위치에 새 빈 히스토리 entry 삽입.
+   * - 삽입 후 currentSlideIndex 를 새 슬라이드 위치로 이동.
+   */
+  insertSlideAt: async (currentIndex, position, prompt) => {
+    const {
+      slides,
+      slideHistories,
+      uid,
+      activePresentationId,
+      selectedDesignSystemId,
+    } = get();
+    if (!Array.isArray(slides) || slides.length === 0) return;
+    if (currentIndex < 0 || currentIndex >= slides.length) return;
+    if (!prompt || !prompt.trim()) return;
+
+    const insertAt = position === 'before' ? currentIndex : currentIndex + 1;
+    const prevSlideHtml = insertAt - 1 >= 0 ? slides[insertAt - 1] : null;
+    const nextSlideHtml = insertAt < slides.length ? slides[insertAt] : null;
+
+    set({ isInsertingSlide: true });
+    try {
+      const newSlideHtml = await generateSingleSlide({
+        prompt: prompt.trim(),
+        designSystemId: selectedDesignSystemId,
+        prevSlideHtml,
+        nextSlideHtml,
+        totalSlideCount: slides.length,
+        insertPosition: position,
+      });
+
+      const newSlides = [
+        ...slides.slice(0, insertAt),
+        newSlideHtml,
+        ...slides.slice(insertAt),
+      ];
+      const newHistories = [
+        ...slideHistories.slice(0, insertAt),
+        [{ html: newSlideHtml, createdAt: Date.now(), reason: '신규 슬라이드' }],
+        ...slideHistories.slice(insertAt),
+      ];
+
+      set({
+        slides: newSlides,
+        slideHistories: newHistories,
+        currentSlideIndex: insertAt,
+      });
+
+      if (uid && activePresentationId) {
+        await updatePresentationSlides(uid, activePresentationId, newSlides, newHistories);
+        set((state) => ({
+          presentations: state.presentations.map((p) =>
+            p.id === activePresentationId
+              ? { ...p, slides: newSlides, slideHistories: newHistories, updatedAt: Date.now() }
+              : p
+          ),
+        }));
+      }
+    } catch (err) {
+      console.error('슬라이드 삽입 실패:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`슬라이드 삽입 실패: ${msg}`);
+    } finally {
+      set({ isInsertingSlide: false });
     }
   },
 

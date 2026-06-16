@@ -833,6 +833,79 @@ function logSlideCountChange(result, originals) {
   return patchYoutubeThumbnails(result);
 }
 
+/**
+ * 단일 슬라이드 신규 생성 (deck 의 디자인 시스템 + 주변 슬라이드 컨텍스트를
+ * 이어받아 동일 톤으로). adjacentSlides 는 [prev, next] 양쪽 슬라이드 HTML
+ * (없으면 null) 을 넘긴다.
+ */
+export async function generateSingleSlide({
+  prompt,
+  designSystemId,
+  prevSlideHtml = null,
+  nextSlideHtml = null,
+  totalSlideCount = null,
+  insertPosition = null, // 'before' | 'after'
+}) {
+  if (!API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const designBlock = designSystemId ? buildDesignSystemPromptBlock(designSystemId) : '';
+
+  const systemPrompt = `${`You are an expert who generates a SINGLE 16:9 presentation slide that will be inserted into an existing slide deck.
+
+The new slide must visually match the existing deck — palette, typography, layout grid, bullet alignment, header / footer treatments — so that a viewer cannot tell which slide was added later.
+
+Rules:
+- Output exactly ONE slide: a single <div style="width:1280px;height:720px;overflow:hidden;position:relative;...">…</div>.
+- Inline CSS only. NO external CSS/JS/font/image references.
+- All width, height, top, left, padding, margin, font-size values MUST use px units.
+- All content fits inside 1280×720px. overflow:hidden on the root.
+- Apply the SAME design system already used by the deck (provided below) — palette, typography, layout, bullets.
+- Use the surrounding slide(s) as the reference for header/footer position, page-number style, gutter padding, bullet style, etc.
+- Korean font: 'Noto Sans KR', sans-serif.
+- All natural-language text in Korean (한국어).
+- Output ONLY the slide HTML — no surrounding prose, no SLIDE_DELIMITER, no markdown fences.
+`}${BULLET_ALIGNMENT_RULES}${designBlock ? `\n\n${designBlock}` : ''}`;
+
+  const surroundingDigest = (label, html) => {
+    if (!html) return `${label}: (none)`;
+    const stripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400);
+    return `${label} text digest:\n${stripped}`;
+  };
+
+  const userText = `Existing deck context:
+- Total existing slides: ${totalSlideCount ?? '?'}
+- New slide will be inserted ${insertPosition === 'before' ? 'BEFORE the current slide' : insertPosition === 'after' ? 'AFTER the current slide' : 'at the requested position'}.
+
+${surroundingDigest('Previous adjacent slide', prevSlideHtml)}
+
+${surroundingDigest('Next adjacent slide', nextSlideHtml)}
+
+The previous adjacent slide's full HTML (use it as the VISUAL TEMPLATE — copy header/footer style, gutter padding, bullet style, page-number style):
+${prevSlideHtml || '(no previous slide)'}
+
+The next adjacent slide's full HTML (also a visual reference):
+${nextSlideHtml || '(no next slide)'}
+
+User instruction for the new slide content:
+${prompt}
+
+Emit only the new slide HTML.`;
+
+  let html = await callProModel(systemPrompt, userText, {
+    maxOutputTokens: 32768,
+    temperature: 0.4,
+    thinkingBudget: 256,
+  });
+  html = stripCodeFences(html).trim();
+  // delimiter 가 섞여서 들어오면 첫 번째 슬라이드만 남김.
+  if (html.includes(SLIDE_DELIMITER)) {
+    html = html.split(SLIDE_DELIMITER)[0].trim();
+  }
+  return patchYoutubeThumbnails(html);
+}
+
 export async function modifyAllSlidesHtml(allSlides, instruction) {
   if (!API_KEY) {
     throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus, Play, Share2, Copy, Check, ExternalLink, AlignLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus, Play, Share2, Copy, Check, ExternalLink, AlignLeft, FileSymlink, FilePlus2 } from 'lucide-react';
 import SlidePresentMode from './SlidePresentMode';
 import useSlideStore from '../../store/useSlideStore';
 import { usePdfExport } from '../../hooks/usePdfExport';
@@ -34,8 +34,15 @@ export default function SlideEditor() {
   const revertToSnapshot = useSlideStore((s) => s.revertToSnapshot);
 
   const insertImageToSlide = useSlideStore((s) => s.insertImageToSlide);
+  const insertSlideAt = useSlideStore((s) => s.insertSlideAt);
+  const isInsertingSlide = useSlideStore((s) => s.isInsertingSlide);
   const { exportSlidesToPdf, pdfLoading } = usePdfExport();
   const { exportSlidesToPptx, pptxLoading } = usePptxExport();
+
+  // 슬라이드 삽입 모달
+  const [insertModalOpen, setInsertModalOpen] = useState(false);
+  const [insertPosition, setInsertPosition] = useState('after'); // 'before' | 'after'
+  const [insertPrompt, setInsertPrompt] = useState('');
 
   // 슬라이드 내용이 바뀌면 캐시된 share URL 무효화 (사용자가 다음에 공유 버튼
   // 누르면 최신 내용으로 새 링크 생성됨). slides / activePresentationId 가
@@ -290,6 +297,32 @@ export default function SlideEditor() {
           블릿 정렬
         </button>
         <button
+          onClick={() => {
+            setInsertPosition('before');
+            setInsertPrompt('');
+            setInsertModalOpen(true);
+          }}
+          disabled={!slides.length || isInsertingSlide}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="현재 슬라이드 앞에 새 슬라이드 삽입"
+        >
+          <FileSymlink className="w-3.5 h-3.5 rotate-180" />
+          앞 삽입
+        </button>
+        <button
+          onClick={() => {
+            setInsertPosition('after');
+            setInsertPrompt('');
+            setInsertModalOpen(true);
+          }}
+          disabled={!slides.length || isInsertingSlide}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="현재 슬라이드 뒤에 새 슬라이드 삽입"
+        >
+          <FilePlus2 className="w-3.5 h-3.5" />
+          뒤 삽입
+        </button>
+        <button
           onClick={async () => {
             if (shareLoading || !slides.length) return;
             setShareModalOpen(true);
@@ -439,6 +472,85 @@ export default function SlideEditor() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {insertModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => { if (!isInsertingSlide) setInsertModalOpen(false); }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                {insertPosition === 'before' ? (
+                  <FileSymlink className="w-5 h-5 text-cyan-600 rotate-180" />
+                ) : (
+                  <FilePlus2 className="w-5 h-5 text-cyan-600" />
+                )}
+                <h2 className="text-base font-semibold text-slate-800">
+                  슬라이드 {insertPosition === 'before' ? '앞' : '뒤'}에 새 슬라이드 삽입
+                </h2>
+              </div>
+              <button
+                onClick={() => setInsertModalOpen(false)}
+                disabled={isInsertingSlide}
+                className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-5">
+              <p className="text-xs text-slate-500 mb-2">
+                현재 슬라이드({currentSlideIndex + 1}/{slides.length}) 의{' '}
+                <span className="font-semibold text-slate-700">
+                  {insertPosition === 'before' ? '앞' : '뒤'}
+                </span>
+                에 deck 의 디자인 시스템을 그대로 따라 새 슬라이드를 생성합니다.
+              </p>
+              <textarea
+                value={insertPrompt}
+                onChange={(e) => setInsertPrompt(e.target.value)}
+                placeholder="예: 본 협동조합의 핵심 가치 3가지를 카드 형태로 강조한 슬라이드"
+                disabled={isInsertingSlide}
+                className="w-full h-32 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-50 disabled:cursor-wait resize-none"
+                autoFocus
+              />
+              <div className="mt-4 flex gap-2 justify-end">
+                <button
+                  onClick={() => setInsertModalOpen(false)}
+                  disabled={isInsertingSlide}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!insertPrompt.trim() || isInsertingSlide) return;
+                    await insertSlideAt(currentSlideIndex, insertPosition, insertPrompt);
+                    setInsertModalOpen(false);
+                  }}
+                  disabled={!insertPrompt.trim() || isInsertingSlide}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isInsertingSlide ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      생성 중...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      슬라이드 생성·삽입
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
