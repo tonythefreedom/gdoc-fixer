@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus, Play, Share2, Copy, Check, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus, Play, Share2, Copy, Check, ExternalLink, AlignLeft } from 'lucide-react';
 import SlidePresentMode from './SlidePresentMode';
 import useSlideStore from '../../store/useSlideStore';
 import { usePdfExport } from '../../hooks/usePdfExport';
@@ -266,6 +266,28 @@ export default function SlideEditor() {
         >
           <Play className="w-3.5 h-3.5" />
           슬라이드쇼
+        </button>
+        <button
+          onClick={() => {
+            if (!slides.length || isModifyingAll) return;
+            const instruction = [
+              '모든 슬라이드의 bullet / 리스트 정렬을 deck 전체에서 통일하라.',
+              '- 모든 슬라이드의 bullet item 좌측 시작 X 좌표를 동일하게 (슬라이드 표준 좌측 padding 기준).',
+              '- top-level 마커는 하나로 통일(• 권장). sub-bullet 마커도 하나로 통일(– 또는 ▸).',
+              '- 마커와 텍스트 사이 12px 고정 간격. <li> 에 text-indent:-16px; padding-left:28px; 또는 grid 2-column 으로 hanging indent 보장.',
+              '- 같은 hierarchy level 의 bullet 은 font-size, font-weight, line-height, color 가 동일.',
+              '- bullet 간 vertical gap 12–16px 로 동일.',
+              '- 콘텐츠(문구) 자체는 그대로 두고 정렬/스타일만 통일하라.',
+              '- 슬라이드 1280×720 viewport 안에 모든 콘텐츠가 들어가도록 유지.',
+            ].join('\n');
+            modifyAllSlides(instruction);
+          }}
+          disabled={!slides.length || isModifyingAll}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="전체 슬라이드의 블릿 들여쓰기 / 마커 / 간격을 일괄 정렬"
+        >
+          <AlignLeft className="w-3.5 h-3.5" />
+          블릿 정렬
         </button>
         <button
           onClick={async () => {

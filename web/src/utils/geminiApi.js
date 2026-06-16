@@ -115,6 +115,36 @@ async function toFilePart(base64Data, mimeType = 'image/png') {
 
 // ─── Prompts ───
 
+/**
+ * 슬라이드 전반에 적용되는 블릿 정렬 가이드. SYSTEM_PROMPT 와 MODIFY_*
+ * 프롬프트에 공통으로 인터폴레이션하여 deck 전체의 블릿이 같은 들여쓰기,
+ * 같은 마커, 같은 줄간격, 같은 hanging indent 로 유지되게 한다.
+ */
+const BULLET_ALIGNMENT_RULES = `
+[Bullet alignment — apply CONSISTENTLY across ALL slides in the deck]
+- Every bullet item (whether <ul>/<li>, <ol>/<li>, or div-based custom bullets)
+  must share the SAME left-edge X coordinate on its slide. Recommended gutter:
+  the slide's standard content-left padding (typically 60–80px from the slide edge).
+- Use ONE bullet marker style across the entire deck for top-level items
+  (default: •, U+2022). Sub-bullets use a SINGLE distinct style across the deck
+  (default: – or ▸). NEVER mix marker styles within the same hierarchy level.
+- Gap between the marker and the first character of the bullet text is fixed
+  (recommended: 12px). Use either:
+    <li style="list-style:none; padding-left:28px; text-indent:-16px;">• …</li>
+  or grid/flex two-column rows with a fixed marker column width.
+- Hanging indent: when a bullet wraps to a second line, the wrapped text MUST
+  align with the first character of the first line, NOT with the bullet marker.
+  Achieve this with text-indent:-16px; padding-left:28px on each <li>, or
+  display:grid; grid-template-columns: 16px 1fr.
+- Sub-bullets indent +28px from their parent's text-start position.
+- Vertical gap between consecutive bullets is identical across slides
+  (recommended: 12–16px via margin-bottom).
+- Bullet text font-size, font-weight, line-height, and color are identical for
+  every bullet at the same hierarchy level across the deck.
+- NEVER vary bullet indent, marker, or spacing within the same hierarchy level
+  on the same slide or across slides.
+`.trim();
+
 const SYSTEM_PROMPT = `You are an expert who converts HTML content into 16:9 presentation slides.
 
 Analyse the given HTML and recompose it into proposal / presentation-style slides.
@@ -148,6 +178,8 @@ Rules:
 - NEVER reference external resources (font CDNs, etc.).
 - All natural-language text inside the slides must remain in Korean (한국어).
 
+${BULLET_ALIGNMENT_RULES}
+
 Response format: emit each slide's HTML separated by the delimiter ${SLIDE_DELIMITER}.
 Output the slide HTML only — no surrounding prose.
 
@@ -178,6 +210,9 @@ Rules:
 - NEVER use external image URLs (http/https).
 - base64 data URI images (<img src="data:image/png;base64,..."/>) are allowed. Keep any existing data URI images in the slide as-is.
 - NEVER reference external resources (font CDNs, etc.).
+
+${BULLET_ALIGNMENT_RULES}
+
 - Output the modified slide HTML only — no surrounding prose, HTML only.
 - All natural-language text inside the HTML must remain in Korean (한국어).`;
 
@@ -206,6 +241,9 @@ Rules:
 - Adjust image size and position to fit the slide layout.
 - Keep any existing data URI images in the slide as-is.
 - NEVER reference external resources.
+
+${BULLET_ALIGNMENT_RULES}
+
 - Output the modified slide HTML only — no surrounding prose.
 - All natural-language text inside the HTML must remain in Korean (한국어).`;
 
@@ -740,6 +778,9 @@ Rules:
 - Keep any existing data URI images in the slides as-is.
 - NEVER reference external resources (font CDNs, etc.).
 - Apply the modification consistently to every slide (e.g. if a background-colour change is requested, change every slide's background colour).
+
+${BULLET_ALIGNMENT_RULES}
+
 - Emit the modified slide HTMLs separated by ${SLIDE_DELIMITER}.
 - Output the slide HTML only — no surrounding prose.
 - All natural-language text inside the slides must remain in Korean (한국어).`;
@@ -777,6 +818,9 @@ Rules:
 - Keep any existing data URI images in the slides as-is.
 - NEVER reference external resources.
 - Apply the modification consistently to every slide.
+
+${BULLET_ALIGNMENT_RULES}
+
 - Emit the modified slide HTMLs separated by ${SLIDE_DELIMITER}.
 - Output the slide HTML only — no surrounding prose.
 - All natural-language text inside the slides must remain in Korean (한국어).`;
