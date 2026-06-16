@@ -2,12 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, Download, Send, History, RotateCcw, ChevronDown, ChevronUp, Layers, X, ImagePlus, Play, Share2, Copy, Check, ExternalLink } from 'lucide-react';
 import SlidePresentMode from './SlidePresentMode';
 import useSlideStore from '../../store/useSlideStore';
-import useAuthStore from '../../store/useAuthStore';
 import { usePdfExport } from '../../hooks/usePdfExport';
 import { usePptxExport } from '../../hooks/usePptxExport';
 import { patchYoutubeThumbnails } from '../../utils/youtubeThumbnail.js';
 import { injectMathJax } from '../../utils/injectMathJax.js';
-import { generatePresentationShareUrl } from '../../utils/presentationShareUrl';
 
 const SLIDE_W = 1280;
 const SLIDE_H = 720;
@@ -20,7 +18,6 @@ export default function SlideEditor() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
-  const user = useAuthStore((s) => s.user);
   // 슬라이드 내용이 바뀌면 캐시된 share URL 무효화 (사용자가 다음에 공유 버튼
   // 누르면 최신 내용으로 새 링크 생성됨)
   useEffect(() => {
@@ -278,6 +275,12 @@ export default function SlideEditor() {
             if (shareUrl) return;
             setShareLoading(true);
             try {
+              // 동적 import 로 모듈 초기화 사이클 회피
+              const [{ generatePresentationShareUrl }, { default: useAuthStore }] = await Promise.all([
+                import('../../utils/presentationShareUrl'),
+                import('../../store/useAuthStore'),
+              ]);
+              const user = useAuthStore.getState().user;
               const pres = presentations.find((p) => p.id === activePresentationId);
               const url = await generatePresentationShareUrl(
                 slides,
