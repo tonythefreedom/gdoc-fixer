@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import Layout from './components/Layout';
 import ShareView from './components/ShareView';
-import PresentationShareView from './components/PresentationShareView';
 import LoginPage from './components/LoginPage';
 import PendingApprovalPage from './components/PendingApprovalPage';
 import { isShareUrl } from './utils/shareUrl';
-import { isPresentationShareUrl } from './utils/presentationShareUrl';
+
+// PresentationShareView 와 그 의존성(presentationShareUrl/storage 등) 을 main
+// bundle 의 init 사이클에서 제외하기 위해 lazy 로드. /p/ 경로일 때만 평가됨.
+const PresentationShareView = lazy(() => import('./components/PresentationShareView'));
+const isPresentationShareUrl = () => window.location.pathname.startsWith('/p/');
 import useAuthStore from './store/useAuthStore';
 import useAppStore from './store/useAppStore';
 import useSlideStore from './store/useSlideStore';
@@ -48,7 +51,17 @@ function App() {
 
   // 공유 뷰는 인증 없이 접근 가능
   if (isPresShare) {
-    return <PresentationShareView />;
+    return (
+      <Suspense
+        fallback={
+          <div className="w-full h-screen flex items-center justify-center bg-slate-900 text-slate-300">
+            <Loader2 className="w-8 h-8 animate-spin" />
+          </div>
+        }
+      >
+        <PresentationShareView />
+      </Suspense>
+    );
   }
   if (isShare) {
     return <ShareView />;
