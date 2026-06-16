@@ -420,6 +420,11 @@ export function listDesignSystems() {
 export function buildDesignSystemPromptBlock(designSystemId) {
   const ds = getDesignSystem(designSystemId);
   if (!ds) return '';
+  // promptHint 에 placeholder 로 박힌 YYYY-MM-DD 를 오늘 날짜로 치환.
+  // (Gemini 가 placeholder 를 그대로 출력하거나 "Last updated: 20" 처럼
+  // 일부만 채워 넣는 현상 방지)
+  const today = new Date().toISOString().slice(0, 10);
+  const hint = ds.promptHint.replace(/YYYY-MM-DD/g, today);
   return `
 
 ========================================
@@ -428,7 +433,7 @@ APPLY THIS DESIGN SYSTEM TO EVERY SLIDE:
 Name: ${ds.name} (${ds.nameEn})
 Identity: ${ds.description}
 
-${ds.promptHint}
+${hint}
 
 Color tokens (use these exact values inline):
 - background: ${ds.palette.background}

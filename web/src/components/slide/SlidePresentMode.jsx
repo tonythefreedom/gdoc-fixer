@@ -118,10 +118,9 @@ export default function SlidePresentMode({ slides, startIndex = 0, onClose }) {
     }
   };
 
-  // 16:9 비율 유지하면서 가능한 한 크게. 5% letterbox 여유로 상단 컨트롤
-  // 바 / 슬라이드 자체 우측 padding 과 겹쳐 우측·상단이 잘려보이는 현상 방지.
+  // 16:9 비율 유지하면서 가능한 한 크게
   const scale = stageSize.w && stageSize.h
-    ? Math.min(stageSize.w / SLIDE_W, stageSize.h / SLIDE_H) * 0.95
+    ? Math.min(stageSize.w / SLIDE_W, stageSize.h / SLIDE_H)
     : 1;
   const displayW = SLIDE_W * scale;
   const displayH = SLIDE_H * scale;
