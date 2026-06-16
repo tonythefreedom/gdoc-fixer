@@ -163,12 +163,15 @@ export default function Sidebar() {
     cancelPlanning();
     clearActivePresentation();
     setActiveFile(fileId);
+    // 컨텐츠 페이지에 있을 때 사이드바에서 선택해도 에디터로 전환되도록.
+    setCurrentView('editor');
   };
 
   const handleSelectPresentation = (presId) => {
     cancelPlanning();
     setActiveFile(null);
     setActivePresentation(presId);
+    setCurrentView('editor');
   };
 
   const handleCopyShareUrl = (e, shareId) => {

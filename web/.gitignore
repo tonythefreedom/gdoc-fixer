@@ -28,3 +28,6 @@ serviceAccountKey.json
 *.njsproj
 *.sln
 *.sw?
+storage-state.json
+test-results/
+playwright-report/
