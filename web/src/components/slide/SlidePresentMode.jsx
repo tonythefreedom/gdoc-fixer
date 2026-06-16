@@ -118,15 +118,19 @@ export default function SlidePresentMode({ slides, startIndex = 0, onClose }) {
     }
   };
 
-  // 16:9 비율 유지하면서 가능한 한 크게
+  // 16:9 비율 유지하면서 가능한 한 크게. 5% letterbox 여유로 상단 컨트롤
+  // 바 / 슬라이드 자체 우측 padding 과 겹쳐 우측·상단이 잘려보이는 현상 방지.
   const scale = stageSize.w && stageSize.h
-    ? Math.min(stageSize.w / SLIDE_W, stageSize.h / SLIDE_H)
+    ? Math.min(stageSize.w / SLIDE_W, stageSize.h / SLIDE_H) * 0.95
     : 1;
   const displayW = SLIDE_W * scale;
   const displayH = SLIDE_H * scale;
 
   const slide = slides[index] || '';
-  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:${SLIDE_W}px;height:${SLIDE_H}px;overflow:hidden;background:#fff;}</style></head><body>${injectMathJax(patchYoutubeThumbnails(slide))}</body></html>`;
+  // body 폭/높이 강제 reset 은 슬라이드 root 와 충돌해 잘림을 만든다. SlideEditor
+  // 와 동일한 단순 reset + body>div overflow:visible 로 viewport 가장자리 라벨도
+  // 잘리지 않게.
+  const srcDoc = `<style>html,body{margin:0;padding:0;overflow:hidden}body>div{overflow:visible!important}</style>${injectMathJax(patchYoutubeThumbnails(slide))}`;
 
   return (
     <div

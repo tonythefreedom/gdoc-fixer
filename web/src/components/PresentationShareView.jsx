@@ -152,8 +152,11 @@ export default function PresentationShareView() {
     );
   }
 
+  // 화면을 가득 채우면 슬라이드 root 의 overflow / 상단 컨트롤 바 영역과
+  // 겹쳐 우측·상단이 잘려보이고 letterbox 가 비대칭으로 느껴진다. 5% 여유로
+  // 위/아래 letterbox 를 균형 있게 유지.
   const scale = stageSize.w && stageSize.h
-    ? Math.min(stageSize.w / SLIDE_W, stageSize.h / SLIDE_H)
+    ? Math.min(stageSize.w / SLIDE_W, stageSize.h / SLIDE_H) * 0.95
     : 1;
   const displayW = SLIDE_W * scale;
   const displayH = SLIDE_H * scale;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, FileCode, Share2, ExternalLink, Trash2, Copy, Pencil, Check, X, Presentation } from 'lucide-react';
+import { Search, FileCode, Share2, ExternalLink, Trash2, Copy, Pencil, Check, X, Presentation, Loader2 } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useShareStore from '../store/useShareStore';
 import useSlideStore from '../store/useSlideStore';
@@ -82,6 +82,37 @@ export default function ContentListPage() {
   const handleOpenPresentation = (id) => {
     setActivePresentation(id);
     setCurrentView('editor');
+  };
+
+  // 외부 공유 뷰어로 열기. 클릭 시 공유 링크를 즉시 생성하고 새 탭으로 이동.
+  // (TDZ / 모듈 사이클 방지를 위해 동적 import + useAuthStore.getState() 패턴)
+  const [sharingPresId, setSharingPresId] = useState(null);
+  const handleOpenPresentationShare = async (pres) => {
+    if (sharingPresId) return;
+    setSharingPresId(pres.id);
+    try {
+      const [{ generatePresentationShareUrl }, { default: useAuthStore }] = await Promise.all([
+        import('../utils/presentationShareUrl'),
+        import('../store/useAuthStore'),
+      ]);
+      const user = useAuthStore.getState().user;
+      const slides = Array.isArray(pres.slides) ? pres.slides : [];
+      if (!slides.length) {
+        alert('이 프리젠테이션에 슬라이드가 없어 공유할 수 없습니다.');
+        return;
+      }
+      const url = await generatePresentationShareUrl(
+        slides,
+        user?.uid,
+        pres.name || '프리젠테이션'
+      );
+      window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      console.error('공유 링크 생성 실패:', err);
+      alert(`공유 링크 생성 실패: ${err?.message || err}`);
+    } finally {
+      setSharingPresId(null);
+    }
   };
 
   const handleDeletePresentation = async (id) => {
@@ -310,9 +341,21 @@ export default function ContentListPage() {
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button
+                            onClick={() => handleOpenPresentationShare(pres)}
+                            disabled={sharingPresId === pres.id}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 rounded disabled:opacity-50 disabled:cursor-wait"
+                            title="공유 링크로 외부 슬라이드 뷰어 열기"
+                          >
+                            {sharingPresId === pres.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Share2 className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
                             onClick={() => handleOpenPresentation(pres.id)}
                             className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
-                            title="열기"
+                            title="에디터로 열기"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>
