@@ -1005,7 +1005,14 @@ export async function modifySlideHtml(currentSlideHtml, instruction, screenshotB
     const parts = await buildParts(systemPrompt, userText);
     const bodyJson = JSON.stringify({
       contents: [{ parts }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 65536 },
+      // thinkingBudget 미지정 시 Pro 2.5 가 thinking 에 maxOutputTokens 의
+      // 대부분을 소진해 응답이 MAX_TOKENS 로 잘림. 슬라이드 1장 수정은 단순
+      // 작업이라 thinking 1024 면 충분, 응답에 64k+ 토큰 확보.
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 65536,
+        thinkingConfig: { thinkingBudget: 1024 },
+      },
     });
     console.log('[callProModelWithScreenshot] request body 크기:', bodyJson.length.toLocaleString(), '자');
     const res = await fetch(PRO_URL, {
