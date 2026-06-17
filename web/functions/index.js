@@ -142,9 +142,11 @@ exports.shareOg = onRequest(async (req, res) => {
   }
 });
 
-// 봇(카카오톡 / 슬랙 / Facebook / Twitter / 디스코드 등) user-agent 감지
+// OG 메타만 필요한 unfurl 봇 user-agent 만 매칭. KAKAOTALK 전체를 잡으면
+// 카카오톡 in-app 브라우저로 링크를 여는 일반 사용자까지 봇 페이지를 보게 되어
+// 슬라이드뷰어가 안 뜬다. 카카오톡 OG fetch 봇은 'kakaotalk-scrap' 토큰 사용.
 function isSocialBot(userAgent = '') {
-  return /KAKAOTALK|kakaotalk-scrap|Slackbot|facebookexternalhit|Twitterbot|Discordbot|TelegramBot|LinkedInBot|WhatsApp|SkypeUriPreview|Embedly|Googlebot|bingbot|ChatGPT|GPTBot|Perplexity/i.test(userAgent);
+  return /kakaotalk-scrap|Slackbot|facebookexternalhit|Twitterbot|Discordbot|TelegramBot|LinkedInBot|WhatsApp|SkypeUriPreview|Embedly|Googlebot|bingbot|ChatGPT|GPTBot|Perplexity/i.test(userAgent);
 }
 
 // 슬라이드 HTML 에서 외부에서 접근 가능한 첫 이미지 URL 추출.
