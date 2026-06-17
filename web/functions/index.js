@@ -141,3 +141,100 @@ exports.shareOg = onRequest(async (req, res) => {
     res.status(500).send('Internal error');
   }
 });
+
+// 봇(카카오톡 / 슬랙 / Facebook / Twitter / 디스코드 등) user-agent 감지
+function isSocialBot(userAgent = '') {
+  return /KAKAOTALK|kakaotalk-scrap|Slackbot|facebookexternalhit|Twitterbot|Discordbot|TelegramBot|LinkedInBot|WhatsApp|SkypeUriPreview|Embedly|Googlebot|bingbot|ChatGPT|GPTBot|Perplexity/i.test(userAgent);
+}
+
+// 공유 프리젠테이션(/p/:id) — 카카오톡/슬랙 unfurl 용 OG 메타 + SPA hydrate
+exports.presentationOg = onRequest(async (req, res) => {
+  const match = req.path.match(/\/p\/([A-Za-z0-9]{8})$/);
+  if (!match) {
+    res.status(404).send('Not found');
+    return;
+  }
+  const shareId = match[1];
+
+  try {
+    const snap = await db.collection('presentations-shared').doc(shareId).get();
+    if (!snap.exists) {
+      res.status(404).send('Not found');
+      return;
+    }
+    const data = snap.data();
+    const name = data.name || '공유된 프리젠테이션';
+    const slideCount = Array.isArray(data.slides) ? data.slides.length : 0;
+    const firstSlideText = (Array.isArray(data.slides) && data.slides[0] ? data.slides[0] : '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+    const description = firstSlideText
+      ? `${firstSlideText}${firstSlideText.length >= 180 ? '…' : ''}`
+      : `슬라이드 ${slideCount}장 · GDoc Fixer 로 만든 공유 프리젠테이션`;
+
+    const ogUrl = `https://gdoc-fixer.web.app/p/${shareId}`;
+    const ogImage = 'https://gdoc-fixer.web.app/icon.png';
+    const userAgent = req.get('user-agent') || '';
+
+    const ogHeadTags = `
+  <title>${escapeHtml(name)} · 공유 프리젠테이션</title>
+  <meta property="og:title" content="${escapeHtml(name)}">
+  <meta property="og:description" content="${escapeHtml(description)}">
+  <meta property="og:image" content="${ogImage}">
+  <meta property="og:url" content="${ogUrl}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="GDoc Fixer">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${escapeHtml(name)}">
+  <meta name="twitter:description" content="${escapeHtml(description)}">
+  <meta name="twitter:image" content="${ogImage}">
+  <meta name="description" content="${escapeHtml(description)}">`.trim();
+
+    // 봇이면 OG 만 들어간 가벼운 페이지 (실제 SPA 다운로드 불필요)
+    if (isSocialBot(userAgent)) {
+      const botPage = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  ${ogHeadTags}
+</head>
+<body>
+  <h1>${escapeHtml(name)}</h1>
+  <p>${escapeHtml(description)}</p>
+  <p><a href="${ogUrl}">슬라이드 뷰어로 열기</a></p>
+</body>
+</html>`;
+      res.set('Cache-Control', 'public, max-age=300');
+      res.status(200).send(botPage);
+      return;
+    }
+
+    // 일반 사용자: SPA index.html 에 OG 메타 inject 후 그대로 응답.
+    // chunk hash 가 매 빌드마다 바뀌므로 hosting 의 최신 index.html 을 fetch.
+    let spaHtml;
+    try {
+      const indexRes = await fetch('https://gdoc-fixer.web.app/index.html', {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      spaHtml = await indexRes.text();
+    } catch (e) {
+      console.error('SPA index.html fetch 실패:', e);
+      res.redirect(302, ogUrl); // 폴백: 라우트 그대로 (실제로는 같은 path 라 무한 루프 위험 → 그냥 OG 페이지 반환)
+      return;
+    }
+
+    // <head> 안에 OG 메타 inject (기본 <title> 은 OG title 로 대체)
+    const injected = spaHtml
+      .replace(/<title>[^<]*<\/title>/i, '')
+      .replace(/<head>/i, `<head>${ogHeadTags}`);
+
+    res.set('Cache-Control', 'public, max-age=300');
+    res.status(200).send(injected);
+  } catch (err) {
+    console.error('presentationOg error:', err);
+    res.status(500).send('Internal error');
+  }
+});
