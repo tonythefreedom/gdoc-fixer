@@ -147,6 +147,45 @@ function isSocialBot(userAgent = '') {
   return /KAKAOTALK|kakaotalk-scrap|Slackbot|facebookexternalhit|Twitterbot|Discordbot|TelegramBot|LinkedInBot|WhatsApp|SkypeUriPreview|Embedly|Googlebot|bingbot|ChatGPT|GPTBot|Perplexity/i.test(userAgent);
 }
 
+// 슬라이드 HTML 에서 외부에서 접근 가능한 첫 이미지 URL 추출.
+// <img src="...">, background-image:url(...), <source src="..."> 등.
+// http(s) 이고 SVG / data URI 가 아닌 이미지여야 카카오톡 unfurl 이 표시.
+function extractFirstImageUrl(slides) {
+  if (!Array.isArray(slides)) return null;
+  const patterns = [
+    /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i,
+    /<source\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i,
+    /background(?:-image)?\s*:\s*[^;}"']*url\(\s*["']?([^"')]+)["']?\s*\)/i,
+  ];
+  const isUsable = (url) => {
+    if (!url) return false;
+    if (!/^https?:\/\//i.test(url)) return false;
+    // SVG 는 OG 봇이 보통 거부, 데이터 URI 는 외부 노출 불가
+    if (/\.svg(\?|#|$)/i.test(url)) return false;
+    if (/img\.youtube\.com\/vi\/[^/]+\/maxresdefault\.jpg/i.test(url)) {
+      // YouTube maxresdefault 는 404 가능 → hqdefault 로 안전화
+      return true;
+    }
+    return true;
+  };
+  for (const slide of slides) {
+    if (typeof slide !== 'string') continue;
+    for (const re of patterns) {
+      const m = slide.match(re);
+      if (m && isUsable(m[1])) {
+        let url = m[1];
+        // maxresdefault 가 잡혔으면 hqdefault 로 fallback (항상 존재)
+        url = url.replace(
+          /(img\.youtube\.com\/vi\/[^/]+\/)maxresdefault\.jpg/i,
+          '$1hqdefault.jpg'
+        );
+        return url;
+      }
+    }
+  }
+  return null;
+}
+
 // 공유 프리젠테이션(/p/:id) — 카카오톡/슬랙 unfurl 용 OG 메타 + SPA hydrate
 exports.presentationOg = onRequest(async (req, res) => {
   const match = req.path.match(/\/p\/([A-Za-z0-9]{8})$/);
@@ -175,7 +214,9 @@ exports.presentationOg = onRequest(async (req, res) => {
       : `슬라이드 ${slideCount}장 · GDoc Fixer 로 만든 공유 프리젠테이션`;
 
     const ogUrl = `https://gdoc-fixer.web.app/p/${shareId}`;
-    const ogImage = 'https://gdoc-fixer.web.app/icon.png';
+    // 프리젠테이션에서 첫 이미지를 추출해 OG 썸네일로 사용. 없으면 앱 아이콘.
+    const extractedImage = extractFirstImageUrl(data.slides);
+    const ogImage = extractedImage || 'https://gdoc-fixer.web.app/icon.png';
     const userAgent = req.get('user-agent') || '';
 
     const ogHeadTags = `

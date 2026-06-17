@@ -24,10 +24,10 @@ export default function LoginPage() {
   return (
     <div className="w-full h-full bg-slate-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-8 flex flex-col items-center gap-6">
-        <img src="/icon.png" alt="GDoc Fixer" className="w-16 h-16" />
+        <img src="/logo.svg" alt="GDoc Fixer" className="w-16 h-16" />
         <div className="text-center">
           <h1 className="text-xl font-bold text-slate-800">GDoc Fixer</h1>
-          <p className="text-sm text-slate-500 mt-1">HTML to PNG Converter</p>
+          <p className="text-sm text-slate-500 mt-1">HTML 문서 + AI 슬라이드 에디터</p>
         </div>
 
         <button

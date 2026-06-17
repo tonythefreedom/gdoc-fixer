@@ -194,12 +194,12 @@ export default function Sidebar() {
   return (
     <div className="bg-slate-900 text-white flex flex-col h-full shrink-0 relative" style={{ width: sidebarWidth }}>
       <div className="p-4 border-b border-slate-700 flex items-center gap-2.5">
-        <img src="/icon.png" alt="Logo" className="w-7 h-7" />
+        <img src="/logo.svg" alt="Logo" className="w-7 h-7" />
         <div>
           <h1 className="text-sm font-bold text-slate-200 tracking-wide">
             GDoc Fixer
           </h1>
-          <p className="text-[10px] text-slate-500 mt-0.5">HTML to PNG Converter</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">HTML 문서 + AI 슬라이드</p>
         </div>
       </div>
 

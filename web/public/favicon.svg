@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="title" x1="14" y1="22" x2="32" y2="22" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- 16:9 슬라이드 -->
+  <rect x="10" y="18" width="44" height="25" rx="3" fill="#ffffff"/>
+  <rect x="14" y="22" width="20" height="3" rx="1.5" fill="url(#title)"/>
+  <rect x="14" y="29" width="30" height="2" rx="1" fill="#cbd5e1"/>
+  <rect x="14" y="34" width="26" height="2" rx="1" fill="#cbd5e1"/>
+  <rect x="14" y="39" width="22" height="2" rx="1" fill="#cbd5e1"/>
+  <!-- AI 스파클 -->
+  <g transform="translate(45, 9)">
+    <path d="M5 0 L6.4 3.6 L10 5 L6.4 6.4 L5 10 L3.6 6.4 L0 5 L3.6 3.6 Z" fill="#fbbf24"/>
+  </g>
+  <g transform="translate(54, 22)">
+    <path d="M2.5 0 L3.2 1.8 L5 2.5 L3.2 3.2 L2.5 5 L1.8 3.2 L0 2.5 L1.8 1.8 Z" fill="#fde68a"/>
+  </g>
+</svg>
