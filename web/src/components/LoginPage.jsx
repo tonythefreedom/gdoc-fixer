@@ -444,7 +444,16 @@ export default function LoginPage() {
             <img src="/logo.svg" alt="" className="w-5 h-5" />
             <span>GDoc Fixer — HTML 문서 + AI 슬라이드 에디터</span>
           </div>
-          <div>© {new Date().getFullYear()} 한국인공지능개발자협동조합</div>
+          <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 text-center md:text-right">
+            <span>© {new Date().getFullYear()} 한국인공지능개발자 협동조합</span>
+            <span className="hidden md:inline text-slate-300">·</span>
+            <span>
+              문의처:{' '}
+              <a href="mailto:tony@banya.ai" className="text-indigo-600 hover:underline">
+                tony@banya.ai
+              </a>
+            </span>
+          </div>
         </div>
       </footer>
     </div>
