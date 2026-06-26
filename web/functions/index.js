@@ -7,7 +7,7 @@ const db = admin.firestore();
 exports.publishToTechBlog = require('./publishToTechBlog').publishToTechBlog;
 const coinCheckout = require('./coinCheckout');
 exports.createCoinCheckout = coinCheckout.createCoinCheckout;
-exports.stripeWebhook = coinCheckout.stripeWebhook;
+exports.lemonsqueezyWebhook = coinCheckout.lemonsqueezyWebhook;
 
 function escapeHtml(str) {
   return String(str)

@@ -22,8 +22,8 @@
         "function": "createCoinCheckout"
       },
       {
-        "source": "/api/stripe-webhook",
-        "function": "stripeWebhook"
+        "source": "/api/lemonsqueezy-webhook",
+        "function": "lemonsqueezyWebhook"
       },
       {
         "source": "**",

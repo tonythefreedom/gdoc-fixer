@@ -274,7 +274,8 @@ export default function ProfilePage() {
             <h3 className="text-base font-semibold text-slate-800">코인 충전</h3>
           </div>
           <p className="text-xs text-slate-500 mb-4">
-            100 코인 = $1. Stripe 안전 결제로 카드 / Apple Pay / Google Pay 지원.
+            100 코인 = $1. Lemon Squeezy 안전 결제 — 카드 / Apple Pay / Google Pay 지원,
+            세금/영수증 자동 처리.
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {COIN_PACKAGES.map((pkg) => {

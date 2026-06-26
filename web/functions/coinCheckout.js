@@ -1,18 +1,25 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
-const Stripe = require('stripe');
+const crypto = require('crypto');
 
-const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
-const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
+// ─── Secrets ────────────────────────────────────────────────
+// LEMONSQUEEZY_API_KEY:   https://app.lemonsqueezy.com/settings/api → API key
+// LEMONSQUEEZY_STORE_ID:  대시보드 URL 의 store id (예: 12345)
+// LEMONSQUEEZY_VARIANTS:  JSON 문자열 — { "500": 111, "1000": 222, "5000": 333, "10000": 444 }
+//                         각 패키지에 매칭되는 Lemon Squeezy variant id.
+// LEMONSQUEEZY_WEBHOOK_SECRET: Lemon Squeezy webhook 생성 시 입력한 signing secret.
+const LEMONSQUEEZY_API_KEY = defineSecret('LEMONSQUEEZY_API_KEY');
+const LEMONSQUEEZY_STORE_ID = defineSecret('LEMONSQUEEZY_STORE_ID');
+const LEMONSQUEEZY_VARIANTS = defineSecret('LEMONSQUEEZY_VARIANTS');
+const LEMONSQUEEZY_WEBHOOK_SECRET = defineSecret('LEMONSQUEEZY_WEBHOOK_SECRET');
 
-// 가격 정책: 100 coin = 1 USD. 패키지를 1 곳에서만 정의.
-// USD 는 cents 단위 정수 (Stripe 요구사항).
+// 가격 정책: 100 coin = $1.
 const COIN_PACKAGES = {
-  500: { coins: 500, amountCents: 500, label: '500 코인' }, // $5
-  1000: { coins: 1000, amountCents: 1000, label: '1,000 코인' }, // $10
-  5000: { coins: 5000, amountCents: 5000, label: '5,000 코인' }, // $50
-  10000: { coins: 10000, amountCents: 10000, label: '10,000 코인' }, // $100
+  500: { coins: 500, amountUsd: 5, label: '500 코인' },
+  1000: { coins: 1000, amountUsd: 10, label: '1,000 코인' },
+  5000: { coins: 5000, amountUsd: 50, label: '5,000 코인' },
+  10000: { coins: 10000, amountUsd: 100, label: '10,000 코인' },
 };
 
 const ALLOWED_ORIGINS = [
@@ -40,11 +47,19 @@ async function verifyUser(req) {
   return decoded;
 }
 
-// ── 1) Checkout Session 생성 ─────────────────────────────────
+function parseVariantMap() {
+  try {
+    return JSON.parse(LEMONSQUEEZY_VARIANTS.value());
+  } catch {
+    return {};
+  }
+}
+
+// ── 1) Checkout 생성 ────────────────────────────────────────
 exports.createCoinCheckout = onRequest(
   {
-    secrets: [STRIPE_SECRET_KEY],
-    cors: false, // 직접 처리 (Authorization 헤더 + custom origin 허용 위해)
+    secrets: [LEMONSQUEEZY_API_KEY, LEMONSQUEEZY_STORE_ID, LEMONSQUEEZY_VARIANTS],
+    cors: false,
   },
   async (req, res) => {
     setCors(req, res);
@@ -60,11 +75,19 @@ exports.createCoinCheckout = onRequest(
     try {
       const decoded = await verifyUser(req);
       const uid = decoded.uid;
-      const email = decoded.email || null;
+      const email = decoded.email || '';
       const { packageKey, returnUrl } = req.body || {};
       const pkg = COIN_PACKAGES[String(packageKey)];
       if (!pkg) {
         res.status(400).json({ error: 'Unknown package' });
+        return;
+      }
+      const variantMap = parseVariantMap();
+      const variantId = variantMap[String(packageKey)];
+      if (!variantId) {
+        res.status(500).json({
+          error: `Lemon Squeezy variant id for package ${packageKey} not configured`,
+        });
         return;
       }
       const safeReturnUrl =
@@ -72,34 +95,60 @@ exports.createCoinCheckout = onRequest(
           ? returnUrl
           : 'https://gdoc-fixer.web.app/?view=profile';
 
-      const stripe = new Stripe(STRIPE_SECRET_KEY.value());
-      const session = await stripe.checkout.sessions.create({
-        mode: 'payment',
-        customer_email: email || undefined,
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              product_data: {
+      const redirect = `${safeReturnUrl}${safeReturnUrl.includes('?') ? '&' : '?'}charge=success&coins=${pkg.coins}`;
+
+      const lsRes = await fetch('https://api.lemonsqueezy.com/v1/checkouts', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.api+json',
+          'Content-Type': 'application/vnd.api+json',
+          Authorization: `Bearer ${LEMONSQUEEZY_API_KEY.value()}`,
+        },
+        body: JSON.stringify({
+          data: {
+            type: 'checkouts',
+            attributes: {
+              checkout_data: {
+                email: email || undefined,
+                custom: {
+                  uid,
+                  coins: String(pkg.coins),
+                  packageKey: String(packageKey),
+                },
+              },
+              product_options: {
                 name: `GDoc Fixer ${pkg.label}`,
                 description: `${pkg.coins.toLocaleString()} 코인 충전`,
+                redirect_url: redirect,
+                receipt_thank_you_note: '결제가 완료되었습니다. 코인이 곧 반영됩니다.',
+                enabled_variants: [Number(variantId)],
               },
-              unit_amount: pkg.amountCents,
+              checkout_options: {
+                embed: false,
+                dark: false,
+              },
             },
-            quantity: 1,
+            relationships: {
+              store: { data: { type: 'stores', id: String(LEMONSQUEEZY_STORE_ID.value()) } },
+              variant: { data: { type: 'variants', id: String(variantId) } },
+            },
           },
-        ],
-        // webhook 에서 코인 지급 시 사용
-        metadata: {
-          uid,
-          coins: String(pkg.coins),
-          packageKey: String(packageKey),
-        },
-        success_url: `${safeReturnUrl}${safeReturnUrl.includes('?') ? '&' : '?'}charge=success&coins=${pkg.coins}`,
-        cancel_url: `${safeReturnUrl}${safeReturnUrl.includes('?') ? '&' : '?'}charge=cancel`,
+        }),
       });
 
-      res.status(200).json({ url: session.url, id: session.id });
+      if (!lsRes.ok) {
+        const text = await lsRes.text();
+        console.error('Lemon Squeezy checkout create failed:', lsRes.status, text);
+        res.status(500).json({ error: `Checkout create failed (${lsRes.status})` });
+        return;
+      }
+      const json = await lsRes.json();
+      const url = json?.data?.attributes?.url;
+      if (!url) {
+        res.status(500).json({ error: 'Lemon Squeezy response missing url' });
+        return;
+      }
+      res.status(200).json({ url, id: json?.data?.id });
     } catch (err) {
       console.error('createCoinCheckout error:', err);
       res.status(500).json({ error: err.message || 'Internal error' });
@@ -107,84 +156,92 @@ exports.createCoinCheckout = onRequest(
   }
 );
 
-// ── 2) Stripe Webhook — 결제 완료 시 코인 지급 ────────────────
-exports.stripeWebhook = onRequest(
+// ── 2) Webhook — order_created 시 코인 지급 ──────────────────
+exports.lemonsqueezyWebhook = onRequest(
   {
-    secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET],
+    secrets: [LEMONSQUEEZY_WEBHOOK_SECRET],
     cors: false,
   },
   async (req, res) => {
-    const sig = req.get('stripe-signature');
-    if (!sig) {
-      res.status(400).send('Missing stripe-signature header');
+    const signature = req.get('X-Signature') || '';
+    const secret = LEMONSQUEEZY_WEBHOOK_SECRET.value();
+    // 서명 검증 — HMAC SHA256 of raw body
+    const computed = crypto
+      .createHmac('sha256', secret)
+      .update(req.rawBody)
+      .digest('hex');
+    if (
+      !signature ||
+      !crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(computed, 'hex'))
+    ) {
+      console.error('Webhook signature mismatch');
+      res.status(401).send('invalid signature');
       return;
     }
-    const stripe = new Stripe(STRIPE_SECRET_KEY.value());
+
     let event;
     try {
-      // Stripe 서명 검증 — rawBody 필수
-      event = stripe.webhooks.constructEvent(
-        req.rawBody,
-        sig,
-        STRIPE_WEBHOOK_SECRET.value()
-      );
-    } catch (err) {
-      console.error('Webhook signature verification failed:', err.message);
-      res.status(400).send(`Webhook Error: ${err.message}`);
+      event = JSON.parse(req.rawBody.toString('utf8'));
+    } catch (e) {
+      res.status(400).send('bad json');
       return;
     }
 
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const uid = session.metadata?.uid;
-      const coins = parseInt(session.metadata?.coins || '0', 10);
-      const sessionId = session.id;
-      if (!uid || !coins) {
-        console.warn('webhook missing metadata:', session.metadata);
-        res.status(200).send('OK (no metadata)');
-        return;
-      }
-      try {
-        const db = admin.firestore();
-        // 멱등성: 같은 session.id 가 두 번 처리되지 않도록 트랜잭션 + 마커 doc
-        const markerRef = db.collection('coinChargeProcessed').doc(sessionId);
-        const profileRef = db.collection('userProfiles').doc(uid);
-        const historyRef = db
-          .collection('userProfiles').doc(uid)
-          .collection('coinCharges').doc(sessionId);
-
-        await db.runTransaction(async (tx) => {
-          const markerSnap = await tx.get(markerRef);
-          if (markerSnap.exists) {
-            return; // 이미 처리됨
-          }
-          tx.set(markerRef, {
-            uid, coins, sessionId,
-            processedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          tx.update(profileRef, {
-            coinBalance: admin.firestore.FieldValue.increment(coins),
-            coinEarned: admin.firestore.FieldValue.increment(coins),
-            lastChargedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          tx.set(historyRef, {
-            coins,
-            amountCents: session.amount_total || null,
-            currency: session.currency || 'usd',
-            stripeSessionId: sessionId,
-            stripePaymentIntent: session.payment_intent || null,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        });
-        console.log(`[webhook] +${coins} coins to ${uid} via ${sessionId}`);
-      } catch (err) {
-        console.error('webhook firestore update failed:', err);
-        res.status(500).send('Firestore error');
-        return;
-      }
+    const eventName = event?.meta?.event_name;
+    if (eventName !== 'order_created') {
+      // 다른 이벤트는 무시 (refund 등은 v2 에서 처리)
+      res.status(200).send('ignored');
+      return;
     }
 
-    res.status(200).send('OK');
+    const custom = event?.meta?.custom_data || {};
+    const uid = custom.uid;
+    const coins = parseInt(custom.coins || '0', 10);
+    const orderId = String(event?.data?.id || '');
+    if (!uid || !coins || !orderId) {
+      console.warn('webhook missing fields:', { uid, coins, orderId });
+      res.status(200).send('OK (no metadata)');
+      return;
+    }
+
+    try {
+      const db = admin.firestore();
+      const markerRef = db.collection('coinChargeProcessed').doc(orderId);
+      const profileRef = db.collection('userProfiles').doc(uid);
+      const historyRef = db
+        .collection('userProfiles').doc(uid)
+        .collection('coinCharges').doc(orderId);
+
+      await db.runTransaction(async (tx) => {
+        const markerSnap = await tx.get(markerRef);
+        if (markerSnap.exists) return; // 멱등성
+
+        const attrs = event?.data?.attributes || {};
+        tx.set(markerRef, {
+          uid, coins, orderId,
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        tx.update(profileRef, {
+          coinBalance: admin.firestore.FieldValue.increment(coins),
+          coinEarned: admin.firestore.FieldValue.increment(coins),
+          lastChargedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        tx.set(historyRef, {
+          coins,
+          totalUsdCents: attrs.total ?? null,
+          currency: attrs.currency || 'usd',
+          provider: 'lemonsqueezy',
+          providerOrderId: orderId,
+          customerEmail: attrs.user_email || null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      console.log(`[ls webhook] +${coins} coins to ${uid} via order ${orderId}`);
+      res.status(200).send('OK');
+    } catch (err) {
+      console.error('webhook firestore update failed:', err);
+      res.status(500).send('Firestore error');
+    }
   }
 );
 
