@@ -18,6 +18,14 @@
         "function": "presentationOg"
       },
       {
+        "source": "/api/coin-checkout",
+        "function": "createCoinCheckout"
+      },
+      {
+        "source": "/api/stripe-webhook",
+        "function": "stripeWebhook"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

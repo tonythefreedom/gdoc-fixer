@@ -5,6 +5,9 @@ admin.initializeApp();
 const db = admin.firestore();
 
 exports.publishToTechBlog = require('./publishToTechBlog').publishToTechBlog;
+const coinCheckout = require('./coinCheckout');
+exports.createCoinCheckout = coinCheckout.createCoinCheckout;
+exports.stripeWebhook = coinCheckout.stripeWebhook;
 
 function escapeHtml(str) {
   return String(str)

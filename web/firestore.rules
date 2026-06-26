@@ -21,6 +21,18 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
+    // 코인 충전 webhook 멱등성 마커 — Cloud Function (admin SDK) 만 write.
+    // 클라이언트는 접근 불필요.
+    match /coinChargeProcessed/{sessionId} {
+      allow read, write: if false;
+    }
+
+    // 결제 이력 — 본인만 읽기, write 는 Cloud Function (admin SDK).
+    match /userProfiles/{uid}/coinCharges/{chargeId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     // 유저 프로필
     match /userProfiles/{uid} {
       // 수퍼관리자: 전체 프로필 읽기/수정 가능

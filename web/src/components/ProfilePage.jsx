@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Coins,
   UserCircle2,
@@ -7,10 +7,21 @@ import {
   Check,
   X,
   Pencil,
+  CreditCard,
+  Plus,
 } from 'lucide-react';
+import { auth } from '../firebase';
 import useAuthStore from '../store/useAuthStore';
 import { ACTION_COSTS, ACTION_LABELS, INITIAL_COIN_GRANT } from '../utils/coin';
 import { uploadBlobToGcs, dataUriToBlob } from '../store/storage';
+
+// 가격 정책: 100 coin = $1. (functions/coinCheckout.js 의 COIN_PACKAGES 와 동기화)
+const COIN_PACKAGES = [
+  { key: 500, coins: 500, usd: 5, label: '체험', highlight: false },
+  { key: 1000, coins: 1000, usd: 10, label: '스타터', highlight: true },
+  { key: 5000, coins: 5000, usd: 50, label: '프로', highlight: false },
+  { key: 10000, coins: 10000, usd: 100, label: '비즈니스', highlight: false },
+];
 
 function readFileAsDataUri(file) {
   return new Promise((resolve, reject) => {
@@ -30,6 +41,54 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(profile?.displayName || '');
+  const [chargingPkg, setChargingPkg] = useState(null);
+  const [chargeBanner, setChargeBanner] = useState(null);
+
+  // Stripe Checkout 에서 돌아온 후 ?charge=success / cancel 처리
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const charge = params.get('charge');
+    if (!charge) return;
+    if (charge === 'success') {
+      const coins = params.get('coins') || '';
+      setChargeBanner({ type: 'success', msg: `${coins} 코인 충전이 완료됐어요. 잔액 반영까지 몇 초 걸릴 수 있습니다.` });
+    } else if (charge === 'cancel') {
+      setChargeBanner({ type: 'cancel', msg: '결제가 취소됐어요.' });
+    }
+    // URL 정리 (?charge 등 제거)
+    params.delete('charge');
+    params.delete('coins');
+    const cleaned = params.toString();
+    const newUrl = window.location.pathname + (cleaned ? `?${cleaned}` : '');
+    window.history.replaceState({}, '', newUrl);
+  }, []);
+
+  const handleCharge = async (pkg) => {
+    if (chargingPkg) return;
+    setChargingPkg(pkg.key);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('로그인이 필요합니다.');
+      const res = await fetch('/api/coin-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          packageKey: pkg.key,
+          returnUrl: `${window.location.origin}${window.location.pathname}`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `결제 세션 생성 실패 (${res.status})`);
+      window.location.href = data.url; // Stripe Checkout 으로 이동
+    } catch (err) {
+      console.error('charge failed:', err);
+      alert(`충전 시작 실패: ${err.message}`);
+      setChargingPkg(null);
+    }
+  };
 
   if (!profile) {
     return (
@@ -170,6 +229,25 @@ export default function ProfilePage() {
           </div>
         </section>
 
+        {/* 충전 결과 배너 */}
+        {chargeBanner && (
+          <div
+            className={`mb-4 px-4 py-3 rounded-lg text-sm flex items-center justify-between gap-3 ${
+              chargeBanner.type === 'success'
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                : 'bg-slate-50 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <span>{chargeBanner.msg}</span>
+            <button
+              onClick={() => setChargeBanner(null)}
+              className="p-1 rounded hover:bg-black/5"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* 코인 잔액 카드 */}
         <section className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white mb-6 shadow-lg">
           <div className="flex items-center gap-3 text-white/90 text-sm mb-2">
@@ -186,6 +264,57 @@ export default function ProfilePage() {
               <div className="text-white/70 text-xs">누적 사용</div>
               <div className="font-semibold text-lg">{spent.toLocaleString()}</div>
             </div>
+          </div>
+        </section>
+
+        {/* 코인 충전 */}
+        <section className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <CreditCard className="w-5 h-5 text-indigo-500" />
+            <h3 className="text-base font-semibold text-slate-800">코인 충전</h3>
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            100 코인 = $1. Stripe 안전 결제로 카드 / Apple Pay / Google Pay 지원.
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {COIN_PACKAGES.map((pkg) => {
+              const isLoading = chargingPkg === pkg.key;
+              return (
+                <button
+                  key={pkg.key}
+                  onClick={() => handleCharge(pkg)}
+                  disabled={!!chargingPkg}
+                  className={`relative text-left p-4 rounded-xl border-2 transition-all disabled:opacity-50 disabled:cursor-wait ${
+                    pkg.highlight
+                      ? 'border-indigo-500 bg-indigo-50 hover:bg-indigo-100'
+                      : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/40'
+                  }`}
+                >
+                  {pkg.highlight && (
+                    <span className="absolute -top-2 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white">
+                      추천
+                    </span>
+                  )}
+                  <div className="text-xs text-slate-500 mb-1">{pkg.label}</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-slate-800">
+                      {pkg.coins.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-slate-500">coin</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-indigo-600">
+                      ${pkg.usd}
+                    </span>
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                    ) : (
+                      <Plus className="w-4 h-4 text-slate-400" />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
 
