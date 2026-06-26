@@ -11,7 +11,6 @@ import ViewportControls from './preview/ViewportControls';
 import SlideEditor from './slide/SlideEditor';
 import SlideGenerationProgress from './slide/SlideGenerationProgress';
 import PlanningEditor from './planning/PlanningEditor';
-import AdminUserManagement from './AdminUserManagement';
 import PublishModal from './PublishModal';
 import { useDocxExport } from '../hooks/useDocxExport';
 import { useDocModify } from '../hooks/useDocModify';
@@ -31,7 +30,6 @@ export default function MainPanel() {
   const generationProgress = useSlideStore((s) => s.generationProgress);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
-  const isAdminMode = useAppStore((s) => s.isAdminMode);
   const attachFile = useAppStore((s) => s.attachFile);
   const attachments = useAppStore((s) => s.attachments);
   const detachFile = useAppStore((s) => s.detachFile);
@@ -406,11 +404,6 @@ export default function MainPanel() {
     },
     [editorWidth]
   );
-
-  // Admin mode
-  if (isAdminMode) {
-    return <AdminUserManagement />;
-  }
 
   // Planning mode
   if (isPlanningMode) {

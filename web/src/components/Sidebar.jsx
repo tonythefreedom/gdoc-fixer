@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
-import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users, FolderOpen, Coins, UserCircle2 } from 'lucide-react';
+import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, Presentation, Share2, ExternalLink, Loader2, Sparkles, FolderOpen } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
-import useAuthStore from '../store/useAuthStore';
 import useSlideStore from '../store/useSlideStore';
 import useShareStore from '../store/useShareStore';
 import { getShareUrl } from '../utils/shareUrl';
@@ -21,12 +20,8 @@ export default function Sidebar() {
   const docxImporting = useAppStore((s) => s.docxImporting);
   const startPlanning = useAppStore((s) => s.startPlanning);
   const isPlanningMode = useAppStore((s) => s.isPlanningMode);
-  const isAdminMode = useAppStore((s) => s.isAdminMode);
-  const setAdminMode = useAppStore((s) => s.setAdminMode);
   const currentView = useAppStore((s) => s.currentView);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
-
-  const userProfile = useAuthStore((s) => s.userProfile);
 
   const presentations = useSlideStore((s) => s.presentations);
   const activePresentationId = useSlideStore((s) => s.activePresentationId);
@@ -37,9 +32,6 @@ export default function Sidebar() {
 
   const shares = useShareStore((s) => s.shares);
   const removeShare = useShareStore((s) => s.removeShare);
-
-  const user = useAuthStore((s) => s.user);
-  const signOut = useAuthStore((s) => s.signOut);
 
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -193,16 +185,6 @@ export default function Sidebar() {
 
   return (
     <div className="bg-slate-900 text-white flex flex-col h-full shrink-0 relative" style={{ width: sidebarWidth }}>
-      <div className="p-4 border-b border-slate-700 flex items-center gap-2.5">
-        <img src="/logo.svg" alt="Logo" className="w-7 h-7" />
-        <div>
-          <h1 className="text-sm font-bold text-slate-200 tracking-wide">
-            GDoc Fixer
-          </h1>
-          <p className="text-[10px] text-slate-500 mt-0.5">HTML 문서 + AI 슬라이드</p>
-        </div>
-      </div>
-
       <div className="p-3 space-y-2">
         <button
           onClick={() => setCurrentView('contents')}
@@ -506,76 +488,6 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* Admin menu */}
-      {userProfile?.role === 'super_admin' && (
-        <div className="px-3 pt-2 pb-1 border-t border-slate-700">
-          <button
-            onClick={() => {
-              clearActivePresentation();
-              setAdminMode(!isAdminMode);
-            }}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isAdminMode
-                ? 'bg-amber-600 text-white'
-                : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            회원 관리
-          </button>
-        </div>
-      )}
-
-      {/* User profile */}
-      {user && (
-        <div className="border-t border-slate-700">
-          {/* 코인 잔액 — 클릭 시 프로필 페이지 */}
-          <button
-            onClick={() => setCurrentView('profile')}
-            className="w-full px-3 py-2 flex items-center gap-2 hover:bg-slate-800/60 transition-colors"
-            title="프로필 / 사용량"
-          >
-            <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-xs text-slate-300">코인</span>
-            <span className="ml-auto text-xs font-semibold text-amber-300">
-              {(typeof userProfile?.coinBalance === 'number' ? userProfile.coinBalance : 0).toLocaleString()}
-            </span>
-          </button>
-
-          <div className="p-3 border-t border-slate-700 flex items-center gap-2">
-            <button
-              onClick={() => setCurrentView('profile')}
-              className="shrink-0 hover:opacity-80 transition-opacity"
-              title="프로필"
-            >
-              {userProfile?.photoURL || user.photoURL ? (
-                <img
-                  src={userProfile?.photoURL || user.photoURL}
-                  alt=""
-                  className="w-7 h-7 rounded-full"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <UserCircle2 className="w-7 h-7 text-slate-500" />
-              )}
-            </button>
-            <button
-              onClick={() => setCurrentView('profile')}
-              className="flex-1 text-left text-xs text-slate-300 truncate hover:text-white transition-colors"
-              title="프로필"
-            >
-              {userProfile?.displayName || user.displayName || user.email}
-            </button>
-            <button
-              onClick={signOut}
-              className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors"
-              title="로그아웃"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
       {/* 리사이즈 핸들 */}
       <div
         onMouseDown={handleMouseDown}
