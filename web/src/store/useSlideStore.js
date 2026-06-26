@@ -78,6 +78,15 @@ const useSlideStore = create((set, get) => ({
     const { uid } = get();
     if (!uid) return;
 
+    // 코인 차감 (20) — 잔액 부족 시 alert 후 중단
+    try {
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(uid, 'generateSlides');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+
     set({ isGenerating: true, generationProgress: { phase: 'converting', current: 0, total: 0, message: 'Gemini AI로 슬라이드 생성 중...' } });
 
     try {

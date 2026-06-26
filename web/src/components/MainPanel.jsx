@@ -72,9 +72,16 @@ export default function MainPanel() {
     }
   };
 
-  const handleExportHtml = () => {
-    const { activeFileContent, activeFileId: fileId, files: allFiles } = useAppStore.getState();
+  const handleExportHtml = async () => {
+    const { activeFileContent, activeFileId: fileId, files: allFiles, uid } = useAppStore.getState();
     if (!activeFileContent) return;
+    try {
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(uid, 'exportDoc');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
     const file = allFiles.find((f) => f.id === fileId);
     const name = (file?.name || 'document').replace(/\.[^.]+$/, '');
     const fullHtml = `<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>${name}</title>\n</head>\n<body>\n${activeFileContent}\n</body>\n</html>`;
@@ -89,6 +96,13 @@ export default function MainPanel() {
 
   const handleExportPdf = async () => {
     if (isExportingPdf) return;
+    try {
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(useAppStore.getState().uid, 'exportDoc');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
     setIsExportingPdf(true);
     setExportMenuOpen(false);
     try {

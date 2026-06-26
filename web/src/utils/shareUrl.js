@@ -16,6 +16,11 @@ function generateId() {
 }
 
 export async function generateShareUrl(html, uid, name) {
+  // 코인 차감 — 잔액 부족 시 throw, 호출측이 catch 해서 모달에 표시
+  if (uid) {
+    const { chargeCoin } = await import('./coin');
+    await chargeCoin(uid, 'shareDoc');
+  }
   const id = generateId();
   // base64 이미지를 GCS에 업로드하여 URL로 교체 (Firestore 1MB 제한 우회)
   let processedHtml = html;

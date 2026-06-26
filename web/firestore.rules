@@ -26,11 +26,15 @@ service cloud.firestore {
       // 수퍼관리자: 전체 프로필 읽기/수정 가능
       allow read, update: if request.auth != null && request.auth.token.email == 'tony@banya.ai';
 
-      // 본인 프로필: 읽기 + 생성 + lastLoginAt 업데이트
+      // 본인 프로필: 읽기 + 생성 + 허용된 필드만 업데이트
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLoginAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastLoginAt',
+          'coinBalance', 'coinSpent', 'coinEarned', 'lastSpentAt',
+          'photoURL', 'displayName'
+        ]);
     }
   }
 }

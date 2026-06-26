@@ -122,6 +122,16 @@ export function usePdfExport() {
 
   const exportSlidesToPdf = useCallback(async (slides) => {
     if (!slides?.length || pdfLoading) return;
+    try {
+      const [{ chargeCoin }, { default: useSlideStore }] = await Promise.all([
+        import('../utils/coin'),
+        import('../store/useSlideStore'),
+      ]);
+      await chargeCoin(useSlideStore.getState().uid, 'exportDoc');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
     setPdfLoading(true);
 
     const container = document.createElement('div');

@@ -43,6 +43,10 @@ async function offloadImages(slides, uid) {
 }
 
 export async function generatePresentationShareUrl(slides, uid, name) {
+  if (uid) {
+    const { chargeCoin } = await import('./coin');
+    await chargeCoin(uid, 'sharePresentation');
+  }
   const id = generateId();
   const processed = await offloadImages(slides, uid);
 

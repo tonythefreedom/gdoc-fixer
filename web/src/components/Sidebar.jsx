@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
-import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users, FolderOpen } from 'lucide-react';
+import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, LogOut, Presentation, Share2, ExternalLink, Loader2, Sparkles, Users, FolderOpen, Coins, UserCircle2 } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useAuthStore from '../store/useAuthStore';
 import useSlideStore from '../store/useSlideStore';
@@ -528,27 +528,52 @@ export default function Sidebar() {
 
       {/* User profile */}
       {user && (
-        <div className="p-3 border-t border-slate-700 flex items-center gap-2">
-          {user.photoURL ? (
-            <img
-              src={user.photoURL}
-              alt=""
-              className="w-7 h-7 rounded-full shrink-0"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="w-7 h-7 rounded-full bg-slate-600 shrink-0" />
-          )}
-          <span className="flex-1 text-xs text-slate-300 truncate">
-            {user.displayName || user.email}
-          </span>
+        <div className="border-t border-slate-700">
+          {/* 코인 잔액 — 클릭 시 프로필 페이지 */}
           <button
-            onClick={signOut}
-            className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors"
-            title="로그아웃"
+            onClick={() => setCurrentView('profile')}
+            className="w-full px-3 py-2 flex items-center gap-2 hover:bg-slate-800/60 transition-colors"
+            title="프로필 / 사용량"
           >
-            <LogOut className="w-4 h-4" />
+            <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-xs text-slate-300">코인</span>
+            <span className="ml-auto text-xs font-semibold text-amber-300">
+              {(typeof userProfile?.coinBalance === 'number' ? userProfile.coinBalance : 0).toLocaleString()}
+            </span>
           </button>
+
+          <div className="p-3 border-t border-slate-700 flex items-center gap-2">
+            <button
+              onClick={() => setCurrentView('profile')}
+              className="shrink-0 hover:opacity-80 transition-opacity"
+              title="프로필"
+            >
+              {userProfile?.photoURL || user.photoURL ? (
+                <img
+                  src={userProfile?.photoURL || user.photoURL}
+                  alt=""
+                  className="w-7 h-7 rounded-full"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <UserCircle2 className="w-7 h-7 text-slate-500" />
+              )}
+            </button>
+            <button
+              onClick={() => setCurrentView('profile')}
+              className="flex-1 text-left text-xs text-slate-300 truncate hover:text-white transition-colors"
+              title="프로필"
+            >
+              {userProfile?.displayName || user.displayName || user.email}
+            </button>
+            <button
+              onClick={signOut}
+              className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors"
+              title="로그아웃"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
       {/* 리사이즈 핸들 */}

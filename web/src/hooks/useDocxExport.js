@@ -6,8 +6,16 @@ export function useDocxExport() {
   const [isExportingDocx, setIsExportingDocx] = useState(false);
 
   const exportDocx = async () => {
-    const { activeFileContent, activeFileId, files } = useAppStore.getState();
+    const { activeFileContent, activeFileId, files, uid } = useAppStore.getState();
     if (!activeFileContent || isExportingDocx) return;
+
+    try {
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(uid, 'exportDoc');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
 
     setIsExportingDocx(true);
     try {

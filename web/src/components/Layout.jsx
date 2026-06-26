@@ -3,6 +3,7 @@ import MainPanel from './MainPanel';
 import ImagePanel from './ImagePanel';
 import ImageModal from './gallery/ImageModal';
 import ContentListPage from './ContentListPage';
+import ProfilePage from './ProfilePage';
 import useAppStore from '../store/useAppStore';
 
 export default function Layout() {
@@ -13,6 +14,8 @@ export default function Layout() {
         <Sidebar />
         {currentView === 'contents' ? (
           <ContentListPage />
+        ) : currentView === 'profile' ? (
+          <ProfilePage />
         ) : (
           <>
             <MainPanel />

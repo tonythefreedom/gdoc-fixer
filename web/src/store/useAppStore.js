@@ -135,6 +135,13 @@ const useAppStore = create((set, get) => ({
   createFile: async (name) => {
     const { uid } = get();
     if (!uid) return;
+    const { chargeCoin } = await import('../utils/coin');
+    try {
+      await chargeCoin(uid, 'createDoc');
+    } catch (err) {
+      alert(err.message);
+      throw err;
+    }
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const file = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
     await createFileDoc(uid, file, DEFAULT_HTML);

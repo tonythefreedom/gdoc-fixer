@@ -47,7 +47,21 @@ const useAuthStore = create((set, get) => ({
           await updateDoc(profileRef, { lastLoginAt: Date.now() });
         }
 
+        // 기존 사용자라도 coinBalance 가 없으면 한 번 100 코인 grant (마이그레이션)
+        if (typeof profile.coinBalance !== 'number') {
+          await updateDoc(profileRef, {
+            coinBalance: 100,
+            coinEarned: 100,
+            coinSpent: 0,
+          });
+          profile.coinBalance = 100;
+          profile.coinEarned = 100;
+          profile.coinSpent = 0;
+        }
+
         set({ userProfile: profile, profileLoading: false });
+        // 프로필 실시간 구독 — 코인 차감/충전이 UI 에 즉시 반영
+        get().subscribeProfile?.(user.uid);
       } else {
         // 최초 로그인: 프로필 생성
         const isSuperAdmin = user.email === SUPER_ADMIN_EMAIL;
@@ -60,9 +74,14 @@ const useAuthStore = create((set, get) => ({
           createdAt: Date.now(),
           updatedAt: Date.now(),
           lastLoginAt: Date.now(),
+          // 신규 회원에게 100 코인 지급
+          coinBalance: 100,
+          coinEarned: 100,
+          coinSpent: 0,
         };
         await setDoc(profileRef, newProfile);
         set({ userProfile: { id: user.uid, ...newProfile }, profileLoading: false });
+        get().subscribeProfile?.(user.uid);
       }
     } catch (err) {
       console.error('Failed to load/create user profile:', err);
@@ -97,10 +116,41 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
+  // 프로필 실시간 구독 — 코인 차감 등이 UI 에 즉시 반영
+  _profileUnsub: null,
+  subscribeProfile: async (uid) => {
+    const prev = get()._profileUnsub;
+    if (prev) prev();
+    const { subscribeProfile } = await import('../utils/coin');
+    const unsub = subscribeProfile(uid, (profile) => {
+      set({ userProfile: profile });
+    });
+    set({ _profileUnsub: unsub });
+  },
+
+  // 프로필 사진 업데이트
+  updateProfilePhoto: async (photoURL) => {
+    const { user } = get();
+    if (!user) return;
+    const profileRef = doc(db, 'userProfiles', user.uid);
+    await updateDoc(profileRef, { photoURL });
+    // subscribeProfile 이 자동 반영
+  },
+
+  // 표시 이름 업데이트
+  updateDisplayName: async (displayName) => {
+    const { user } = get();
+    if (!user) return;
+    const profileRef = doc(db, 'userProfiles', user.uid);
+    await updateDoc(profileRef, { displayName });
+  },
+
   signOut: async () => {
     try {
+      const prev = get()._profileUnsub;
+      if (prev) prev();
       await firebaseSignOut(auth);
-      set({ userProfile: null });
+      set({ userProfile: null, _profileUnsub: null });
       // 이전 사용자 데이터 메모리에서 비움 — 같은 디바이스에서 계정 전환 시
       // 다른 사용자의 파일 / 슬라이드 / 공유 목록이 잠시 노출되는 것을 방지.
       await resetAllStores();

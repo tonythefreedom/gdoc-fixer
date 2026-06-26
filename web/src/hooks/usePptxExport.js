@@ -433,6 +433,16 @@ export function usePptxExport() {
 
   const exportSlidesToPptx = useCallback(async (slides, presentationName = 'presentation') => {
     if (!slides?.length || pptxLoading) return;
+    try {
+      const [{ chargeCoin }, { default: useSlideStore }] = await Promise.all([
+        import('../utils/coin'),
+        import('../store/useSlideStore'),
+      ]);
+      await chargeCoin(useSlideStore.getState().uid, 'exportDoc');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
     setPptxLoading(true);
 
     try {
