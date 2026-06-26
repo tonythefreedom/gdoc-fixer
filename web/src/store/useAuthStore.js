@@ -18,6 +18,9 @@ const useAuthStore = create((set, get) => ({
         await get().loadOrCreateProfile(user);
       } else {
         set({ user: null, userProfile: null, loading: false, profileLoading: false });
+        // 비-명시적 로그아웃(세션 만료 / 다른 탭에서 로그아웃 / Firebase
+        // 자동 토큰 무효화) 케이스에도 메모리 데이터 비움.
+        await resetAllStores();
       }
     });
   },
@@ -98,11 +101,31 @@ const useAuthStore = create((set, get) => ({
     try {
       await firebaseSignOut(auth);
       set({ userProfile: null });
+      // 이전 사용자 데이터 메모리에서 비움 — 같은 디바이스에서 계정 전환 시
+      // 다른 사용자의 파일 / 슬라이드 / 공유 목록이 잠시 노출되는 것을 방지.
+      await resetAllStores();
     } catch (err) {
       console.error('Sign-out failed:', err);
       throw err;
     }
   },
 }));
+
+// 다른 store 모듈과 cycle 회피를 위해 동적 import.
+async function resetAllStores() {
+  try {
+    const [{ default: useAppStore }, { default: useSlideStore }, { default: useShareStore }] =
+      await Promise.all([
+        import('./useAppStore'),
+        import('./useSlideStore'),
+        import('./useShareStore'),
+      ]);
+    useAppStore.getState().reset?.();
+    useSlideStore.getState().reset?.();
+    useShareStore.getState().reset?.();
+  } catch (err) {
+    console.warn('resetAllStores failed:', err);
+  }
+}
 
 export default useAuthStore;

@@ -24,11 +24,13 @@ const useSlideStore = create((set, get) => ({
   presentationSnapshots: [],
   uid: null,
 
-  // 사용자가 선택한 디자인 시스템 ID. 옛 ID(modern-minimal 등) 가 저장되어
-  // 있으면 IR 톤 카탈로그의 첫 항목(executive-navy)으로 자동 마이그레이션.
-  selectedDesignSystemId: migrateDesignSystemId(localStorage.getItem('slideDesignSystemId')),
+  // 사용자가 선택한 디자인 시스템 ID. uid 가 결정된 후 loadPresentations 에서
+  // 계정별 키(slideDesignSystemId:{uid}) 로 read 한다. uid 없는 초기 상태는
+  // 안전한 기본값(executive-navy) 으로 시작.
+  selectedDesignSystemId: migrateDesignSystemId(null),
   setSelectedDesignSystemId: (id) => {
-    localStorage.setItem('slideDesignSystemId', id);
+    const uid = get().uid;
+    if (uid) localStorage.setItem(`slideDesignSystemId:${uid}`, id);
     set({ selectedDesignSystemId: id });
   },
 
@@ -36,7 +38,9 @@ const useSlideStore = create((set, get) => ({
   generationProgress: null,
 
   loadPresentations: async (uid) => {
-    set({ uid });
+    // 해당 사용자의 디자인 시스템 선택값도 함께 로드 (계정별 격리)
+    const savedDsId = localStorage.getItem(`slideDesignSystemId:${uid}`);
+    set({ uid, selectedDesignSystemId: migrateDesignSystemId(savedDsId) });
     try {
       const list = await loadPresentationList(uid);
       set({ presentations: list });
@@ -49,6 +53,25 @@ const useSlideStore = create((set, get) => ({
     } catch (err) {
       console.error('Failed to load presentations:', err);
     }
+  },
+
+  // 로그아웃 / 사용자 전환 시 호출
+  reset: () => {
+    set({
+      presentations: [],
+      activePresentationId: null,
+      slides: [],
+      slideHistories: [],
+      currentSlideIndex: 0,
+      isGenerating: false,
+      modifyingSlideIndices: [],
+      isModifyingAll: false,
+      isInsertingSlide: false,
+      presentationSnapshots: [],
+      uid: null,
+      selectedDesignSystemId: migrateDesignSystemId(null),
+      generationProgress: null,
+    });
   },
 
   generateSlides: async (html, sourceFileId, fileName) => {

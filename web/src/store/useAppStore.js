@@ -21,17 +21,27 @@ import {
   DEFAULT_HTML,
 } from '../utils/constants';
 
-function loadSavedPresets() {
+// uid 별 localStorage 키. 같은 디바이스를 여러 계정이 사용해도 프리셋이
+// 섞이지 않게 한다.
+function presetsKey(uid) {
+  return uid ? `gdoc-fixer-presets:${uid}` : null;
+}
+
+function loadSavedPresets(uid) {
+  const key = presetsKey(uid);
+  if (!key) return [];
   try {
-    const raw = localStorage.getItem('gdoc-fixer-presets');
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveSavedPresets(presets) {
-  localStorage.setItem('gdoc-fixer-presets', JSON.stringify(presets));
+function saveSavedPresets(uid, presets) {
+  const key = presetsKey(uid);
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(presets));
 }
 
 const useAppStore = create((set, get) => ({
@@ -50,8 +60,8 @@ const useAppStore = create((set, get) => ({
   viewportWidth: DEFAULT_VIEWPORT_WIDTH,
   viewportHeight: DEFAULT_VIEWPORT_HEIGHT,
 
-  // Saved presets
-  savedPresets: loadSavedPresets(),
+  // Saved presets — uid 가 결정된 후 loadUserFiles 시점에 채움.
+  savedPresets: [],
 
   // Images
   images: [],
@@ -77,7 +87,14 @@ const useAppStore = create((set, get) => ({
 
   // Load user files from Firestore (with localStorage migration)
   loadUserFiles: async (uid) => {
-    set({ uid, filesLoading: true, activeFileId: null, activeFileContent: '', files: [] });
+    set({
+      uid,
+      filesLoading: true,
+      activeFileId: null,
+      activeFileContent: '',
+      files: [],
+      savedPresets: loadSavedPresets(uid), // 계정별 프리셋
+    });
 
     // Migrate localStorage data if exists
     const localFiles = loadLocalFiles();
@@ -91,6 +108,27 @@ const useAppStore = create((set, get) => ({
 
     const files = await loadFileList(uid);
     set({ files, filesLoading: false });
+  },
+
+  // 로그아웃 / 사용자 전환 시 호출 — 메모리에 남은 이전 사용자 데이터 비움
+  reset: () => {
+    set({
+      currentView: 'contents',
+      files: [],
+      activeFileId: null,
+      activeFileContent: '',
+      uid: null,
+      filesLoading: false,
+      savedPresets: [],
+      images: [],
+      imageUrls: {},
+      attachments: [],
+      isPlanningMode: false,
+      isAdminMode: false,
+      isExporting: false,
+      modalImageKey: null,
+      isImagePanelOpen: false,
+    });
   },
 
   // Actions
@@ -358,16 +396,17 @@ const useAppStore = create((set, get) => ({
   },
 
   savePreset: (label) => {
-    const { viewportWidth, viewportHeight, savedPresets } = get();
+    const { viewportWidth, viewportHeight, savedPresets, uid } = get();
     const preset = { label, w: viewportWidth, h: viewportHeight };
     const updated = [...savedPresets, preset];
-    saveSavedPresets(updated);
+    saveSavedPresets(uid, updated);
     set({ savedPresets: updated });
   },
 
   deletePreset: (index) => {
+    const { uid } = get();
     const updated = get().savedPresets.filter((_, i) => i !== index);
-    saveSavedPresets(updated);
+    saveSavedPresets(uid, updated);
     set({ savedPresets: updated });
   },
 

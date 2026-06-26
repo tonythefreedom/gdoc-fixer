@@ -31,6 +31,9 @@ const useShareStore = create((set) => ({
       console.error('Failed to delete share:', err);
     }
   },
+
+  // 로그아웃 / 사용자 전환 시 호출
+  reset: () => set({ shares: [], uid: null }),
 }));
 
 export default useShareStore;
