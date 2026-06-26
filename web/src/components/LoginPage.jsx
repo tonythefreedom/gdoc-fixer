@@ -438,21 +438,25 @@ export default function LoginPage() {
       </section>
 
       {/* ── Footer ─────────────────────────── */}
-      <footer className="border-t border-slate-200 py-8">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            <img src="/logo.svg" alt="" className="w-5 h-5" />
-            <span>GDoc Fixer — HTML 문서 + AI 슬라이드 에디터</span>
+      <footer className="border-t border-slate-200 py-10 bg-slate-50">
+        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-6 text-xs text-slate-500">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <img src="/logo.svg" alt="" className="w-6 h-6" />
+              <span className="text-sm font-semibold text-slate-700">GDoc Fixer</span>
+            </div>
+            <p className="text-slate-500">HTML 문서 + AI 슬라이드 에디터</p>
           </div>
-          <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 text-center md:text-right">
-            <span>© {new Date().getFullYear()} 한국인공지능개발자 협동조합</span>
-            <span className="hidden md:inline text-slate-300">·</span>
-            <span>
-              문의처:{' '}
-              <a href="mailto:tony@banya.ai" className="text-indigo-600 hover:underline">
-                tony@banya.ai
+          <div className="md:text-right space-y-1.5">
+            <div className="text-sm font-semibold text-slate-700">한국인공지능개발자 협동조합</div>
+            <div>주소 : 서울시 강남구 삼성로 86길 16 덕산빌딩 5층</div>
+            <div>
+              이메일 :{' '}
+              <a href="mailto:tonymustbegreat@gmail.com" className="text-indigo-600 hover:underline">
+                tonymustbegreat@gmail.com
               </a>
-            </span>
+            </div>
+            <div className="pt-2 text-slate-400">© {new Date().getFullYear()} 한국인공지능개발자 협동조합</div>
           </div>
         </div>
       </footer>
