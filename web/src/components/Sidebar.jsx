@@ -237,7 +237,7 @@ export default function Sidebar() {
           ) : (
             <>
               <FileUp className="w-4 h-4" />
-              HWP 가져오기 (rhwp)
+              HWP 가져오기
             </>
           )}
         </button>
