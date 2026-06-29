@@ -72,32 +72,30 @@ export default function AdminUserManagement() {
   const pendingCount = users.filter((u) => u.status === 'pending').length;
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-50 min-h-0">
-      {/* Header */}
-      <div className="px-6 py-4 bg-white border-b border-slate-200">
-        <h2 className="text-lg font-bold text-slate-800">회원 관리</h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          전체 {users.length}명{pendingCount > 0 && ` · 승인 대기 ${pendingCount}명`}
-        </p>
-      </div>
+    <main className="flex-1 h-full overflow-y-auto bg-slate-50">
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-800">회원 관리</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            전체 {users.length}명{pendingCount > 0 && ` · 승인 대기 ${pendingCount}명`}
+          </p>
+        </header>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto p-6">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 font-medium text-slate-600">사용자</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">역할</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">상태</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">가입일</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">최종 로그인</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">관리</th>
+            <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-medium">사용자</th>
+                <th className="text-left px-4 py-2.5 font-medium">역할</th>
+                <th className="text-left px-4 py-2.5 font-medium">상태</th>
+                <th className="text-left px-4 py-2.5 font-medium">가입일</th>
+                <th className="text-left px-4 py-2.5 font-medium">최종 로그인</th>
+                <th className="text-right px-4 py-2.5 font-medium">관리</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                <tr key={u.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       {u.photoURL ? (
@@ -173,8 +171,8 @@ export default function AdminUserManagement() {
               )}
             </tbody>
           </table>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

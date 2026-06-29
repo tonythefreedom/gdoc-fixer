@@ -42,7 +42,7 @@ export default function Header() {
   const isSuperAdmin = userProfile?.role === 'super_admin';
 
   return (
-    <header className="h-12 bg-white border-b border-slate-200 flex items-center px-4 shrink-0">
+    <header className="h-14 bg-white border-b border-slate-200 flex items-center px-6 shrink-0">
       {/* 좌측 — 로고 */}
       <button
         onClick={() => setCurrentView('contents')}
@@ -53,17 +53,17 @@ export default function Header() {
         <span className="text-sm font-bold text-slate-800">GDoc Fixer</span>
       </button>
 
-      {/* 우측 액션 영역 */}
+      {/* 우측 액션 영역 — 페이지 공통 톤(slate/indigo) 으로 통일 */}
       <div className="ml-auto flex items-center gap-2">
-        {/* 코인 칩 */}
+        {/* 코인 칩 — slate 베이스 + amber 코인 아이콘만 액센트 */}
         {user && (
           <button
             onClick={goProfile}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
             title="프로필 / 사용량"
           >
-            <Coins className="w-3.5 h-3.5 text-amber-600" />
-            <span className="text-xs font-semibold text-amber-700">
+            <Coins className="w-3.5 h-3.5 text-amber-500" />
+            <span className="text-xs font-semibold text-slate-700">
               {balance.toLocaleString()}
             </span>
           </button>
@@ -73,10 +73,10 @@ export default function Header() {
         {isSuperAdmin && (
           <button
             onClick={goAdmin}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
               currentView === 'admin'
-                ? 'bg-purple-600 text-white'
-                : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
             }`}
             title="회원 관리"
           >
@@ -90,14 +90,16 @@ export default function Header() {
           <div className="relative" ref={profileMenuRef}>
             <button
               onClick={() => setProfileMenuOpen((v) => !v)}
-              className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
+              className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-colors ${
+                profileMenuOpen ? 'bg-slate-100' : 'hover:bg-slate-50'
+              }`}
               title="프로필 메뉴"
             >
               {userProfile?.photoURL || user.photoURL ? (
                 <img
                   src={userProfile?.photoURL || user.photoURL}
                   alt=""
-                  className="w-7 h-7 rounded-full object-cover"
+                  className="w-7 h-7 rounded-full object-cover border border-slate-200"
                   referrerPolicy="no-referrer"
                 />
               ) : (
@@ -109,12 +111,12 @@ export default function Header() {
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
             {profileMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-slate-200 py-1.5 z-50">
-                <div className="px-3 pb-2 mb-1 border-b border-slate-100">
+              <div className="absolute right-0 top-full mt-1 w-60 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-50">
+                <div className="px-3 py-2 mb-1 border-b border-slate-100">
                   <div className="text-sm font-semibold text-slate-800 truncate">
                     {userProfile?.displayName || user.displayName || '사용자'}
                   </div>
-                  <div className="text-xs text-slate-500 truncate">{user.email}</div>
+                  <div className="text-xs text-slate-500 truncate mt-0.5">{user.email}</div>
                 </div>
                 <button
                   onClick={goProfile}
