@@ -46,21 +46,22 @@ async function fetchContentFromGcs(url) {
 }
 
 export async function createFileDoc(uid, file, content) {
+  // file 의 모든 메타 필드를 그대로 저장. id 는 doc id 라 데이터에서 제외.
+  // 이렇게 해야 type/hwpUrl/ext 같은 추가 필드(HWP 파일 등) 가 재로드 시
+  // 손실되지 않는다.
+  const { id: _id, ...meta } = file;
+  void _id;
   if (contentExceedsLimit(content)) {
     const gcsUrl = await uploadContentToGcs(uid, file.id, content);
     await setDoc(fileDoc(uid, file.id), {
-      name: file.name,
+      ...meta,
       content: '',
       contentGcsUrl: gcsUrl,
-      createdAt: file.createdAt,
-      updatedAt: file.updatedAt,
     });
   } else {
     await setDoc(fileDoc(uid, file.id), {
-      name: file.name,
+      ...meta,
       content,
-      createdAt: file.createdAt,
-      updatedAt: file.updatedAt,
     });
   }
 }
