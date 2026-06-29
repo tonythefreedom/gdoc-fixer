@@ -159,11 +159,11 @@ export default function ContentListPage() {
   const resultCount = filteredFiles.length + filteredPresentations.length + filteredShares.length;
 
   return (
-    <main className="flex-1 h-full overflow-y-auto bg-slate-50">
+    <main className="flex-1 h-full overflow-y-auto bg-slate-950">
       <div className="max-w-6xl mx-auto px-6 py-8">
         <header className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-800">컨텐츠</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-slate-100">컨텐츠</h1>
+          <p className="text-sm text-slate-400 mt-1">
             생성된 파일과 공유 링크를 한 곳에서 관리합니다.
           </p>
         </header>
@@ -171,7 +171,7 @@ export default function ContentListPage() {
         {/* 검색 입력 — IME-aware: 한글 조합 중에는 필터링 보류 */}
         <div className="mb-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="text"
               value={rawQuery}
@@ -186,11 +186,11 @@ export default function ContentListPage() {
                 setComposing(false);
                 setCommittedQuery(e.currentTarget.value);
               }}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
           {committedQuery && (
-            <div className="text-xs text-slate-500 mt-2">
+            <div className="text-xs text-slate-400 mt-2">
               {resultCount === 0
                 ? `"${committedQuery}" 에 대한 결과가 없습니다`
                 : `"${committedQuery}" 검색 결과 ${resultCount}건 (Files ${filteredFiles.length} · Presentations ${filteredPresentations.length} · Shares ${filteredShares.length})`}
@@ -200,18 +200,18 @@ export default function ContentListPage() {
 
         {/* Shared 테이블 (배포된 링크) */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
             <Share2 className="w-4 h-4 text-emerald-500" />
             Shared ({filteredShares.length} / {shares.length})
           </h2>
           {filteredShares.length === 0 ? (
-            <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-lg bg-white">
+            <div className="text-center text-sm text-slate-500 py-10 border border-dashed border-slate-800 rounded-lg bg-slate-900">
               {committedQuery ? '검색된 공유 링크가 없습니다.' : '아직 생성된 공유 링크가 없습니다.'}
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+            <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
+                <thead className="bg-slate-800 text-slate-300 text-xs uppercase">
                   <tr>
                     <th className="text-left px-4 py-2.5 font-medium">이름</th>
                     <th className="text-left px-4 py-2.5 font-medium w-44">생성일</th>
@@ -219,39 +219,39 @@ export default function ContentListPage() {
                     <th className="text-right px-4 py-2.5 font-medium w-40">작업</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-800">
                   {filteredShares.map((share) => {
                     const url = getShareUrl(share.id);
                     return (
-                      <tr key={share.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-2.5 text-slate-700">
+                      <tr key={share.id} className="hover:bg-slate-950">
+                        <td className="px-4 py-2.5 text-slate-200">
                           {share.name || `공유 #${share.id.slice(0, 6)}`}
                         </td>
-                        <td className="px-4 py-2.5 text-slate-500 text-xs">
+                        <td className="px-4 py-2.5 text-slate-400 text-xs">
                           {formatDate(share.createdAt)}
                         </td>
-                        <td className="px-4 py-2.5 text-slate-500 text-xs truncate max-w-xs">
+                        <td className="px-4 py-2.5 text-slate-400 text-xs truncate max-w-xs">
                           <span className="font-mono">{url}</span>
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => handleCopyShareUrl(share.id)}
-                              className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                              className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded"
                               title="URL 복사"
                             >
                               <Copy className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleOpenShare(share.id)}
-                              className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                              className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded"
                               title="새 탭에서 열기"
                             >
                               <ExternalLink className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteShare(share.id)}
-                              className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
+                              className="p-1.5 text-slate-400 hover:bg-red-900/30 hover:text-red-400 rounded"
                               title="삭제"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -269,18 +269,18 @@ export default function ContentListPage() {
 
         {/* Presentations 테이블 (Files 보다 먼저 표시) */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
             <Presentation className="w-4 h-4 text-indigo-400" />
             Presentations ({filteredPresentations.length} / {presentations.length})
           </h2>
           {filteredPresentations.length === 0 ? (
-            <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-lg bg-white">
+            <div className="text-center text-sm text-slate-500 py-10 border border-dashed border-slate-800 rounded-lg bg-slate-900">
               {committedQuery ? '검색된 프리젠테이션이 없습니다.' : '아직 생성된 프리젠테이션이 없습니다.'}
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+            <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
+                <thead className="bg-slate-800 text-slate-300 text-xs uppercase">
                   <tr>
                     <th className="text-left px-4 py-2.5 font-medium">이름</th>
                     <th className="text-left px-4 py-2.5 font-medium w-24">슬라이드</th>
@@ -289,14 +289,14 @@ export default function ContentListPage() {
                     <th className="text-right px-4 py-2.5 font-medium w-40">작업</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-800">
                   {filteredPresentations.map((pres) => (
-                    <tr key={pres.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5 text-slate-700">
+                    <tr key={pres.id} className="hover:bg-slate-950">
+                      <td className="px-4 py-2.5 text-slate-200">
                         {editingKind === 'presentation' && editingId === pres.id ? (
                           <div className="flex items-center gap-2">
                             <input
-                              className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm outline-none focus:border-indigo-500"
+                              className="flex-1 px-2 py-1 border border-slate-700 rounded text-sm outline-none focus:border-indigo-400"
                               value={editName}
                               onChange={(e) => setEditName(e.target.value)}
                               onKeyDown={(e) => {
@@ -307,14 +307,14 @@ export default function ContentListPage() {
                             />
                             <button
                               onClick={confirmRename}
-                              className="p-1 text-emerald-600 hover:text-emerald-700"
+                              className="p-1 text-emerald-400 hover:text-emerald-300"
                               title="확인"
                             >
                               <Check className="w-4 h-4" />
                             </button>
                             <button
                               onClick={cancelRename}
-                              className="p-1 text-slate-400 hover:text-slate-600"
+                              className="p-1 text-slate-500 hover:text-slate-300"
                               title="취소"
                             >
                               <X className="w-4 h-4" />
@@ -323,19 +323,19 @@ export default function ContentListPage() {
                         ) : (
                           <button
                             onClick={() => handleOpenPresentation(pres.id)}
-                            className="text-left text-indigo-600 hover:underline"
+                            className="text-left text-indigo-400 hover:underline"
                           >
                             {pres.name || `프리젠테이션 #${pres.id.slice(0, 6)}`}
                           </button>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-600 text-xs">
+                      <td className="px-4 py-2.5 text-slate-300 text-xs">
                         {Array.isArray(pres.slides) ? pres.slides.length : 0}장
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500 text-xs">
+                      <td className="px-4 py-2.5 text-slate-400 text-xs">
                         {formatDate(pres.createdAt)}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500 text-xs">
+                      <td className="px-4 py-2.5 text-slate-400 text-xs">
                         {formatDate(pres.updatedAt)}
                       </td>
                       <td className="px-4 py-2.5">
@@ -343,7 +343,7 @@ export default function ContentListPage() {
                           <button
                             onClick={() => handleOpenPresentationShare(pres)}
                             disabled={sharingPresId === pres.id}
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 rounded disabled:opacity-50 disabled:cursor-wait"
+                            className="p-1.5 text-emerald-400 hover:bg-emerald-900/30 hover:text-emerald-300 rounded disabled:opacity-50 disabled:cursor-wait"
                             title="공유 링크로 외부 슬라이드 뷰어 열기"
                           >
                             {sharingPresId === pres.id ? (
@@ -354,21 +354,21 @@ export default function ContentListPage() {
                           </button>
                           <button
                             onClick={() => handleOpenPresentation(pres.id)}
-                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                            className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded"
                             title="에디터로 열기"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => startRename('presentation', pres)}
-                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                            className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded"
                             title="이름 변경"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeletePresentation(pres.id)}
-                            className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
+                            className="p-1.5 text-slate-400 hover:bg-red-900/30 hover:text-red-400 rounded"
                             title="삭제"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -385,18 +385,18 @@ export default function ContentListPage() {
 
         {/* Files 테이블 */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-            <FileCode className="w-4 h-4 text-slate-400" />
+          <h2 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+            <FileCode className="w-4 h-4 text-slate-500" />
             Files ({filteredFiles.length} / {files.length})
           </h2>
           {filteredFiles.length === 0 ? (
-            <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-lg bg-white">
+            <div className="text-center text-sm text-slate-500 py-10 border border-dashed border-slate-800 rounded-lg bg-slate-900">
               {committedQuery ? '검색된 파일이 없습니다.' : '아직 생성된 파일이 없습니다.'}
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+            <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-slate-100 text-slate-600 text-xs uppercase">
+                <thead className="bg-slate-800 text-slate-300 text-xs uppercase">
                   <tr>
                     <th className="text-left px-4 py-2.5 font-medium">이름</th>
                     <th className="text-left px-4 py-2.5 font-medium w-44">생성일</th>
@@ -404,14 +404,14 @@ export default function ContentListPage() {
                     <th className="text-right px-4 py-2.5 font-medium w-40">작업</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-800">
                   {filteredFiles.map((file) => (
-                    <tr key={file.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5 text-slate-700">
+                    <tr key={file.id} className="hover:bg-slate-950">
+                      <td className="px-4 py-2.5 text-slate-200">
                         {editingKind === 'file' && editingId === file.id ? (
                           <div className="flex items-center gap-2">
                             <input
-                              className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm outline-none focus:border-indigo-500"
+                              className="flex-1 px-2 py-1 border border-slate-700 rounded text-sm outline-none focus:border-indigo-400"
                               value={editName}
                               onChange={(e) => setEditName(e.target.value)}
                               onKeyDown={(e) => {
@@ -422,14 +422,14 @@ export default function ContentListPage() {
                             />
                             <button
                               onClick={confirmRename}
-                              className="p-1 text-emerald-600 hover:text-emerald-700"
+                              className="p-1 text-emerald-400 hover:text-emerald-300"
                               title="확인"
                             >
                               <Check className="w-4 h-4" />
                             </button>
                             <button
                               onClick={cancelRename}
-                              className="p-1 text-slate-400 hover:text-slate-600"
+                              className="p-1 text-slate-500 hover:text-slate-300"
                               title="취소"
                             >
                               <X className="w-4 h-4" />
@@ -438,37 +438,37 @@ export default function ContentListPage() {
                         ) : (
                           <button
                             onClick={() => handleOpenFile(file.id)}
-                            className="text-left text-indigo-600 hover:underline"
+                            className="text-left text-indigo-400 hover:underline"
                           >
                             {file.name}
                           </button>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500 text-xs">
+                      <td className="px-4 py-2.5 text-slate-400 text-xs">
                         {formatDate(file.createdAt)}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500 text-xs">
+                      <td className="px-4 py-2.5 text-slate-400 text-xs">
                         {formatDate(file.updatedAt)}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => handleOpenFile(file.id)}
-                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                            className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded"
                             title="열기"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => startRename('file', file)}
-                            className="p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded"
+                            className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded"
                             title="이름 변경"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteFile(file.id)}
-                            className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded"
+                            className="p-1.5 text-slate-400 hover:bg-red-900/30 hover:text-red-400 rounded"
                             title="삭제"
                           >
                             <Trash2 className="w-4 h-4" />

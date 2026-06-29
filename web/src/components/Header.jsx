@@ -42,7 +42,7 @@ export default function Header() {
   const isSuperAdmin = userProfile?.role === 'super_admin';
 
   return (
-    <header className="h-14 bg-white border-b border-slate-200 flex items-center px-6 shrink-0">
+    <header className="h-14 bg-slate-900 border-b border-slate-700 flex items-center px-6 shrink-0">
       {/* 좌측 — 로고 */}
       <button
         onClick={() => setCurrentView('contents')}
@@ -50,20 +50,20 @@ export default function Header() {
         title="홈"
       >
         <img src="/logo.svg" alt="GDoc Fixer" className="w-6 h-6" />
-        <span className="text-sm font-bold text-slate-800">GDoc Fixer</span>
+        <span className="text-sm font-bold text-slate-100">GDoc Fixer</span>
       </button>
 
-      {/* 우측 액션 영역 — 페이지 공통 톤(slate/indigo) 으로 통일 */}
+      {/* 우측 액션 영역 — 사이드바(slate-900) 와 같은 다크 톤 */}
       <div className="ml-auto flex items-center gap-2">
-        {/* 코인 칩 — slate 베이스 + amber 코인 아이콘만 액센트 */}
+        {/* 코인 칩 */}
         {user && (
           <button
             onClick={goProfile}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
             title="프로필 / 사용량"
           >
-            <Coins className="w-3.5 h-3.5 text-amber-500" />
-            <span className="text-xs font-semibold text-slate-700">
+            <Coins className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-xs font-semibold text-slate-200">
               {balance.toLocaleString()}
             </span>
           </button>
@@ -76,7 +76,7 @@ export default function Header() {
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
               currentView === 'admin'
                 ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
             }`}
             title="회원 관리"
           >
@@ -91,7 +91,7 @@ export default function Header() {
             <button
               onClick={() => setProfileMenuOpen((v) => !v)}
               className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-colors ${
-                profileMenuOpen ? 'bg-slate-100' : 'hover:bg-slate-50'
+                profileMenuOpen ? 'bg-slate-700' : 'hover:bg-slate-800'
               }`}
               title="프로필 메뉴"
             >
@@ -99,13 +99,13 @@ export default function Header() {
                 <img
                   src={userProfile?.photoURL || user.photoURL}
                   alt=""
-                  className="w-7 h-7 rounded-full object-cover border border-slate-200"
+                  className="w-7 h-7 rounded-full object-cover border border-slate-700"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <UserCircle2 className="w-7 h-7 text-slate-400" />
+                <UserCircle2 className="w-7 h-7 text-slate-500" />
               )}
-              <span className="text-xs text-slate-700 max-w-[140px] truncate hidden sm:block">
+              <span className="text-xs text-slate-200 max-w-[140px] truncate hidden sm:block">
                 {userProfile?.displayName || user.displayName || user.email}
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
