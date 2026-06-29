@@ -13,6 +13,7 @@ import SlideGenerationProgress from './slide/SlideGenerationProgress';
 import PlanningEditor from './planning/PlanningEditor';
 import PublishModal from './PublishModal';
 import { useDocxExport } from '../hooks/useDocxExport';
+import RhwpEditorView from './RhwpEditorView';
 import { useDocModify } from '../hooks/useDocModify';
 import { generateShareUrl } from '../utils/shareUrl';
 import useShareStore from '../store/useShareStore';
@@ -423,10 +424,18 @@ export default function MainPanel() {
   // No file selected
   if (!activeFileId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-100 text-slate-400 text-sm">
+      <div className="flex-1 flex items-center justify-center bg-slate-950 text-slate-500 text-sm">
         좌측에서 파일을 선택하거나 새 파일을 만드세요
       </div>
     );
+  }
+
+  // HWP 파일 — 기본 HTML 에디터 대신 rhwp 에디터 임베드
+  {
+    const activeFile = files.find((f) => f.id === activeFileId);
+    if (activeFile?.type === 'hwp') {
+      return <RhwpEditorView />;
+    }
   }
 
   // File editor mode

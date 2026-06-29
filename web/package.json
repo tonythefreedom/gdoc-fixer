@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@rhwp/editor": "^0.7.17",
     "chart.js": "^4.5.1",
     "docx": "^9.6.1",
     "docx-preview": "^0.3.7",

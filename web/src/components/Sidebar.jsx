@@ -14,7 +14,7 @@ export default function Sidebar() {
   const renameFile = useAppStore((s) => s.renameFile);
   const toggleImagePanel = useAppStore((s) => s.toggleImagePanel);
   const isImagePanelOpen = useAppStore((s) => s.isImagePanelOpen);
-  const createFileFromHwp = useAppStore((s) => s.createFileFromHwp);
+  const createHwpFileForRhwpEditor = useAppStore((s) => s.createHwpFileForRhwpEditor);
   const hwpImporting = useAppStore((s) => s.hwpImporting);
   const createFileFromDocx = useAppStore((s) => s.createFileFromDocx);
   const docxImporting = useAppStore((s) => s.docxImporting);
@@ -232,23 +232,23 @@ export default function Sidebar() {
           {hwpImporting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              HWP 변환 중...
+              HWP 업로드 중...
             </>
           ) : (
             <>
               <FileUp className="w-4 h-4" />
-              HWP 가져오기
+              HWP 가져오기 (rhwp)
             </>
           )}
         </button>
         <input
           ref={hwpInputRef}
           type="file"
-          accept=".hwp"
+          accept=".hwp,.hwpx"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) {
-              createFileFromHwp(file);
+              createHwpFileForRhwpEditor(file);
               e.target.value = '';
             }
           }}

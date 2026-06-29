@@ -170,6 +170,43 @@ const useAppStore = create((set, get) => ({
     }
   },
 
+  /**
+   * HWP 바이너리를 GCS 에 그대로 업로드하고 type:'hwp' 파일로 등록.
+   * MainPanel 이 type:'hwp' 일 때 rhwp 에디터를 임베드해서 직접 보여준다.
+   */
+  createHwpFileForRhwpEditor: async (file) => {
+    const { uid } = get();
+    if (!uid) return;
+    set({ hwpImporting: true });
+    try {
+      const { uploadBlobToGcs } = await import('./storage');
+      const name = file.name.replace(/\.(hwp|hwpx)$/i, '') || `hwp_${Date.now().toString(36)}`;
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const ext = /\.hwpx$/i.test(file.name) ? 'hwpx' : 'hwp';
+      const path = `wiki-images/hwp/${uid}/${id}_${Date.now()}.${ext}`;
+      const hwpUrl = await uploadBlobToGcs(path, file);
+
+      const fileDoc = {
+        id,
+        name,
+        type: 'hwp',
+        hwpUrl,
+        ext,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      // createFileDoc 은 type/hwpUrl 같은 추가 필드를 그대로 메타에 저장한다.
+      await createFileDoc(uid, fileDoc, '');
+      set({ files: [...get().files, fileDoc], currentView: 'editor' });
+      get().setActiveFile(id);
+    } catch (err) {
+      console.error('HWP(rhwp) import failed:', err);
+      alert(`HWP 파일 가져오기 실패: ${err.message || err}`);
+    } finally {
+      set({ hwpImporting: false });
+    }
+  },
+
   createFileFromDocx: async (file) => {
     const { uid } = get();
     if (!uid) return;
