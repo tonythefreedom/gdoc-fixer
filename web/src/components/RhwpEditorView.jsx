@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Download, FileType, Save, Sparkles } from 'lucide-react';
+import { Loader2, Download, FileType, Save, Sparkles, Send } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 
 /**
@@ -24,6 +24,11 @@ export default function RhwpEditorView() {
   const [error, setError] = useState('');
   const [pageCount, setPageCount] = useState(0);
   const [exporting, setExporting] = useState(false);
+
+  // LLM 채팅 — HWP 본문 단락을 자연어 요청으로 수정
+  const [chatPrompt, setChatPrompt] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatStatus, setChatStatus] = useState(''); // 단계 표시
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +95,68 @@ export default function RhwpEditorView() {
     };
   }, [activeFile?.id, activeFile?.hwpUrl]);
 
+  /**
+   * LLM 으로 본문 텍스트 수정 → 새 HWPX bytes 만들어서 loadFile 재로드.
+   * 흐름: 현재 HWPX export → 단락 텍스트 추출 → LLM modifyHwpText → 단락
+   * 교체 → loadFile.
+   */
+  const handleChatSubmit = async () => {
+    const ed = editorRef.current;
+    const instruction = chatPrompt.trim();
+    if (!ed || !instruction || chatBusy) return;
+
+    setChatBusy(true);
+    setChatStatus('현재 문서 export…');
+    try {
+      // 코인 1 차감 (HTML 문서 업데이트와 동일 비용)
+      const { uid } = useAppStore.getState();
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(uid, 'modifyDoc');
+
+      const currentBytes = await ed.exportHwpx();
+
+      setChatStatus('본문 단락 추출…');
+      const { extractParagraphsFromHwpx, applyParagraphsToHwpx } = await import('../utils/hwpxText');
+      const paragraphs = await extractParagraphsFromHwpx(currentBytes);
+
+      setChatStatus('LLM 호출 (단락 수정)…');
+      const { modifyHwpText } = await import('../utils/geminiApi');
+      const newParagraphs = await modifyHwpText(paragraphs, instruction);
+
+      setChatStatus('새 HWPX 빌드…');
+      const newBytes = await applyParagraphsToHwpx(currentBytes, newParagraphs);
+
+      setChatStatus('에디터에 재로드…');
+      // 큰 문서면 timeout 가능 — pageCount 폴링으로 복구
+      try {
+        const loaded = await ed.loadFile(newBytes, activeFile?.name || 'document.hwp');
+        setPageCount(loaded?.pageCount || 0);
+      } catch (err) {
+        if (!/timeout/i.test(err?.message || '')) throw err;
+        let pc = 0;
+        for (let i = 0; i < 10; i++) {
+          await new Promise((r) => setTimeout(r, 1500));
+          try {
+            pc = await ed.pageCount();
+            if (pc > 0) break;
+          } catch { /* retry */ }
+        }
+        if (pc <= 0) throw err;
+        setPageCount(pc);
+      }
+
+      setChatPrompt('');
+      setChatStatus('완료');
+      setTimeout(() => setChatStatus(''), 1500);
+    } catch (err) {
+      console.error('chat modify failed:', err);
+      alert(`수정 실패: ${err?.message || err}`);
+      setChatStatus('');
+    } finally {
+      setChatBusy(false);
+    }
+  };
+
   const handleExport = async (kind /* 'hwp' | 'hwpx' */) => {
     const ed = editorRef.current;
     if (!ed || exporting) return;
@@ -128,10 +195,6 @@ export default function RhwpEditorView() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <span className="hidden md:inline-flex items-center gap-1 text-[11px] text-slate-400">
-            <Sparkles className="w-3 h-3" />
-            LLM 자동 삽입은 v2 예정
-          </span>
           <button
             onClick={() => handleExport('hwp')}
             disabled={status !== 'ready' || exporting}
@@ -169,6 +232,44 @@ export default function RhwpEditorView() {
           </div>
         )}
       </div>
+
+      {/* LLM 채팅 입력 — HWP 본문 텍스트를 자연어로 수정 */}
+      {status === 'ready' && (
+        <div className="px-4 py-3 bg-slate-900 border-t border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 mb-1.5 text-[11px] text-slate-400">
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            HWP 본문에 적용할 수정 지시를 입력하세요 · 코인 1 소모
+          </div>
+          <div className="flex items-end gap-2">
+            <textarea
+              value={chatPrompt}
+              onChange={(e) => setChatPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  handleChatSubmit();
+                }
+              }}
+              placeholder="예: 결론 단락을 한 줄 더 추가해. 또는: 표현을 정중한 비즈니스 톤으로 다듬어."
+              disabled={chatBusy}
+              rows={2}
+              className="flex-1 resize-none rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-400 disabled:opacity-60"
+            />
+            <button
+              onClick={handleChatSubmit}
+              disabled={!chatPrompt.trim() || chatBusy}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="LLM 으로 HWP 본문 수정 (Cmd+Enter)"
+            >
+              {chatBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              {chatBusy ? '수정 중…' : '적용'}
+            </button>
+          </div>
+          {chatStatus && (
+            <p className="mt-1.5 text-[11px] text-slate-500">{chatStatus}</p>
+          )}
+        </div>
+      )}
     </main>
   );
 }

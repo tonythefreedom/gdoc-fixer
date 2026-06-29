@@ -1674,6 +1674,51 @@ function safeParseLlmJson(text) {
   throw result instanceof Error ? result : new Error('JSON parse failed');
 }
 
+/**
+ * 현재 HWP 문서의 단락 텍스트 배열과 사용자 수정 요청을 받아 수정된 단락
+ * 배열을 JSON 으로 반환. 응답을 그대로 hwpxText.applyParagraphsToHwpx 에
+ * 넘기면 새 HWPX bytes 를 만들 수 있다.
+ */
+export async function modifyHwpText(currentParagraphs, instruction) {
+  if (!API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const systemPrompt = `당신은 한국어 HWP 문서 편집 전문가입니다.
+사용자가 현재 문서의 단락 텍스트 배열과 수정 요청을 함께 보냅니다.
+
+규칙:
+- 응답은 반드시 JSON: { "paragraphs": ["단락1", "단락2", ...] }
+- 각 문자열이 하나의 단락. 빈 단락은 빈 문자열 "".
+- HWP 의 본문 텍스트만 출력 (서식 마크업, HTML, 마크다운 금지).
+- 한국어 자연스러운 문장으로.
+- 사용자가 명시적으로 추가/삭제 요청하지 않으면 단락 수와 흐름을 유지.
+- 표 / 그림 / 수식은 단락 텍스트에 포함되지 않으므로 그대로 유지된다고 가정.
+- JSON 외 다른 텍스트(설명, 코드 펜스 등) 절대 포함 금지.
+`;
+
+  const userText = `현재 단락 배열:\n${JSON.stringify(currentParagraphs, null, 2)}\n\n사용자 요청:\n${instruction}\n\n위 규칙대로 수정된 paragraphs 를 JSON 으로만 출력하세요.`;
+
+  const text = await callProModel(systemPrompt, userText, {
+    maxOutputTokens: 32768,
+    temperature: 0.3,
+    thinkingBudget: 128,
+    responseMimeType: 'application/json',
+  });
+
+  let parsed;
+  try {
+    parsed = safeParseLlmJson(text);
+  } catch (e) {
+    console.error('modifyHwpText JSON parse failed:', text);
+    throw new Error('LLM 응답 파싱 실패. 다시 시도해주세요.');
+  }
+  if (!Array.isArray(parsed?.paragraphs)) {
+    throw new Error('LLM 응답에 paragraphs 배열이 없습니다.');
+  }
+  return parsed.paragraphs.map((p) => (typeof p === 'string' ? p : String(p ?? '')));
+}
+
 export async function planUserContentForFormatting(brief) {
   if (!API_KEY) {
     throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
