@@ -111,18 +111,18 @@ export default function Header() {
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
             {profileMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-60 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-50">
-                <div className="px-3 py-2 mb-1 border-b border-slate-100">
-                  <div className="text-sm font-semibold text-slate-800 truncate">
+              <div className="absolute right-0 top-full mt-1 w-60 bg-slate-900 rounded-xl shadow-lg border border-slate-700 py-1.5 z-50">
+                <div className="px-3 py-2 mb-1 border-b border-slate-800">
+                  <div className="text-sm font-semibold text-slate-100 truncate">
                     {userProfile?.displayName || user.displayName || '사용자'}
                   </div>
-                  <div className="text-xs text-slate-500 truncate mt-0.5">{user.email}</div>
+                  <div className="text-xs text-slate-400 truncate mt-0.5">{user.email}</div>
                 </div>
                 <button
                   onClick={goProfile}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 transition-colors"
                 >
-                  <UserCog className="w-4 h-4 text-slate-500" />
+                  <UserCog className="w-4 h-4 text-slate-400" />
                   프로필 / 사용량
                 </button>
                 <button
@@ -130,7 +130,7 @@ export default function Header() {
                     setProfileMenuOpen(false);
                     signOut();
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-900/30 transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   로그아웃
