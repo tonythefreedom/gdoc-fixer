@@ -46,7 +46,29 @@ export default function RhwpEditorView() {
         const res = await fetch(activeFile.hwpUrl);
         if (!res.ok) throw new Error(`HWP fetch 실패 ${res.status}`);
         const buf = await res.arrayBuffer();
-        const loaded = await editor.loadFile(buf, activeFile.name || 'document.hwp');
+
+        // @rhwp/editor 는 loadFile 응답 RPC 의 timeout 이 10s 하드코딩.
+        // 16+페이지 큰 HWP 는 그 안에 응답이 안 와 reject 되지만 iframe 내부는
+        // 정상 로드된 경우가 많다. timeout 시 pageCount() 폴링으로 복구.
+        let loaded;
+        try {
+          loaded = await editor.loadFile(buf, activeFile.name || 'document.hwp');
+        } catch (err) {
+          if (!/timeout/i.test(err?.message || '')) throw err;
+          console.warn('[RhwpEditorView] loadFile timeout — pageCount 폴링으로 복구 시도');
+          let pc = 0;
+          for (let i = 0; i < 10; i++) {
+            if (cancelled) return;
+            await new Promise((r) => setTimeout(r, 1500));
+            try {
+              pc = await editor.pageCount();
+              if (pc > 0) break;
+            } catch { /* 다음 polling */ }
+          }
+          if (pc <= 0) throw err;
+          loaded = { pageCount: pc };
+        }
+
         if (cancelled) return;
         setPageCount(loaded?.pageCount || 0);
         setStatus('ready');
