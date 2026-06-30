@@ -16,17 +16,27 @@ import { ACTION_COSTS, ACTION_LABELS, INITIAL_COIN_GRANT } from '../utils/coin';
 import { uploadBlobToGcs, dataUriToBlob } from '../store/storage';
 
 // 가격 정책: 100 coin = $1. functions/coinCheckout.js 의 COIN_PACKAGES 와 동기화.
-// variantId 는 Lemon Squeezy 의 variant id (숫자). checkout[variant_id] query 로
-// share URL 의 default variant 를 override 한다.
-const COIN_PACKAGES = [
-  { key: 1000, coins: 1000, usd: 10, label: '체험', highlight: false, variantId: 1854485 },
-  { key: 5000, coins: 5000, usd: 50, label: '스타터', highlight: true, variantId: 1854486 },
-];
-
-// Lemon Squeezy 의 Share URL — 단일 product 의 결제 페이지 (4 variants 선택).
+// Lemon Squeezy 결제 URL. 각 variant 별 직접 buy / share URL.
 // uid / email / coins 는 checkout[custom][...] query param 으로 주입되어
 // webhook(order_created) 의 meta.custom_data 에 도달.
-const LEMONSQUEEZY_SHARE_URL = 'https://app.lemonsqueezy.com/share/1185899';
+const COIN_PACKAGES = [
+  {
+    key: 1000,
+    coins: 1000,
+    usd: 10,
+    label: '체험',
+    highlight: false,
+    checkoutUrl: 'https://app.lemonsqueezy.com/share/1185899',
+  },
+  {
+    key: 5000,
+    coins: 5000,
+    usd: 50,
+    label: '스타터',
+    highlight: true,
+    checkoutUrl: 'https://gdoc-fixer.lemonsqueezy.com/checkout/buy/532df188-8a58-4301-96c2-5340eb15b189',
+  },
+];
 
 function readFileAsDataUri(file) {
   return new Promise((resolve, reject) => {
@@ -79,8 +89,6 @@ export default function ProfilePage() {
     // Lemon Squeezy Share URL 로 직접 redirect. checkout[custom][*] 가 webhook
     // (order_created) 의 meta.custom_data 로 forward 되어 자동 코인 충전.
     const params = new URLSearchParams();
-    // 선택한 패키지의 variant 강제 — share URL 의 default variant 를 override.
-    if (pkg.variantId) params.set('checkout[variant_id]', String(pkg.variantId));
     if (u.email) params.set('checkout[email]', u.email);
     params.set('checkout[custom][uid]', u.uid);
     params.set('checkout[custom][coins]', String(pkg.coins));
@@ -89,7 +97,7 @@ export default function ProfilePage() {
       'checkout[success_url]',
       `${window.location.origin}${window.location.pathname}?charge=success&coins=${pkg.coins}`
     );
-    window.location.href = `${LEMONSQUEEZY_SHARE_URL}?${params.toString()}`;
+    window.location.href = `${pkg.checkoutUrl}?${params.toString()}`;
   };
 
   if (!profile) {
