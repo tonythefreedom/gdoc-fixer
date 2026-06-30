@@ -4,9 +4,9 @@ const admin = require('firebase-admin');
 
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 
-const FROM = 'GDoc Fixer <noreply@banya.ai>';
-// 실 발송 도메인 인증이 완료될 때까지 sandbox 도메인을 fallback 으로 사용 가능.
-// 도메인 검증 후 FROM 을 자기 도메인으로 변경.
+const FROM = 'GDoc Fixer <noreply@prototypebench.org>';
+// Resend → Domains 에서 prototypebench.org 검증 (SPF/DKIM/DMARC TXT 레코드) 필요.
+// 검증 완료 전 발송 시 Resend 가 403/422 반환 — 가입 흐름은 try/catch fail-soft.
 
 const ALLOWED_ORIGINS = [
   'https://gdoc-fixer.web.app',
