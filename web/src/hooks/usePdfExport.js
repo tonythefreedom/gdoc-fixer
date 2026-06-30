@@ -75,12 +75,51 @@ function extractSlideViewport(html) {
   };
 }
 
-// Convert external image URLs to data URIs so html-to-image can render them
-async function inlineExternalImages(html) {
+/**
+ * 전체 슬라이드 deck 에서 사용된 GCS 이미지 URL 들을 한 번씩만 fetch 해
+ * URL → dataURI Map 반환. 같은 이미지가 여러 슬라이드에 있어도 1 회 fetch.
+ */
+async function prefetchImageMap(slides) {
+  const urlRegex = /https:\/\/storage\.googleapis\.com\/[^\s"')]+/g;
+  const all = new Set();
+  for (const s of slides) {
+    const m = s.match(urlRegex);
+    if (m) for (const u of m) all.add(u);
+  }
+  const map = new Map();
+  await Promise.all(
+    [...all].map(async (url) => {
+      try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const dataUri = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        map.set(url, dataUri);
+      } catch (err) {
+        console.warn('Failed to inline image for PDF:', url, err);
+      }
+    })
+  );
+  return map;
+}
+
+function applyImageMap(html, map) {
+  if (!map.size) return html;
+  let result = html;
+  for (const [url, dataUri] of map) {
+    result = result.replaceAll(url, dataUri);
+  }
+  return result;
+}
+
+// (deprecated) 슬라이드 1 개 단위 인라인 — 호출 안 함. 호환 위해 남김.
+async function inlineExternalImages(html) { // eslint-disable-line no-unused-vars
   const urlRegex = /https:\/\/storage\.googleapis\.com\/[^\s"')]+/g;
   const urls = [...new Set(html.match(urlRegex) || [])];
   if (urls.length === 0) return html;
-
   let result = html;
   await Promise.all(urls.map(async (url) => {
     try {
@@ -139,8 +178,14 @@ export function usePdfExport() {
         hotfixes: ['px_scaling'],
       });
 
+      // 전 슬라이드의 GCS 이미지를 한 번씩만 fetch (병렬). 같은 이미지가
+      // 여러 슬라이드에 있어도 1 회만 네트워크 호출.
+      console.time('[PDF] prefetchImages');
+      const imageMap = await prefetchImageMap(slides);
+      console.timeEnd('[PDF] prefetchImages');
+
       for (let i = 0; i < slides.length; i++) {
-        const inlinedHtml = await inlineExternalImages(slides[i]);
+        const inlinedHtml = applyImageMap(slides[i], imageMap);
 
         // 슬라이드 HTML 에서 1280×720 viewport 만 추출 → PDF 의 최외곽으로 사용
         const { viewportHtml, styles } = extractSlideViewport(inlinedHtml);
@@ -169,19 +214,21 @@ export function usePdfExport() {
 
         container.appendChild(slideEl);
 
-        await delay(300);
+        // 폰트/이미지 이미 로드됨 — 짧은 한 frame 대기로 layout flush 만.
+        await delay(30);
 
         const canvas = await toCanvas(slideEl, {
           width: SLIDE_W,
           height: SLIDE_H,
-          pixelRatio: 3,
-          cacheBust: true,
+          // 2배는 PDF 출력 quality 충분 + canvas 픽셀 4 배 감소 (3 → 2)
+          pixelRatio: 2,
+          cacheBust: false,
           imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
         });
 
         if (i > 0) pdf.addPage([SLIDE_W, SLIDE_H], 'landscape');
         pdf.addImage(
-          canvas.toDataURL('image/jpeg', 0.95),
+          canvas.toDataURL('image/jpeg', 0.85),
           'JPEG',
           0, 0, SLIDE_W, SLIDE_H,
           undefined,
@@ -189,6 +236,7 @@ export function usePdfExport() {
         );
 
         container.removeChild(slideEl);
+        console.log(`[PDF] ${i + 1}/${slides.length}`);
       }
 
       const blob = pdf.output('blob');
