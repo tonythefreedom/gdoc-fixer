@@ -16,9 +16,11 @@ import { ACTION_COSTS, ACTION_LABELS, INITIAL_COIN_GRANT } from '../utils/coin';
 import { uploadBlobToGcs, dataUriToBlob } from '../store/storage';
 
 // 가격 정책: 100 coin = $1. functions/coinCheckout.js 의 COIN_PACKAGES 와 동기화.
+// variantId 는 Lemon Squeezy 의 variant id (숫자). checkout[variant_id] query 로
+// share URL 의 default variant 를 override 한다.
 const COIN_PACKAGES = [
-  { key: 1000, coins: 1000, usd: 10, label: '체험', highlight: false },
-  { key: 5000, coins: 5000, usd: 50, label: '스타터', highlight: true },
+  { key: 1000, coins: 1000, usd: 10, label: '체험', highlight: false, variantId: 1854485 },
+  { key: 5000, coins: 5000, usd: 50, label: '스타터', highlight: true, variantId: 1854486 },
 ];
 
 // Lemon Squeezy 의 Share URL — 단일 product 의 결제 페이지 (4 variants 선택).
@@ -77,6 +79,8 @@ export default function ProfilePage() {
     // Lemon Squeezy Share URL 로 직접 redirect. checkout[custom][*] 가 webhook
     // (order_created) 의 meta.custom_data 로 forward 되어 자동 코인 충전.
     const params = new URLSearchParams();
+    // 선택한 패키지의 variant 강제 — share URL 의 default variant 를 override.
+    if (pkg.variantId) params.set('checkout[variant_id]', String(pkg.variantId));
     if (u.email) params.set('checkout[email]', u.email);
     params.set('checkout[custom][uid]', u.uid);
     params.set('checkout[custom][coins]', String(pkg.coins));
