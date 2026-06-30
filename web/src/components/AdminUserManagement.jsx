@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Loader2, CheckCircle, Clock, XCircle, Shield, UserCheck, UserX } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Loader2, CheckCircle, Clock, XCircle, Shield, UserCheck, UserX, Coins, Plus } from 'lucide-react';
 import useAdminStore from '../store/useAdminStore';
 
 function StatusBadge({ status }) {
@@ -56,6 +56,24 @@ export default function AdminUserManagement() {
   const loadAllUsers = useAdminStore((s) => s.loadAllUsers);
   const approveUser = useAdminStore((s) => s.approveUser);
   const rejectUser = useAdminStore((s) => s.rejectUser);
+  const grantCoins = useAdminStore((s) => s.grantCoins);
+  const [granting, setGranting] = useState(null);
+
+  const handleGrant = async (u) => {
+    const input = window.prompt(
+      `${u.displayName || u.email} 에게 부여할 코인 (음수면 차감). 현재 잔액: ${u.coinBalance ?? 0}`,
+      '10000'
+    );
+    if (input === null) return;
+    const n = Number(input);
+    if (!Number.isFinite(n) || n === 0) return;
+    setGranting(u.id);
+    try {
+      await grantCoins(u.id, n);
+    } finally {
+      setGranting(null);
+    }
+  };
 
   useEffect(() => {
     loadAllUsers();
@@ -88,8 +106,8 @@ export default function AdminUserManagement() {
                 <th className="text-left px-4 py-2.5 font-medium">사용자</th>
                 <th className="text-left px-4 py-2.5 font-medium">역할</th>
                 <th className="text-left px-4 py-2.5 font-medium">상태</th>
+                <th className="text-right px-4 py-2.5 font-medium">코인</th>
                 <th className="text-left px-4 py-2.5 font-medium">가입일</th>
-                <th className="text-left px-4 py-2.5 font-medium">최종 로그인</th>
                 <th className="text-right px-4 py-2.5 font-medium">관리</th>
               </tr>
             </thead>
@@ -122,14 +140,26 @@ export default function AdminUserManagement() {
                   <td className="px-4 py-3">
                     <StatusBadge status={u.status} />
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-300">
+                      <Coins className="w-3 h-3" />
+                      {(u.coinBalance ?? 0).toLocaleString()}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-xs text-slate-400">
                     {formatDate(u.createdAt)}
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-400">
-                    {formatDate(u.lastLoginAt)}
-                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => handleGrant(u)}
+                        disabled={granting === u.id}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-amber-900/30 text-amber-300 hover:bg-amber-900/40 disabled:opacity-40 disabled:cursor-wait transition-colors"
+                        title="코인 부여 / 차감"
+                      >
+                        {granting === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                        코인
+                      </button>
                       {u.role !== 'super_admin' && (
                         <>
                           <button

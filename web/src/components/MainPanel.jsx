@@ -74,13 +74,6 @@ export default function MainPanel() {
   const handleExportHtml = async () => {
     const { activeFileContent, activeFileId: fileId, files: allFiles, uid } = useAppStore.getState();
     if (!activeFileContent) return;
-    try {
-      const { chargeCoin } = await import('../utils/coin');
-      await chargeCoin(uid, 'exportDoc');
-    } catch (err) {
-      alert(err.message);
-      return;
-    }
     const file = allFiles.find((f) => f.id === fileId);
     const name = (file?.name || 'document').replace(/\.[^.]+$/, '');
     const fullHtml = `<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>${name}</title>\n</head>\n<body>\n${activeFileContent}\n</body>\n</html>`;
@@ -91,21 +84,27 @@ export default function MainPanel() {
     a.download = `${name}.html`;
     a.click();
     URL.revokeObjectURL(url);
+    // export 성공 후 코인 차감
+    try {
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(uid, 'exportDoc');
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   const handleExportPdf = async () => {
     if (isExportingPdf) return;
-    try {
-      const { chargeCoin } = await import('../utils/coin');
-      await chargeCoin(useAppStore.getState().uid, 'exportDoc');
-    } catch (err) {
-      alert(err.message);
-      return;
-    }
     setIsExportingPdf(true);
     setExportMenuOpen(false);
     try {
-      const iframeDoc = iframeRef.current?.contentDocument;
+      // iframe 이 일시 reload 중일 수 있어 짧게 폴링 후 확정.
+      let iframeDoc;
+      for (let i = 0; i < 10; i++) {
+        iframeDoc = iframeRef.current?.contentDocument;
+        if (iframeDoc?.body) break;
+        await new Promise((r) => setTimeout(r, 150));
+      }
       if (!iframeDoc?.body) throw new Error('Preview iframe not accessible');
 
       const { viewportWidth } = useAppStore.getState();
@@ -333,10 +332,19 @@ export default function MainPanel() {
       // wrapperPixelHeight 는 진단 변수, 미사용 시 lint 가 경고하지 않도록 명시적으로 무시.
       void wrapperPixelHeight;
 
-      const { activeFileId: fileId, files: allFiles } = useAppStore.getState();
+      const { activeFileId: fileId, files: allFiles, uid } = useAppStore.getState();
       const file = allFiles.find((f) => f.id === fileId);
       const name = (file?.name || 'document').replace(/\.[^.]+$/, '');
       pdf.save(`${name}.pdf`);
+
+      // export 성공 후 코인 차감. 실패해도 export 결과는 사용자 손에 있으니
+      // alert 후 종료(이미 다운로드 받음).
+      try {
+        const { chargeCoin } = await import('../utils/coin');
+        await chargeCoin(uid, 'exportDoc');
+      } catch (err) {
+        alert(err.message);
+      }
     } catch (err) {
       console.error('PDF export failed:', err);
       alert('PDF 내보내기 실패: ' + (err.message || err));

@@ -9,14 +9,6 @@ export function useDocxExport() {
     const { activeFileContent, activeFileId, files, uid } = useAppStore.getState();
     if (!activeFileContent || isExportingDocx) return;
 
-    try {
-      const { chargeCoin } = await import('../utils/coin');
-      await chargeCoin(uid, 'exportDoc');
-    } catch (err) {
-      alert(err.message);
-      return;
-    }
-
     setIsExportingDocx(true);
     try {
       const { htmlToDocxBlob } = await import('../utils/docxExporter');
@@ -29,6 +21,13 @@ export function useDocxExport() {
 
       const name = rawName.replace(/\.hwp$/i, '');
       downloadBlob(blob, `${name}.docx`);
+
+      try {
+        const { chargeCoin } = await import('../utils/coin');
+        await chargeCoin(uid, 'exportDoc');
+      } catch (err) {
+        alert(err.message);
+      }
     } catch (err) {
       console.error('DOCX export failed:', err);
       alert(`DOCX 내보내기 실패: ${err.message || err}`);

@@ -433,16 +433,6 @@ export function usePptxExport() {
 
   const exportSlidesToPptx = useCallback(async (slides, presentationName = 'presentation') => {
     if (!slides?.length || pptxLoading) return;
-    try {
-      const [{ chargeCoin }, { default: useSlideStore }] = await Promise.all([
-        import('../utils/coin'),
-        import('../store/useSlideStore'),
-      ]);
-      await chargeCoin(useSlideStore.getState().uid, 'exportDoc');
-    } catch (err) {
-      alert(err.message);
-      return;
-    }
     setPptxLoading(true);
 
     try {
@@ -458,6 +448,15 @@ export function usePptxExport() {
 
       const blob = await pptx.write({ outputType: 'blob' });
       downloadBlob(blob, `${presentationName}.pptx`);
+      try {
+        const [{ chargeCoin }, { default: useSlideStore }] = await Promise.all([
+          import('../utils/coin'),
+          import('../store/useSlideStore'),
+        ]);
+        await chargeCoin(useSlideStore.getState().uid, 'exportDoc');
+      } catch (err) {
+        alert(err.message);
+      }
     } catch (err) {
       console.error('PPTX export failed:', err);
       const msg = err instanceof Error ? err.message : String(err);

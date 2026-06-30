@@ -122,16 +122,6 @@ export function usePdfExport() {
 
   const exportSlidesToPdf = useCallback(async (slides) => {
     if (!slides?.length || pdfLoading) return;
-    try {
-      const [{ chargeCoin }, { default: useSlideStore }] = await Promise.all([
-        import('../utils/coin'),
-        import('../store/useSlideStore'),
-      ]);
-      await chargeCoin(useSlideStore.getState().uid, 'exportDoc');
-    } catch (err) {
-      alert(err.message);
-      return;
-    }
     setPdfLoading(true);
 
     const container = document.createElement('div');
@@ -204,6 +194,17 @@ export function usePdfExport() {
       const blob = pdf.output('blob');
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
+
+      // export 성공 후 코인 차감 (실패해도 export 결과는 이미 사용자 손에)
+      try {
+        const [{ chargeCoin }, { default: useSlideStore }] = await Promise.all([
+          import('../utils/coin'),
+          import('../store/useSlideStore'),
+        ]);
+        await chargeCoin(useSlideStore.getState().uid, 'exportDoc');
+      } catch (err) {
+        alert(err.message);
+      }
     } catch (err) {
       console.error('PDF export failed:', err);
       const msg = err instanceof Error ? err.message : String(err);
