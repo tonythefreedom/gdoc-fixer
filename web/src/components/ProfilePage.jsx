@@ -15,13 +15,16 @@ import useAuthStore from '../store/useAuthStore';
 import { ACTION_COSTS, ACTION_LABELS, INITIAL_COIN_GRANT } from '../utils/coin';
 import { uploadBlobToGcs, dataUriToBlob } from '../store/storage';
 
-// 가격 정책: 100 coin = $1. (functions/coinCheckout.js 의 COIN_PACKAGES 와 동기화)
+// 가격 정책: 100 coin = $1. functions/coinCheckout.js 의 COIN_PACKAGES 와 동기화.
 const COIN_PACKAGES = [
-  { key: 500, coins: 500, usd: 5, label: '체험', highlight: false },
-  { key: 1000, coins: 1000, usd: 10, label: '스타터', highlight: true },
-  { key: 5000, coins: 5000, usd: 50, label: '프로', highlight: false },
-  { key: 10000, coins: 10000, usd: 100, label: '비즈니스', highlight: false },
+  { key: 1000, coins: 1000, usd: 10, label: '체험', highlight: false },
+  { key: 5000, coins: 5000, usd: 50, label: '스타터', highlight: true },
 ];
+
+// Lemon Squeezy 의 Share URL — 단일 product 의 결제 페이지 (4 variants 선택).
+// uid / email / coins 는 checkout[custom][...] query param 으로 주입되어
+// webhook(order_created) 의 meta.custom_data 에 도달.
+const LEMONSQUEEZY_SHARE_URL = 'https://app.lemonsqueezy.com/share/1185899';
 
 function readFileAsDataUri(file) {
   return new Promise((resolve, reject) => {
@@ -63,31 +66,26 @@ export default function ProfilePage() {
     window.history.replaceState({}, '', newUrl);
   }, []);
 
-  const handleCharge = async (pkg) => {
+  const handleCharge = (pkg) => {
     if (chargingPkg) return;
-    setChargingPkg(pkg.key);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('로그인이 필요합니다.');
-      const res = await fetch('/api/coin-checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          packageKey: pkg.key,
-          returnUrl: `${window.location.origin}${window.location.pathname}`,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || `결제 세션 생성 실패 (${res.status})`);
-      window.location.href = data.url; // Stripe Checkout 으로 이동
-    } catch (err) {
-      console.error('charge failed:', err);
-      alert(`충전 시작 실패: ${err.message}`);
-      setChargingPkg(null);
+    const u = auth.currentUser;
+    if (!u?.uid) {
+      alert('로그인이 필요합니다.');
+      return;
     }
+    setChargingPkg(pkg.key);
+    // Lemon Squeezy Share URL 로 직접 redirect. checkout[custom][*] 가 webhook
+    // (order_created) 의 meta.custom_data 로 forward 되어 자동 코인 충전.
+    const params = new URLSearchParams();
+    if (u.email) params.set('checkout[email]', u.email);
+    params.set('checkout[custom][uid]', u.uid);
+    params.set('checkout[custom][coins]', String(pkg.coins));
+    params.set('checkout[custom][packageKey]', String(pkg.key));
+    params.set(
+      'checkout[success_url]',
+      `${window.location.origin}${window.location.pathname}?charge=success&coins=${pkg.coins}`
+    );
+    window.location.href = `${LEMONSQUEEZY_SHARE_URL}?${params.toString()}`;
   };
 
   if (!profile) {
