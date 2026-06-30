@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../firebase';
 import { INITIAL_COIN_GRANT } from '../utils/coin';
 
 const SUPER_ADMIN_EMAIL = 'tony@banya.ai';
+const SUPER_ADMIN_GRANT = 100000;
 
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -48,16 +49,37 @@ const useAuthStore = create((set, get) => ({
           await updateDoc(profileRef, { lastLoginAt: Date.now() });
         }
 
-        // 기존 사용자라도 coinBalance 가 없으면 한 번 100 코인 grant (마이그레이션)
+        // 슈퍼관리자는 더 큰 grant 기준 (SUPER_ADMIN_GRANT). 일반 승인 사용자는
+        // INITIAL_COIN_GRANT.
+        const targetGrant =
+          user.email === SUPER_ADMIN_EMAIL ? SUPER_ADMIN_GRANT : INITIAL_COIN_GRANT;
+
         if (typeof profile.coinBalance !== 'number') {
+          // 마이그레이션 — coinBalance 가 없는 기존 사용자
           await updateDoc(profileRef, {
-            coinBalance: INITIAL_COIN_GRANT,
-            coinEarned: INITIAL_COIN_GRANT,
+            coinBalance: targetGrant,
+            coinEarned: targetGrant,
             coinSpent: 0,
           });
-          profile.coinBalance = INITIAL_COIN_GRANT;
-          profile.coinEarned = INITIAL_COIN_GRANT;
+          profile.coinBalance = targetGrant;
+          profile.coinEarned = targetGrant;
           profile.coinSpent = 0;
+        } else if (
+          profile.status === 'approved' &&
+          typeof profile.coinEarned === 'number' &&
+          profile.coinEarned < targetGrant
+        ) {
+          // 옛 grant 받은 승인 사용자에게 차액 top-up. lifetime 누적 기준이라
+          // 한 번만 작동 (다음 로그인 시 coinEarned >= targetGrant 라 조건
+          // false).
+          const topUp = targetGrant - profile.coinEarned;
+          await updateDoc(profileRef, {
+            coinBalance: increment(topUp),
+            coinEarned: increment(topUp),
+          });
+          profile.coinBalance = (profile.coinBalance || 0) + topUp;
+          profile.coinEarned = profile.coinEarned + topUp;
+          console.log(`[coin] approved user top-up: +${topUp}`);
         }
 
         set({ userProfile: profile, profileLoading: false });
@@ -66,6 +88,7 @@ const useAuthStore = create((set, get) => ({
       } else {
         // 최초 로그인: 프로필 생성
         const isSuperAdmin = user.email === SUPER_ADMIN_EMAIL;
+        const initialGrant = isSuperAdmin ? SUPER_ADMIN_GRANT : INITIAL_COIN_GRANT;
         const newProfile = {
           email: user.email,
           displayName: user.displayName || '',
@@ -75,9 +98,9 @@ const useAuthStore = create((set, get) => ({
           createdAt: Date.now(),
           updatedAt: Date.now(),
           lastLoginAt: Date.now(),
-          // 신규 회원에게 100 코인 지급
-          coinBalance: INITIAL_COIN_GRANT,
-          coinEarned: INITIAL_COIN_GRANT,
+          // 신규 회원 코인 지급 (슈퍼관리자: 100,000 / 일반: 2,000)
+          coinBalance: initialGrant,
+          coinEarned: initialGrant,
           coinSpent: 0,
         };
         await setDoc(profileRef, newProfile);
