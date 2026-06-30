@@ -1,25 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle, Clock, XCircle, Shield, UserCheck, UserX, Coins, Plus } from 'lucide-react';
+import { Loader2, CheckCircle, Clock, XCircle, Shield, UserCheck, Ban, Coins, Plus } from 'lucide-react';
 import useAdminStore from '../store/useAdminStore';
 
 function StatusBadge({ status }) {
   if (status === 'approved') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-900/40 text-emerald-300">
-        <CheckCircle className="w-3 h-3" /> 승인됨
+        <CheckCircle className="w-3 h-3" /> 활성
       </span>
     );
   }
-  if (status === 'rejected') {
+  if (status === 'blocked' || status === 'rejected') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/40 text-red-300">
-        <XCircle className="w-3 h-3" /> 거절됨
+        <XCircle className="w-3 h-3" /> 차단됨
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-900/40 text-amber-300">
-      <Clock className="w-3 h-3" /> 대기 중
+      <Clock className="w-3 h-3" /> 승인 대기 (기존)
     </span>
   );
 }
@@ -55,7 +55,7 @@ export default function AdminUserManagement() {
   const usersLoading = useAdminStore((s) => s.usersLoading);
   const loadAllUsers = useAdminStore((s) => s.loadAllUsers);
   const approveUser = useAdminStore((s) => s.approveUser);
-  const rejectUser = useAdminStore((s) => s.rejectUser);
+  const blockUser = useAdminStore((s) => s.blockUser);
   const grantCoins = useAdminStore((s) => s.grantCoins);
   const [granting, setGranting] = useState(null);
 
@@ -162,30 +162,26 @@ export default function AdminUserManagement() {
                       </button>
                       {u.role !== 'super_admin' && (
                         <>
-                          <button
-                            onClick={() => approveUser(u.id)}
-                            disabled={u.status === 'approved'}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                              u.status === 'approved'
-                                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                : 'bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/40'
-                            }`}
-                          >
-                            <UserCheck className="w-3.5 h-3.5" />
-                            승인
-                          </button>
-                          <button
-                            onClick={() => rejectUser(u.id)}
-                            disabled={u.status === 'rejected'}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                              u.status === 'rejected'
-                                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                : 'bg-red-900/30 text-red-300 hover:bg-red-900/40'
-                            }`}
-                          >
-                            <UserX className="w-3.5 h-3.5" />
-                            거절
-                          </button>
+                          {u.status !== 'approved' && (
+                            <button
+                              onClick={() => approveUser(u.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/40 transition-colors"
+                              title={u.status === 'pending' ? '기존 가입자 승인 + 환영 이메일 발송' : '계정 활성화'}
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              {u.status === 'pending' ? '승인' : '활성화'}
+                            </button>
+                          )}
+                          {u.status === 'approved' && (
+                            <button
+                              onClick={() => blockUser(u.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-900/30 text-red-300 hover:bg-red-900/40 transition-colors"
+                              title="계정 차단 (로그인 후 사용 불가)"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                              차단
+                            </button>
+                          )}
                         </>
                       )}
                     </div>

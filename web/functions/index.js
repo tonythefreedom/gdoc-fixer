@@ -8,6 +8,7 @@ exports.publishToTechBlog = require('./publishToTechBlog').publishToTechBlog;
 const coinCheckout = require('./coinCheckout');
 exports.createCoinCheckout = coinCheckout.createCoinCheckout;
 exports.lemonsqueezyWebhook = coinCheckout.lemonsqueezyWebhook;
+exports.welcomeEmail = require('./welcomeEmail').welcomeEmail;
 
 function escapeHtml(str) {
   return String(str)

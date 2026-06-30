@@ -6,6 +6,7 @@ import {
   LogOut,
   ChevronDown,
   UserCog,
+  BookOpen,
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import useAppStore from '../store/useAppStore';
@@ -55,6 +56,22 @@ export default function Header() {
 
       {/* 우측 액션 영역 — 사이드바(slate-900) 와 같은 다크 톤 */}
       <div className="ml-auto flex items-center gap-2">
+        {/* 가이드 */}
+        {user && (
+          <button
+            onClick={() => setCurrentView('guide')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              currentView === 'guide'
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+            }`}
+            title="사용 가이드"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            가이드
+          </button>
+        )}
+
         {/* 코인 칩 */}
         {user && (
           <button

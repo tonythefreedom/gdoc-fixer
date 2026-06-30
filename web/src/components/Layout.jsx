@@ -6,6 +6,7 @@ import ImageModal from './gallery/ImageModal';
 import ContentListPage from './ContentListPage';
 import ProfilePage from './ProfilePage';
 import AdminUserManagement from './AdminUserManagement';
+import GuidePage from './GuidePage';
 import useAppStore from '../store/useAppStore';
 
 export default function Layout() {
@@ -20,6 +21,8 @@ export default function Layout() {
             <AdminUserManagement />
           ) : currentView === 'profile' ? (
             <ProfilePage />
+          ) : currentView === 'guide' ? (
+            <GuidePage />
           ) : currentView === 'contents' ? (
             <ContentListPage />
           ) : (

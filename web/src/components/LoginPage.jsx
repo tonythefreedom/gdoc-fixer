@@ -228,7 +228,7 @@ export default function LoginPage() {
               으로
             </h1>
             <p className="mt-5 text-base md:text-lg text-slate-600 leading-relaxed">
-              Gemini 가 HTML 문서를 분석해 16:9 슬라이드 deck 으로 변환합니다.
+              AI 가 HTML 문서를 분석해 16:9 슬라이드 deck 으로 변환합니다.
               IR · 컨설팅 · 분기 실적 톤의 디자인 시스템 10 종 중 하나를 골라 한 번에 적용하고,
               자연어 한 마디로 전체 슬라이드를 수정·정렬할 수 있습니다.
             </p>
@@ -263,38 +263,38 @@ export default function LoginPage() {
               <FeatureIconBox><Code2 className="w-6 h-6" /></FeatureIconBox>
               <h3 className="mt-4 text-lg font-semibold text-slate-900">HTML 문서 편집</h3>
               <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                CodeMirror 기반 HTML 에디터 + 실시간 미리보기. 자연어 한 마디로 Gemini 가 문서 전체를 수정합니다.
+                신택스 하이라이트 코드 에디터 + 실시간 미리보기. 자연어 한 마디로 AI 가 문서 전체를 수정합니다.
               </p>
               <ul className="mt-4 text-xs text-slate-600 space-y-1.5">
-                <li className="flex gap-2"><span className="text-indigo-500">▸</span> Excel · 이미지 · PDF 첨부 기반 수정</li>
-                <li className="flex gap-2"><span className="text-indigo-500">▸</span> MathJax · LaTeX 자동 렌더링</li>
-                <li className="flex gap-2"><span className="text-indigo-500">▸</span> AI 이미지 자동 생성 (Gemini Flash-Image)</li>
+                <li className="flex gap-2"><span className="text-indigo-500">▸</span> 스프레드시트 · 이미지 · PDF 첨부 기반 수정</li>
+                <li className="flex gap-2"><span className="text-indigo-500">▸</span> 수식 자동 렌더링</li>
+                <li className="flex gap-2"><span className="text-indigo-500">▸</span> AI 이미지 자동 생성</li>
               </ul>
             </div>
             <div className="p-6 rounded-2xl border border-slate-200 bg-white hover:shadow-md transition-shadow">
               <FeatureIconBox gradient="from-purple-500 to-pink-500"><Presentation className="w-6 h-6" /></FeatureIconBox>
               <h3 className="mt-4 text-lg font-semibold text-slate-900">AI 슬라이드 생성</h3>
               <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                HTML 콘텐츠를 분석해 1280×720 슬라이드 deck 으로 자동 분할 · 배치.
+                HTML 콘텐츠를 분석해 16:9 슬라이드 deck 으로 자동 분할 · 배치.
                 디자인 시스템 10 종 중 하나를 골라 일관된 톤으로 한 번에 생성합니다.
               </p>
               <ul className="mt-4 text-xs text-slate-600 space-y-1.5">
                 <li className="flex gap-2"><span className="text-purple-500">▸</span> 슬라이드 단위 / deck 전체 일괄 수정</li>
                 <li className="flex gap-2"><span className="text-purple-500">▸</span> 앞/뒤 슬라이드 삽입 · 디자인 자동 승계</li>
-                <li className="flex gap-2"><span className="text-purple-500">▸</span> 블릿 정렬 일괄 통일 + 슬라이드쇼 (F5)</li>
+                <li className="flex gap-2"><span className="text-purple-500">▸</span> 블릿 정렬 일괄 통일 + 슬라이드쇼 모드</li>
               </ul>
             </div>
             <div className="p-6 rounded-2xl border border-slate-200 bg-white hover:shadow-md transition-shadow">
               <FeatureIconBox gradient="from-amber-500 to-orange-600"><FileType className="w-6 h-6" /></FeatureIconBox>
               <h3 className="mt-4 text-lg font-semibold text-slate-900">한글(HWP) 작성</h3>
               <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                .hwp / .hwpx 파일을 가져와 rhwp 에디터 (Rust + WASM) 로 바로 편집.
+                한글 파일을 가져와 웹 기반 한글 에디터로 바로 편집.
                 자연어 한 마디로 본문 단락을 AI 가 수정해 줍니다.
               </p>
               <ul className="mt-4 text-xs text-slate-600 space-y-1.5">
-                <li className="flex gap-2"><span className="text-amber-500">▸</span> HWP/HWPX 원본 서식 보존 편집</li>
+                <li className="flex gap-2"><span className="text-amber-500">▸</span> 한글 파일 원본 서식 보존 편집</li>
                 <li className="flex gap-2"><span className="text-amber-500">▸</span> 좌측 채팅 → 단락 텍스트 AI 일괄 수정</li>
-                <li className="flex gap-2"><span className="text-amber-500">▸</span> HWP / HWPX 로 즉시 내보내기</li>
+                <li className="flex gap-2"><span className="text-amber-500">▸</span> 한글 파일로 즉시 내보내기</li>
               </ul>
             </div>
             <div className="p-6 rounded-2xl border border-slate-200 bg-white hover:shadow-md transition-shadow">
@@ -302,12 +302,12 @@ export default function LoginPage() {
               <h3 className="mt-4 text-lg font-semibold text-slate-900">공유 & 게시</h3>
               <p className="mt-2 text-sm text-slate-600 leading-relaxed">
                 인증 없이 접근 가능한 공유 링크를 한 번에 발급.
-                카카오톡 · 슬랙 unfurl 용 OG 메타가 자동으로 들어갑니다.
+                메신저 / 협업 도구의 링크 미리보기에 자동으로 메타가 들어갑니다.
               </p>
               <ul className="mt-4 text-xs text-slate-600 space-y-1.5">
-                <li className="flex gap-2"><span className="text-emerald-500">▸</span> /share/:id — HTML 문서 공유 뷰</li>
-                <li className="flex gap-2"><span className="text-emerald-500">▸</span> /p/:id — 슬라이드 뷰어 + 키보드 네비</li>
-                <li className="flex gap-2"><span className="text-emerald-500">▸</span> tech-blog 자동 게시 (번역 · SEO)</li>
+                <li className="flex gap-2"><span className="text-emerald-500">▸</span> HTML 문서 공유 뷰</li>
+                <li className="flex gap-2"><span className="text-emerald-500">▸</span> 슬라이드 뷰어 + 키보드 네비</li>
+                <li className="flex gap-2"><span className="text-emerald-500">▸</span> 기술 블로그 자동 게시 (번역 · SEO)</li>
               </ul>
             </div>
           </div>
@@ -369,7 +369,7 @@ export default function LoginPage() {
               <FeatureIconBox gradient="from-pink-500 to-rose-500"><ImageIcon className="w-6 h-6" /></FeatureIconBox>
               <div>
                 <h3 className="text-base font-semibold text-slate-900">AI 이미지 자동 생성</h3>
-                <p className="mt-1.5 text-sm text-slate-600">슬라이드 콘텐츠에 맞춰 placeholder 이미지를 Gemini Flash-Image 로 생성 · 배치.</p>
+                <p className="mt-1.5 text-sm text-slate-600">슬라이드 콘텐츠에 맞춰 placeholder 이미지를 생성 AI 로 만들어 배치.</p>
               </div>
             </div>
             <div className="p-6 rounded-2xl border border-slate-200 bg-white flex gap-4">
@@ -382,8 +382,8 @@ export default function LoginPage() {
             <div className="p-6 rounded-2xl border border-slate-200 bg-white flex gap-4">
               <FeatureIconBox gradient="from-emerald-500 to-green-500"><Languages className="w-6 h-6" /></FeatureIconBox>
               <div>
-                <h3 className="text-base font-semibold text-slate-900">tech-blog 자동 번역 게시</h3>
-                <p className="mt-1.5 text-sm text-slate-600">한국어 → 영어 본문 자동 번역 + SEO 메타 생성 + GitHub Actions 트리거.</p>
+                <h3 className="text-base font-semibold text-slate-900">기술 블로그 자동 번역 게시</h3>
+                <p className="mt-1.5 text-sm text-slate-600">한국어 → 영어 본문 자동 번역 + SEO 메타 생성 + 자동 배포 파이프라인 트리거.</p>
               </div>
             </div>
           </div>
@@ -433,7 +433,7 @@ export default function LoginPage() {
                 </div>
               </div>
             </div>
-            <p className="mt-3 text-xs text-slate-500">링크 한 번이면 카카오톡 · 슬랙 unfurl 자동, 인증 없이 누구나 열람.</p>
+            <p className="mt-3 text-xs text-slate-500">링크 한 번이면 메신저 / 협업 도구 미리보기 자동, 인증 없이 누구나 열람.</p>
           </div>
         </div>
       </section>

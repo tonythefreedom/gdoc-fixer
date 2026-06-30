@@ -86,7 +86,7 @@ const useAuthStore = create((set, get) => ({
         // 프로필 실시간 구독 — 코인 차감/충전이 UI 에 즉시 반영
         get().subscribeProfile?.(user.uid);
       } else {
-        // 최초 로그인: 프로필 생성
+        // 최초 로그인: 프로필 생성. 신규 가입자는 자동 승인 (정책 변경).
         const isSuperAdmin = user.email === SUPER_ADMIN_EMAIL;
         const initialGrant = isSuperAdmin ? SUPER_ADMIN_GRANT : INITIAL_COIN_GRANT;
         const newProfile = {
@@ -94,11 +94,10 @@ const useAuthStore = create((set, get) => ({
           displayName: user.displayName || '',
           photoURL: user.photoURL || '',
           role: isSuperAdmin ? 'super_admin' : 'user',
-          status: isSuperAdmin ? 'approved' : 'pending',
+          status: 'approved', // 신규 가입은 자동 승인. 차단은 admin 이 수동.
           createdAt: Date.now(),
           updatedAt: Date.now(),
           lastLoginAt: Date.now(),
-          // 신규 회원 코인 지급 (슈퍼관리자: 100,000 / 일반: 2,000)
           coinBalance: initialGrant,
           coinEarned: initialGrant,
           coinSpent: 0,
@@ -106,6 +105,17 @@ const useAuthStore = create((set, get) => ({
         await setDoc(profileRef, newProfile);
         set({ userProfile: { id: user.uid, ...newProfile }, profileLoading: false });
         get().subscribeProfile?.(user.uid);
+        // 환영 이메일 발송 (실패해도 가입 흐름은 진행)
+        try {
+          const idToken = await user.getIdToken();
+          await fetch('/api/welcome-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+            body: JSON.stringify({ kind: 'signup' }),
+          });
+        } catch (e) {
+          console.warn('welcome email failed:', e);
+        }
       }
     } catch (err) {
       console.error('Failed to load/create user profile:', err);

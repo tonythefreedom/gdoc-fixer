@@ -19,8 +19,32 @@ const useAdminStore = create((set) => ({
     }
   },
 
+  /**
+   * 승인 / 언블록 — status 를 'approved' 로. 이전이 'pending' 또는
+   * 'blocked' 면 가입 축하/환영 이메일 발송. 'approved' → 'approved' 는 noop.
+   */
   approveUser: async (uid) => {
     try {
+      const prev = (await import('zustand').then(() => null), null);
+      const before = (typeof window !== 'undefined' ? (window.__lastUsersSnapshot__ || null) : null);
+      void prev; void before;
+      // 현재 status 확인 위해 store 상태 사용
+      const current = (typeof window !== 'undefined') ? null : null;
+      void current;
+
+      // 간단히 — 현재 행의 status 가 'pending' 또는 'blocked' 일 때만 이메일.
+      let needEmail = false;
+      let userEmail = null;
+      let userName = null;
+      // store 내부 접근 (set/get) 패턴이 아닌 외부 모듈에서 — 한 번 dynamic import
+      const { default: store } = await import('./useAdminStore');
+      const u = store.getState().users.find((x) => x.id === uid);
+      if (u && (u.status === 'pending' || u.status === 'blocked')) {
+        needEmail = true;
+        userEmail = u.email;
+        userName = u.displayName || '';
+      }
+
       await updateDoc(doc(db, 'userProfiles', uid), {
         status: 'approved',
         updatedAt: Date.now(),
@@ -30,8 +54,43 @@ const useAdminStore = create((set) => ({
           u.id === uid ? { ...u, status: 'approved', updatedAt: Date.now() } : u
         ),
       }));
+
+      if (needEmail && userEmail) {
+        try {
+          const { auth } = await import('../firebase');
+          const idToken = await auth.currentUser?.getIdToken();
+          if (idToken) {
+            await fetch('/api/welcome-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+              body: JSON.stringify({ kind: 'admin-approve', targetUid: uid, targetEmail: userEmail, targetName: userName }),
+            });
+          }
+        } catch (e) {
+          console.warn('admin approve welcome email failed:', e);
+        }
+      }
     } catch (err) {
       console.error('Failed to approve user:', err);
+    }
+  },
+
+  /**
+   * 블록 — status 를 'blocked' 로. 이미 'blocked' 면 noop.
+   */
+  blockUser: async (uid) => {
+    try {
+      await updateDoc(doc(db, 'userProfiles', uid), {
+        status: 'blocked',
+        updatedAt: Date.now(),
+      });
+      set((state) => ({
+        users: state.users.map((u) =>
+          u.id === uid ? { ...u, status: 'blocked', updatedAt: Date.now() } : u
+        ),
+      }));
+    } catch (err) {
+      console.error('Failed to block user:', err);
     }
   },
 

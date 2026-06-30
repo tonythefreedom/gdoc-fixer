@@ -26,6 +26,10 @@
         "function": "lemonsqueezyWebhook"
       },
       {
+        "source": "/api/welcome-email",
+        "function": "welcomeEmail"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
