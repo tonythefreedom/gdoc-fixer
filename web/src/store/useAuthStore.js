@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../firebase';
+import { INITIAL_COIN_GRANT } from '../utils/coin';
 
 const SUPER_ADMIN_EMAIL = 'tony@banya.ai';
 
@@ -50,12 +51,12 @@ const useAuthStore = create((set, get) => ({
         // 기존 사용자라도 coinBalance 가 없으면 한 번 100 코인 grant (마이그레이션)
         if (typeof profile.coinBalance !== 'number') {
           await updateDoc(profileRef, {
-            coinBalance: 100,
-            coinEarned: 100,
+            coinBalance: INITIAL_COIN_GRANT,
+            coinEarned: INITIAL_COIN_GRANT,
             coinSpent: 0,
           });
-          profile.coinBalance = 100;
-          profile.coinEarned = 100;
+          profile.coinBalance = INITIAL_COIN_GRANT;
+          profile.coinEarned = INITIAL_COIN_GRANT;
           profile.coinSpent = 0;
         }
 
@@ -75,8 +76,8 @@ const useAuthStore = create((set, get) => ({
           updatedAt: Date.now(),
           lastLoginAt: Date.now(),
           // 신규 회원에게 100 코인 지급
-          coinBalance: 100,
-          coinEarned: 100,
+          coinBalance: INITIAL_COIN_GRANT,
+          coinEarned: INITIAL_COIN_GRANT,
           coinSpent: 0,
         };
         await setDoc(profileRef, newProfile);

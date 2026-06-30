@@ -160,6 +160,18 @@ export default function PlanningEditor() {
 
   const handleGenerate = async () => {
     if (!brief.trim() || isGenerating) return;
+
+    // AI 기획안 생성 = research/plan + 이미지 생성 + compose 의 큰 LLM 흐름.
+    // 단일 액션으로 사전 차감.
+    try {
+      const { default: useAppStore } = await import('../../store/useAppStore');
+      const { chargeCoin } = await import('../../utils/coin');
+      await chargeCoin(useAppStore.getState().uid, 'researchAndPlan');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
     setCompletedSteps([]);

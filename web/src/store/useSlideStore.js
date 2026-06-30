@@ -257,6 +257,14 @@ const useSlideStore = create((set, get) => ({
     const { slides, uid, activePresentationId } = get();
     if (!instruction.trim() || index < 0 || index >= slides.length) return;
 
+    try {
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(uid, 'modifySlide');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+
     set((state) => ({
       modifyingSlideIndices: [...state.modifyingSlideIndices, { index, instruction }],
     }));
@@ -312,6 +320,14 @@ const useSlideStore = create((set, get) => ({
   modifyAllSlides: async (instruction) => {
     const { slides, slideHistories, uid, activePresentationId } = get();
     if (!instruction.trim() || slides.length === 0) return;
+
+    try {
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(uid, 'modifyAllSlides');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
 
     set((state) => ({
       isModifyingAll: true,
@@ -383,6 +399,14 @@ const useSlideStore = create((set, get) => ({
     if (!Array.isArray(slides) || slides.length === 0) return;
     if (currentIndex < 0 || currentIndex >= slides.length) return;
     if (!prompt || !prompt.trim()) return;
+
+    try {
+      const { chargeCoin } = await import('../utils/coin');
+      await chargeCoin(uid, 'insertSlide');
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
 
     const insertAt = position === 'before' ? currentIndex : currentIndex + 1;
     const prevSlideHtml = insertAt - 1 >= 0 ? slides[insertAt - 1] : null;

@@ -8,26 +8,44 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
-// 액션별 코인 비용 — 한 곳에서만 정의해서 UI / 차감 로직이 동기화되게 함.
+// 액션별 코인 비용 — 100 coin = $1. Gemini 2.5 Pro/Flash-Image API 실비
+// 대비 약 2~3배 마진 (실비 변동/이미지 첨부 가변성 흡수).
 export const ACTION_COSTS = Object.freeze({
-  createDoc: 10, // HTML 문서 신규 생성
-  modifyDoc: 1, // HTML 문서 AI 업데이트
-  shareDoc: 2, // HTML 문서 공유 링크 발급
-  generateSlides: 20, // HTML → 슬라이드 deck 변환
-  sharePresentation: 1, // 프리젠테이션 공유 링크 발급
-  exportDoc: 2, // 어떤 형식이든 내보내기 (PDF/PPTX/DOCX/HTML)
+  // LLM 없음 — UX 명목 비용
+  createDoc: 1,             // HTML 문서 신규 생성
+  shareDoc: 2,              // HTML 공유 링크 발급
+  sharePresentation: 1,     // 프리젠테이션 공유 링크 발급
+  exportDoc: 2,             // 내보내기 (PDF/PPTX/DOCX/HTML)
+
+  // LLM 사용 — 실비 기반
+  modifyDoc: 80,            // HTML 문서 AI 업데이트
+  generateSlides: 350,      // HTML → 슬라이드 deck 변환
+  modifySlide: 30,          // 슬라이드 1 장 AI 수정
+  modifyAllSlides: 200,     // 슬라이드 deck 일괄 수정 (블릿 정렬 포함)
+  insertSlide: 30,          // 슬라이드 앞/뒤 삽입
+  fixSlideViewport: 15,     // 슬라이드 viewport 자동 수정
+  modifyHwpText: 80,        // HWP 본문 AI 수정
+  publishTechBlog: 600,     // tech-blog 자동 번역 게시
+  researchAndPlan: 300,     // AI 기획안 생성
 });
 
 export const ACTION_LABELS = Object.freeze({
   createDoc: 'HTML 문서 생성',
-  modifyDoc: 'HTML 문서 업데이트',
-  shareDoc: 'HTML 문서 공유',
-  generateSlides: '프리젠테이션 변환',
-  sharePresentation: '프리젠테이션 공유',
-  exportDoc: '내보내기',
+  modifyDoc: 'HTML AI 수정',
+  shareDoc: 'HTML 공유 링크',
+  generateSlides: '슬라이드 deck 생성',
+  sharePresentation: '슬라이드 공유 링크',
+  exportDoc: '내보내기 (PDF/PPTX/DOCX/HTML)',
+  modifySlide: '슬라이드 1 장 수정',
+  modifyAllSlides: '슬라이드 deck 일괄 수정',
+  insertSlide: '슬라이드 앞/뒤 삽입',
+  fixSlideViewport: '슬라이드 viewport 자동 수정',
+  modifyHwpText: 'HWP 본문 AI 수정',
+  publishTechBlog: 'tech-blog 자동 번역 게시',
+  researchAndPlan: 'AI 기획안 생성',
 });
 
-export const INITIAL_COIN_GRANT = 100;
+export const INITIAL_COIN_GRANT = 2000;
 
 export class InsufficientCoinError extends Error {
   constructor(have, need) {

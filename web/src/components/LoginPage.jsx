@@ -255,10 +255,10 @@ export default function LoginPage() {
       <section id="features" className="py-20 border-t border-slate-100">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-slate-900">하나의 워크스페이스, 세 가지 출력</h2>
-            <p className="mt-3 text-slate-600">한 번 작성한 문서를 편집 · 발표 · 게시 형태로 자유롭게 전환합니다.</p>
+            <h2 className="text-3xl font-bold text-slate-900">하나의 워크스페이스, 네 가지 출력</h2>
+            <p className="mt-3 text-slate-600">한 번 작성한 문서를 편집 · 발표 · HWP · 게시 형태로 자유롭게 전환합니다.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="p-6 rounded-2xl border border-slate-200 bg-white hover:shadow-md transition-shadow">
               <FeatureIconBox><Code2 className="w-6 h-6" /></FeatureIconBox>
               <h3 className="mt-4 text-lg font-semibold text-slate-900">HTML 문서 편집</h3>
@@ -282,6 +282,19 @@ export default function LoginPage() {
                 <li className="flex gap-2"><span className="text-purple-500">▸</span> 슬라이드 단위 / deck 전체 일괄 수정</li>
                 <li className="flex gap-2"><span className="text-purple-500">▸</span> 앞/뒤 슬라이드 삽입 · 디자인 자동 승계</li>
                 <li className="flex gap-2"><span className="text-purple-500">▸</span> 블릿 정렬 일괄 통일 + 슬라이드쇼 (F5)</li>
+              </ul>
+            </div>
+            <div className="p-6 rounded-2xl border border-slate-200 bg-white hover:shadow-md transition-shadow">
+              <FeatureIconBox gradient="from-amber-500 to-orange-600"><FileType className="w-6 h-6" /></FeatureIconBox>
+              <h3 className="mt-4 text-lg font-semibold text-slate-900">한글(HWP) 작성</h3>
+              <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                .hwp / .hwpx 파일을 가져와 rhwp 에디터 (Rust + WASM) 로 바로 편집.
+                자연어 한 마디로 본문 단락을 AI 가 수정해 줍니다.
+              </p>
+              <ul className="mt-4 text-xs text-slate-600 space-y-1.5">
+                <li className="flex gap-2"><span className="text-amber-500">▸</span> HWP/HWPX 원본 서식 보존 편집</li>
+                <li className="flex gap-2"><span className="text-amber-500">▸</span> 좌측 채팅 → 단락 텍스트 AI 일괄 수정</li>
+                <li className="flex gap-2"><span className="text-amber-500">▸</span> HWP / HWPX 로 즉시 내보내기</li>
               </ul>
             </div>
             <div className="p-6 rounded-2xl border border-slate-200 bg-white hover:shadow-md transition-shadow">
@@ -383,19 +396,22 @@ export default function LoginPage() {
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-100">
               <FileDown className="w-3.5 h-3.5" />
-              4 가지 내보내기 형식
+              6 가지 내보내기 형식
             </div>
             <h2 className="mt-4 text-3xl font-bold text-slate-900">원하는 형식으로 즉시 내려받기</h2>
             <p className="mt-3 text-slate-600">
               PDF — fit-to-width 자동 페이지 분할, 텍스트 경계 잘림 회피.<br />
               PPTX — 편집 가능한 슬라이드.<br />
-              DOCX · HTML — 후속 편집 / 임베드 용도.
+              DOCX · HTML — 후속 편집 / 임베드 용도.<br />
+              HWP / HWPX — 한컴오피스 네이티브 한글 파일.
             </p>
-            <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
               <ExportChip icon={<FileType className="w-4 h-4 text-red-500" />} label="PDF" />
               <ExportChip icon={<Presentation className="w-4 h-4 text-orange-500" />} label="PPTX" />
               <ExportChip icon={<FileDown className="w-4 h-4 text-blue-500" />} label="DOCX" />
               <ExportChip icon={<FileCode className="w-4 h-4 text-emerald-500" />} label="HTML" />
+              <ExportChip icon={<FileType className="w-4 h-4 text-amber-600" />} label="HWP" />
+              <ExportChip icon={<FileType className="w-4 h-4 text-amber-500" />} label="HWPX" />
             </div>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">

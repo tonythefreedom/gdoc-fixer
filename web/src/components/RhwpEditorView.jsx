@@ -128,7 +128,7 @@ export default function RhwpEditorView() {
     try {
       const { uid } = useAppStore.getState();
       const { chargeCoin } = await import('../utils/coin');
-      await chargeCoin(uid, 'modifyDoc');
+      await chargeCoin(uid, 'modifyHwpText');
 
       const currentBytes = await ed.exportHwpx();
 
