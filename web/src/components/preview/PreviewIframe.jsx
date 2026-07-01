@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useRef } from 'react';
+import useAppStore from '../../store/useAppStore';
 import { patchYoutubeThumbnails } from '../../utils/youtubeThumbnail.js';
 import { injectMathJax, htmlHasLatex } from '../../utils/injectMathJax.js';
 
@@ -53,6 +54,17 @@ const PreviewIframe = forwardRef(function PreviewIframe(
       }}
       srcDoc={patchedHtml}
       sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      onLoad={(e) => {
+        // about:blank 첫 onLoad 무시 — iframe srcDoc 적용 전 빈 doc 의 load.
+        const doc = e.target?.contentDocument;
+        const html = doc?.documentElement?.outerHTML || '';
+        if (html.length < 200) return;
+        // onLoad = HTML 파싱 완료. tailwindcss CDN 같은 외부 script 의 JIT
+        // 적용 + 큰 HTML (수백KB) paint 가 그 후에도 진행되므로 500ms 더 여유.
+        setTimeout(() => {
+          useAppStore.getState().dismissEditorTransition();
+        }, 500);
+      }}
       style={{
         width: `${viewportWidth}px`,
         height: `${viewportHeight}px`,

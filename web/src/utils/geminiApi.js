@@ -546,21 +546,50 @@ async function callProModel(systemPrompt, userText, options = {}) {
   if (responseMimeType) {
     generationConfig.responseMimeType = responseMimeType;
   }
-  const res = await fetch(PRO_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: withCurrentDate(systemPrompt) },
-            { text: userText },
-          ],
-        },
-      ],
-      generationConfig,
-    }),
+  const requestBody = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          { text: withCurrentDate(systemPrompt) },
+          { text: userText },
+        ],
+      },
+    ],
+    generationConfig,
   });
+
+  // 일시적 ERR_CONNECTION_CLOSED / Failed to fetch / 5xx 는 자동 retry.
+  // Gemini API 가 가끔 연결을 끊거나 게이트웨이 에러를 반환 — 사용자가 직접
+  // 다시 누를 필요 없이 최대 3회 시도, 1s/2s/4s backoff.
+  let res;
+  let attempt = 0;
+  while (true) {
+    try {
+      res = await fetch(PRO_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: requestBody,
+      });
+      // 5xx 는 retry 대상
+      if (res.status >= 500 && res.status < 600 && attempt < 2) {
+        attempt++;
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+        continue;
+      }
+      break;
+    } catch (fetchErr) {
+      const transient = /Failed to fetch|NetworkError|CONNECTION_CLOSED|aborted/i.test(
+        fetchErr?.message || ''
+      );
+      if (transient && attempt < 2) {
+        attempt++;
+        console.warn(`[callProModel] transient fetch error, retry ${attempt}/2:`, fetchErr.message);
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+        continue;
+      }
+      throw fetchErr;
+    }
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -1700,20 +1729,68 @@ export async function modifyHwpText(currentParagraphs, instruction) {
     throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  const systemPrompt = `당신은 한국어 HWP 문서 편집 전문가입니다.
-사용자가 현재 문서의 단락 텍스트 배열과 수정 요청을 함께 보냅니다.
+  const paragraphCount = currentParagraphs.length;
+  const widths = currentParagraphs.widths || [];
+  const isGuide = currentParagraphs.isGuide || [];
+  // HWPUNIT 기반 셀 폭 분류. 양식의 실제 셀 크기 분포에 맞춤:
+  //   < 3000: 매우 좁음 (체크박스, 한 글자, 표 헤더의 작은 칸)
+  //   3000-7000: 짧음 (이름, 직급, 짧은 라벨)
+  //   7000-20000: 중간 (회사명, 한두 줄 본문)
+  //   20000+: 본문 (긴 문단)
+  const widthHint = (w) => {
+    if (w == null) return '?';
+    if (w < 3000) return '극좁';
+    if (w < 7000) return '좁음';
+    if (w < 20000) return '중간';
+    return '본문';
+  };
 
-규칙:
-- 응답은 반드시 JSON: { "paragraphs": ["단락1", "단락2", ...] }
-- 각 문자열이 하나의 단락. 빈 단락은 빈 문자열 "".
-- HWP 의 본문 텍스트만 출력 (서식 마크업, HTML, 마크다운 금지).
-- 한국어 자연스러운 문장으로.
-- 사용자가 명시적으로 추가/삭제 요청하지 않으면 단락 수와 흐름을 유지.
-- 표 / 그림 / 수식은 단락 텍스트에 포함되지 않으므로 그대로 유지된다고 가정.
-- JSON 외 다른 텍스트(설명, 코드 펜스 등) 절대 포함 금지.
+  // 이전 구조 (paragraphs 배열 전체 반환) 는 LLM 이 한두 줄만 빠뜨려도 전체
+  // 매핑이 shift 되어 라벨이 본문 자리로 들어가는 치명적 문제 발생.
+  // → edits 형식으로 변경: 변경할 단락만 {i, v} 로 출력, 나머지는 그대로 유지.
+  const systemPrompt = `당신은 한국어 HWP 양식 채우기 전문가입니다.
+입력: 양식의 단락 배열 (인덱스 0 ~ ${paragraphCount - 1}, 각 단락의 폭 정보 포함) + 사용자 내용.
+
+**채우는 자리 (사용자 내용으로 반드시 대체)**:
+1. **"* 〜 작성", "* 〜 기재", "* 〜 입력"** 같은 가이드 안내 문구 단락 = 양식이 "이 자리에 무엇을 적어달라" 안내한 자리. **안내문을 지우고 사용자 내용으로 대체**.
+2. **샘플 데이터** (예: "주식회사 헬로프레시", "김민준", "123-45-67890", 기존 본문 등) = 양식에 미리 채워진 예시. 사용자 정보로 대체.
+3. **빈 단락("")** = 채우는 자리. 인근 라벨/맥락을 보고 사용자 내용으로 적절히 채움.
+
+**변경 금지 (원본 그대로 유지 = edits 에 포함하지 마라)**:
+- 표 헤더 단어 (예: "구분", "순번", "성명", "직급", "내용", "비고")
+- 양식의 고정 라벨 (예: "상호", "대표자", "사업자번호", "업종", "사업비", "지원동기" 같은 짧은 라벨 — 보통 7글자 이내)
+- 페이지 제목 (예: "『2026년 ... 지원사업』")
+
+**셀 폭 규칙 (매우 중요)**:
+각 단락에 [극좁]/[좁음]/[중간]/[본문] 폭 표시:
+- **[극좁]**: 체크박스/순번/한 글자. 1-3자만.
+- **[좁음]**: 짧은 라벨/이름/직급. 10자 이내.
+- **[중간]**: 한 줄 정보. 40자 이내.
+- **[본문]**: 자유롭게 긴 문장/문단.
+- 좁은 칸에 긴 본문 넣으면 한 글자씩 세로 출력되어 망가짐.
+- 단 **원본이 이미 30자 이상 본문** 이면 양식의 본문 자리로 의도된 것 → 폭 무시하고 본문 길이로 채울 것.
+
+**출력 형식**:
+- JSON: { "edits": [{ "i": 인덱스(숫자), "v": "새 텍스트" }, ...] }
+- 인덱스 범위: 0 ~ ${paragraphCount - 1}.
+- JSON 외 다른 텍스트(설명, 코드 펜스) 절대 금지.
+
+예시 (입력 "[좁음] 0: '구분', [본문] 1: '* AI 활용 아이템 소개 작성', [중간] 2: '주식회사 헬로프레시'"):
+{"edits":[{"i":1,"v":"AI 활용 아이템 본문..."},{"i":2,"v":"【회사명】"}]}
+→ 라벨 "구분" 유지, 안내문/샘플은 사용자 내용으로 대체.
 `;
 
-  const userText = `현재 단락 배열:\n${JSON.stringify(currentParagraphs, null, 2)}\n\n사용자 요청:\n${instruction}\n\n위 규칙대로 수정된 paragraphs 를 JSON 으로만 출력하세요.`;
+  const numbered = currentParagraphs
+    .map((p, i) => `[${widthHint(widths[i])}] ${i}: ${JSON.stringify(p)}`)
+    .join('\n');
+
+  const userText = `현재 양식 단락 ([폭] 인덱스: 내용):
+${numbered}
+
+사용자 내용:
+${instruction}
+
+위 규칙대로 빈 단락에 내용을 분배해 edits JSON 만 출력하세요. 셀 폭에 맞는 길이로 작성하세요.`;
 
   const text = await callProModel(systemPrompt, userText, {
     maxOutputTokens: 32768,
@@ -1729,10 +1806,29 @@ export async function modifyHwpText(currentParagraphs, instruction) {
     console.error('modifyHwpText JSON parse failed:', text);
     throw new Error('LLM 응답 파싱 실패. 다시 시도해주세요.');
   }
-  if (!Array.isArray(parsed?.paragraphs)) {
-    throw new Error('LLM 응답에 paragraphs 배열이 없습니다.');
+  if (!Array.isArray(parsed?.edits)) {
+    throw new Error('LLM 응답에 edits 배열이 없습니다.');
   }
-  return parsed.paragraphs.map((p) => (typeof p === 'string' ? p : String(p ?? '')));
+
+  // edits 를 원본 위에 적용 — 미명시 단락은 자동 보존, shift 불가능.
+  const out = [...currentParagraphs];
+  let appliedCount = 0;
+  let skippedCount = 0;
+  for (const e of parsed.edits) {
+    const i = typeof e?.i === 'number' ? e.i : parseInt(e?.i, 10);
+    if (!Number.isFinite(i) || i < 0 || i >= paragraphCount) {
+      console.warn(`[modifyHwpText] invalid edit index: ${e?.i}`);
+      skippedCount++;
+      continue;
+    }
+    const v = typeof e.v === 'string' ? e.v : String(e.v ?? '');
+    out[i] = v;
+    appliedCount++;
+  }
+  console.log(
+    `[modifyHwpText] applied ${appliedCount} edits (skipped ${skippedCount}, base ${paragraphCount} preserved)`
+  );
+  return out;
 }
 
 export async function planUserContentForFormatting(brief) {

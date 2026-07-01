@@ -161,14 +161,18 @@ export default function PlanningEditor() {
   const handleGenerate = async () => {
     if (!brief.trim() || isGenerating) return;
 
+    console.log('[planning] handleGenerate start', { template: selectedTemplate, briefLen: brief.length });
+
     // AI 기획안 생성 = research/plan + 이미지 생성 + compose 의 큰 LLM 흐름.
     // 단일 액션으로 사전 차감.
+    const { default: useAppStoreLocal } = await import('../../store/useAppStore');
     try {
-      const { default: useAppStore } = await import('../../store/useAppStore');
       const { chargeCoin } = await import('../../utils/coin');
-      await chargeCoin(useAppStore.getState().uid, 'researchAndPlan');
+      const result = await chargeCoin(useAppStoreLocal.getState().uid, 'researchAndPlan');
+      console.log('[planning] chargeCoin result', result);
     } catch (err) {
-      alert(err.message);
+      console.error('[planning] chargeCoin failed:', err);
+      alert(`코인 차감 실패: ${err.message}`);
       return;
     }
 
@@ -176,7 +180,16 @@ export default function PlanningEditor() {
     setError(null);
     setCompletedSteps([]);
 
+    // 생성 시작 즉시 fullscreen overlay 표시 — generation 동안 PlanningEditor /
+    // Layout 의 어떤 re-render 가 일어나도 사용자 시야에서 깜빡임이 보이지 않게
+    // 가려준다. 각 step 마다 message 업데이트.
+    const { startEditorTransition, setEditorTransitionMessage, dismissEditorTransition } =
+      useAppStoreLocal.getState();
+    startEditorTransition('AI 기획안 생성을 시작합니다...');
+
     try {
+      console.log('[planning] importing geminiApi + storage...');
+      setEditorTransitionMessage('모듈 로드 중...');
       const {
         researchAndPlan,
         planUserContentForFormatting,
@@ -189,41 +202,68 @@ export default function PlanningEditor() {
 
       const isCustom = selectedTemplate === 'custom';
 
-      // Step 1: Plan (custom: extract from user content; others: research + structure)
+      // Step 1
       setCurrentStep('researching');
+      setEditorTransitionMessage(
+        isCustom ? '사용자 원문 분석 및 이미지 추출 중...' : 'Google 검색으로 주제 조사 및 구조 설계 중...'
+      );
+      console.log('[planning] step researching start');
       const plan = isCustom
         ? await planUserContentForFormatting(brief)
         : await researchAndPlan(brief, selectedTemplate);
+      console.log('[planning] step researching done', { title: plan?.title, imageCount: plan?.imageDescriptions?.length });
       markStepComplete('researching');
 
-      // Step 2: Generate images
+      // Step 2
       setCurrentStep('generating-images');
+      setEditorTransitionMessage('이미지 생성 중...');
+      console.log('[planning] step generating-images start');
       const generatedImages = await generateImages(plan.imageDescriptions);
+      console.log('[planning] step generating-images done', { count: generatedImages?.length });
       markStepComplete('generating-images');
 
-      // Step 3: Process images
+      // Step 3
       setCurrentStep('processing-images');
+      setEditorTransitionMessage('이미지 후처리 중...');
+      console.log('[planning] step processing-images start');
       const processedImages = await processGeneratedImages(generatedImages);
+      console.log('[planning] step processing-images done', { count: processedImages?.length });
       markStepComplete('processing-images');
 
-      // Step 4: Compose HTML document (custom: format-only; others: full compose)
+      // Step 4
       setCurrentStep('composing');
+      setEditorTransitionMessage(
+        isCustom ? 'HTML 디자인 적용 중...' : 'HTML 기획안 문서 작성 중...'
+      );
+      console.log('[planning] step composing start');
       let finalHtml = isCustom
         ? await composeCustomDocument(plan, processedImages)
         : await composeDocument(plan, processedImages);
+      console.log('[planning] step composing done', { htmlLen: finalHtml?.length });
       markStepComplete('composing');
 
-      // Step 5: Upload images to GCS + Save file
+      // Step 5
       setCurrentStep('saving');
+      setEditorTransitionMessage('파일 저장 중...');
+      console.log('[planning] step saving start');
       if (uid) {
         finalHtml = await uploadDocumentImages(uid, finalHtml);
       }
       const fileName = plan.title || `기획안_${Date.now().toString(36)}`;
+      // createFileWithContent 가 다시 startEditorTransition 같은 효과로 default
+      // 메시지 ("기획안이 완성되었습니다") 로 덮어 쓰도록 message reset.
+      setEditorTransitionMessage(null);
       await createFileWithContent(fileName, finalHtml);
+      console.log('[planning] step saving done — file created');
       markStepComplete('saving');
+      // dismiss 는 PreviewIframe.onLoad 또는 4s fallback 이 처리.
     } catch (err) {
-      console.error('Planning generation failed:', err);
-      setError(err.message || '기획안 생성에 실패했습니다.');
+      console.error('[planning] generation failed:', err);
+      const msg = err?.message || '기획안 생성에 실패했습니다.';
+      setError(msg);
+      // 에러 시 overlay 즉시 dismiss — 사용자가 입력 화면으로 돌아갈 수 있게.
+      dismissEditorTransition();
+      alert(`기획안 생성 실패\n\n${msg}\n\n자세한 내용은 콘솔(F12)에서 확인 가능합니다.`);
     } finally {
       setIsGenerating(false);
       setCurrentStep(null);

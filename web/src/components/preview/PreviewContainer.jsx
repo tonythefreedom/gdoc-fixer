@@ -18,12 +18,19 @@ export default function PreviewContainer({ iframeRef }) {
     .filter((att) => att.type === 'image');
 
   const containerRef = useRef(null);
-  const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
+  // 초기값 null → 실제 컨테이너 크기 측정 전까지 iframe 렌더 보류.
+  // 800x600 기본값으로 시작 후 ResizeObserver 가 실제 크기로 덮어쓰면
+  // iframe 의 transform: scale() 이 두 번 바뀌며 깜빡임 발생.
+  const [containerSize, setContainerSize] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(null);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    // 첫 측정은 동기로 — mount 직후 layout 이 잡혀 있으므로 ResizeObserver 의
+    // 첫 콜백 (다음 frame) 을 기다리지 않고 즉시 정확한 크기를 잡는다.
+    const rect = el.getBoundingClientRect();
+    setContainerSize({ w: rect.width, h: rect.height });
     const observer = new ResizeObserver(([entry]) => {
       setContainerSize({
         w: entry.contentRect.width,
@@ -34,10 +41,14 @@ export default function PreviewContainer({ iframeRef }) {
     return () => observer.disconnect();
   }, []);
 
-  // Calculate scale to fit viewport within container (with padding)
+  // Calculate scale to fit viewport within container (with padding).
+  // containerSize 가 아직 측정되지 않은 첫 paint 에서는 iframe 자체는 렌더
+  // 보류 — 잘못된 scale 로 한 frame 그렸다가 보정되는 깜빡임 회피.
+  // Hook 호출 순서 일관성을 위해 early return 은 hook 들 뒤에 둔다 (React rules).
+  const measured = !!containerSize;
   const padding = 40;
-  const availW = Math.max(100, containerSize.w - padding * 2);
-  const availH = Math.max(100, containerSize.h - padding * 2);
+  const availW = measured ? Math.max(100, containerSize.w - padding * 2) : viewportWidth;
+  const availH = measured ? Math.max(100, containerSize.h - padding * 2) : viewportHeight;
   const scale = Math.min(availW / viewportWidth, availH / viewportHeight, 1);
 
   const scaledW = viewportWidth * scale;
@@ -51,6 +62,10 @@ export default function PreviewContainer({ iframeRef }) {
   });
 
   const lightboxAtt = lightboxIndex !== null ? imageAttachments[lightboxIndex] : null;
+
+  if (!measured) {
+    return <div ref={containerRef} className="flex-1 bg-slate-200" />;
+  }
 
   return (
     <div

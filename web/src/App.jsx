@@ -32,14 +32,20 @@ function App() {
     initAuth();
   }, [initAuth]);
 
-  // Load user files, presentations, and shares when user is approved
+  // Load user files, presentations, and shares when user is approved.
+  // 주의: dep 에 userProfile 전체를 두면 subscribeProfile 의 onSnapshot 으로
+  // coinBalance 가 바뀔 때마다 (예: chargeCoin 후) loadUserFiles 가 재호출되며
+  // files 가 새 array 로 set → activeFile selector 가 새 reference →
+  // RhwpEditorView 의 useEffect cleanup 이 editor.destroy() 호출 → 작업 중인
+  // handleChatSubmit 이 worker null 로 깨짐. status 만 의존하면 충분.
+  const profileStatus = userProfile?.status;
   useEffect(() => {
-    if (user && userProfile?.status === 'approved') {
+    if (user && profileStatus === 'approved') {
       loadUserFiles(user.uid);
       loadPresentations(user.uid);
       loadShares(user.uid);
     }
-  }, [user, userProfile, loadUserFiles, loadPresentations, loadShares]);
+  }, [user, profileStatus, loadUserFiles, loadPresentations, loadShares]);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -104,7 +110,59 @@ function App() {
     );
   }
 
-  return <Layout />;
+  return (
+    <>
+      <Layout />
+      <EditorTransitionOverlay />
+    </>
+  );
+}
+
+function EditorTransitionOverlay() {
+  const visible = useAppStore((s) => s.isTransitioningToEditor);
+  const message = useAppStore((s) => s.editorTransitionMessage);
+  if (!visible) return null;
+  const title = message || '기획안이 완성되었습니다';
+  const subtitle = message ? '잠시만 기다려 주세요...' : '에디터로 이동 중...';
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100000,
+        background: 'rgba(15, 23, 42, 0.88)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        style={{
+          background: '#ffffff',
+          borderRadius: 16,
+          padding: '28px 36px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
+          minWidth: 320,
+          maxWidth: 480,
+        }}
+      >
+        <Loader2 className="w-7 h-7 animate-spin shrink-0" style={{ color: '#10b981' }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', lineHeight: 1.4 }}>
+            {title}
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+            {subtitle}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default App;

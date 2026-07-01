@@ -77,6 +77,13 @@ const useAppStore = create((set, get) => ({
   // Planning mode
   isPlanningMode: false,
 
+  // 기획안 생성 직후 PlanningEditor → EditorView 전환 동안 fullscreen overlay 로
+  // 전체 화면 reconciliation + iframe paint 깜빡임을 덮는다.
+  isTransitioningToEditor: false,
+  // overlay 안에 표시할 메시지. PlanningEditor 가 generation 각 step 에 따라
+  // 업데이트. null 이면 default 메시지 사용.
+  editorTransitionMessage: null,
+
   // Admin mode
   isAdminMode: false,
 
@@ -348,13 +355,58 @@ const useAppStore = create((set, get) => ({
   },
 
   createFileWithContent: async (name, content) => {
-    const { uid } = get();
+    const { uid, imageUrls } = get();
     if (!uid) return;
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const file = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
     await createFileDoc(uid, file, content);
-    set({ files: [...get().files, file], isPlanningMode: false });
-    get().setActiveFile(id);
+
+    // 기존 이미지 URL revoke (setActiveFile 의 cleanup 부분과 동일)
+    Object.values(imageUrls).forEach((url) => URL.revokeObjectURL(url));
+
+    // planning mode 종료 + 새 파일 활성화 + content 주입을 단일 commit 으로 묶어
+    // 깜빡임 (PlanningEditor 닫힘 → 빈 화면 → await loadFileContent → 갑자기 나타남) 제거.
+    // 이미 메모리에 content 가 있으므로 Firestore 재로드 불필요.
+    // fullscreen overlay 도 함께 켜서 EditorView 의 큰 reconciliation +
+    // iframe srcDoc paint 가 끝나는 동안 사용자 시각에 빈 화면이 노출되지 않게 한다.
+    set({
+      files: [...get().files, file],
+      isPlanningMode: false,
+      isTransitioningToEditor: true,
+      activeFileId: id,
+      activeFileContent: content,
+      images: [],
+      imageUrls: {},
+      isImagePanelOpen: false,
+      isAdminMode: false,
+      currentView: 'editor',
+    });
+
+    // 이미지 메타는 백그라운드 로드 (await 하면 다시 깜빡임 유발)
+    get().loadImagesForFile(id);
+
+    // 큰 HTML (수백KB) + tailwindcss CDN JIT 컴파일 등 무거운 iframe paint
+    // 도 커버하도록 보수적인 fallback. 보통은 PreviewIframe.onLoad 가 먼저
+    // dismiss (~ paint 완료 시점) 하므로 이건 안전망일 뿐.
+    setTimeout(() => {
+      if (get().isTransitioningToEditor) {
+        set({ isTransitioningToEditor: false });
+      }
+    }, 4000);
+  },
+
+  dismissEditorTransition: () => {
+    if (get().isTransitioningToEditor) {
+      set({ isTransitioningToEditor: false, editorTransitionMessage: null });
+    }
+  },
+
+  startEditorTransition: (message) => {
+    set({ isTransitioningToEditor: true, editorTransitionMessage: message || null });
+  },
+
+  setEditorTransitionMessage: (message) => {
+    set({ editorTransitionMessage: message || null });
   },
 
   setActiveFile: async (fileId) => {

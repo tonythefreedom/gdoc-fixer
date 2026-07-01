@@ -95,6 +95,26 @@ export async function chargeCoin(uid, action) {
 }
 
 /**
+ * chargeCoin 의 역연산 — 작업 실패 시 차감된 코인을 사용자에게 환불.
+ * coinBalance 증가 + coinSpent / spendByAction 감소.
+ */
+export async function refundCoin(uid, action) {
+  if (!uid) return null;
+  const cost = ACTION_COSTS[action];
+  if (cost === undefined) {
+    console.warn(`[refundCoin] unknown action: ${action}`);
+    return null;
+  }
+  const profileRef = doc(db, 'userProfiles', uid);
+  await updateDoc(profileRef, {
+    coinBalance: increment(cost),
+    coinSpent: increment(-cost),
+    [`spendByAction.${action}`]: increment(-cost),
+  });
+  return { refunded: cost };
+}
+
+/**
  * 잔액만 빠르게 조회.
  */
 export async function getCoinBalance(uid) {

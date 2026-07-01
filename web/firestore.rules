@@ -45,6 +45,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'lastLoginAt',
           'coinBalance', 'coinSpent', 'coinEarned', 'lastSpentAt',
+          'spendByAction',
           'photoURL', 'displayName'
         ]);
     }
