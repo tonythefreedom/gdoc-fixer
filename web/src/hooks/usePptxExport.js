@@ -446,7 +446,14 @@ export function usePptxExport() {
         processSlideHtml(pptx, slides[i]);
       }
 
-      const blob = await pptx.write({ outputType: 'blob' });
+      let blob = await pptx.write({ outputType: 'blob' });
+      // 폰트 임베드 후처리 (Pretendard 서브셋) — 실패해도 원본 blob 유지
+      try {
+        const { embedPptxFonts } = await import('../utils/embedPptxFonts');
+        blob = await embedPptxFonts(blob);
+      } catch (e) {
+        console.warn('[PPTX] 폰트 임베드 스킵:', e);
+      }
       downloadBlob(blob, `${presentationName}.pptx`);
       try {
         const [{ chargeCoin }, { default: useSlideStore }] = await Promise.all([
