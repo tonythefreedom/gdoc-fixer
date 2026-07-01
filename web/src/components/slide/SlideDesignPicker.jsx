@@ -7,20 +7,35 @@ import { SLIDE_DESIGN_SYSTEMS } from '../../utils/slideDesignSystems';
  * 디자인 시스템의 palette + typography 를 실제로 사용해 샘플 슬라이드를
  * 렌더링하므로 정적 색상 칩보다 훨씬 직관적이다.
  */
-function DesignThumbnail({ ds, size = 'sm' }) {
-  const dims = size === 'lg' ? { w: 384, h: 216 } : { w: 224, h: 126 };
-  const scale = dims.w / 1280;
+function DesignThumbnail({ ds }) {
+  const ref = useRef(null);
+  const [thumbW, setThumbW] = useState(480);
 
-  // body 안에 1280x720 슬라이드를 만들고 css scale 로 축소.
+  // 카드 폭에 맞춰 썸네일이 꽉 차도록 실제 렌더 폭을 측정해 scale 을 계산.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const cw = entries[0]?.contentRect?.width;
+      if (cw) setThumbW(cw);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const scale = thumbW / 1280;
+
+  // 1280x720 슬라이드를 컨테이너 폭에 맞춰 css scale 로 축소 (반응형 · 16:9).
   return (
     <div
-      className="relative overflow-hidden border border-slate-200 bg-slate-50"
-      style={{ width: dims.w, height: dims.h }}
+      ref={ref}
+      className="relative w-full overflow-hidden bg-slate-50"
+      style={{ aspectRatio: '16 / 9' }}
     >
       <div
         style={{
           position: 'absolute',
-          inset: 0,
+          top: 0,
+          left: 0,
           background: ds.palette.background,
           transformOrigin: 'top left',
           transform: `scale(${scale})`,
@@ -138,17 +153,17 @@ export default function SlideDesignPicker({ value, onChange, disabled }) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/40 flex"
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
           <div
             ref={modalRef}
-            className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-white w-full h-full overflow-hidden flex flex-col"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">프리젠테이션 디자인 시스템</h2>
-                <p className="text-xs text-slate-500 mt-0.5">변환 시 모든 슬라이드에 적용됩니다 · 호버하면 큰 미리보기</p>
+                <p className="text-xs text-slate-500 mt-0.5">변환 시 모든 슬라이드에 적용됩니다 · 실제 색·타이포로 렌더된 미리보기</p>
               </div>
               <button
                 onClick={() => setOpen(false)}
@@ -158,7 +173,7 @@ export default function SlideDesignPicker({ value, onChange, disabled }) {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-6 overflow-y-auto">
+            <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-6 p-5 md:p-8 overflow-y-auto">
               {SLIDE_DESIGN_SYSTEMS.map((ds) => {
                 const selected = ds.id === value;
                 return (
@@ -172,8 +187,8 @@ export default function SlideDesignPicker({ value, onChange, disabled }) {
                         : 'border-slate-200 hover:border-slate-400'
                     }`}
                   >
-                    <div className="flex justify-center bg-slate-50 p-3">
-                      <DesignThumbnail ds={ds} size="sm" />
+                    <div className="bg-slate-50">
+                      <DesignThumbnail ds={ds} />
                     </div>
                     <div className="p-3 bg-white">
                       <div className="flex items-center justify-between gap-2">
