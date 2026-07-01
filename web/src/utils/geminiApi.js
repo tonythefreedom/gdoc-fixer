@@ -1110,11 +1110,19 @@ Rules:
 - Reuse existing HTML elements where appropriate: <table>, <ul>/<ol>, <img>, etc.
 - When attachment data is provided, reference it according to the user's instruction. Excel comes as CSV per sheet, text files as raw text, images/PDFs as inline data.
 - Placeholders of the form __B64_IMG_N__ are image slots — NEVER delete them, always keep them in place.
-- When a chart/graph is needed, do not draw it yourself. Insert an HTML comment placeholder in this exact form (the client renders it via Chart.js):
+- When a chart/graph is needed, do not draw it yourself. Insert an HTML comment placeholder in this exact form (the client renders it via ECharts as crisp SVG):
   <!--CHART:{"type":"line","title":"차트 제목","labels":["1월","2월"],"datasets":[{"label":"시리즈명","data":[10,20]}],"xLabel":"X축","yLabel":"Y축"}-->
   type: "line" | "bar" | "pie" | "doughnut" | "radar"
   width/height are optional (default 800x500)
   stacked: true enables stacked charts
+- When a flow / architecture / sequence / timeline / relationship DIAGRAM is needed, do NOT hand-draw boxes with divs. Emit a Mermaid block (the client renders it to SVG). Do NOT wrap Mermaid code in an HTML comment (its "-->" arrows would break the comment):
+  <div class="mermaid">
+  flowchart LR
+    A["입력"] --> B{"판단"}
+    B -->|예| C["처리"]
+    B -->|아니오| D["종료"]
+  </div>
+  Supported: flowchart, sequenceDiagram, timeline, mindmap, erDiagram, gantt, stateDiagram. Keep all node/edge labels in Korean and wrap label text in double quotes.
 - Output the complete modified HTML document only — no surrounding prose, HTML only.
 - All natural-language text inside the HTML must remain in Korean (한국어). Chart titles, labels, axis names go in Korean as in the example above.
 ${VISUAL_HTML_RULES}`;
@@ -1173,11 +1181,19 @@ Rules:
 - Preserve the document's existing formatting (inline style, CSS classes, etc.) as much as possible.
 - When attachment data is provided, reference it according to the user's instruction.
 - Placeholders of the form __B64_IMG_N__ must never be deleted.
-- When a chart/graph is needed, do not draw it. Insert an HTML comment placeholder inside <<<REPLACE>>> in this form (the client renders it via Chart.js):
+- When a chart/graph is needed, do not draw it. Insert an HTML comment placeholder inside <<<REPLACE>>> in this form (the client renders it via ECharts as crisp SVG):
   <!--CHART:{"type":"line","title":"차트 제목","labels":["1월","2월"],"datasets":[{"label":"시리즈명","data":[10,20]}],"xLabel":"X축","yLabel":"Y축"}-->
   type: "line" | "bar" | "pie" | "doughnut" | "radar"
   width/height are optional (default 800x500)
   stacked: true enables stacked charts
+- When a flow / architecture / sequence / timeline / relationship DIAGRAM is needed, do NOT hand-draw boxes with divs. Emit a Mermaid block (the client renders it to SVG). Do NOT wrap Mermaid code in an HTML comment (its "-->" arrows would break the comment):
+  <div class="mermaid">
+  flowchart LR
+    A["입력"] --> B{"판단"}
+    B -->|예| C["처리"]
+    B -->|아니오| D["종료"]
+  </div>
+  Supported: flowchart, sequenceDiagram, timeline, mindmap, erDiagram, gantt, stateDiagram. Keep all node/edge labels in Korean and wrap label text in double quotes.
 - Output the delimited form only — no surrounding prose.
 - All natural-language text inside <<<REPLACE>>> must remain in Korean (한국어).`;
 
@@ -1362,7 +1378,7 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
     result = restoreBase64Images(decompressed, embeddedImages);
 
     // 차트 플레이스홀더를 Chart.js 이미지로 렌더링
-    result = renderChartPlaceholders(result);
+    result = await renderChartPlaceholders(result);
 
     return result;
   }
@@ -1406,7 +1422,7 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
         html = restoreBase64Images(html, embeddedImages);
 
         // 차트 플레이스홀더를 Chart.js 이미지로 렌더링
-        html = renderChartPlaceholders(html);
+        html = await renderChartPlaceholders(html);
 
         if (html.includes('<')) return html;
         throw new Error('유효한 HTML이 반환되지 않았습니다.');
@@ -1463,7 +1479,7 @@ export async function modifyDocumentHtml(currentHtml, instruction, attachments =
   html = restoreBase64Images(html, embeddedImages);
 
   // 차트 플레이스홀더를 Chart.js 이미지로 렌더링
-  html = renderChartPlaceholders(html);
+  html = await renderChartPlaceholders(html);
 
   if (!html.includes('<')) {
     throw new Error('유효한 HTML이 반환되지 않았습니다.');

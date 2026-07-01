@@ -1,28 +1,69 @@
 /**
- * 클라이언트 사이드 차트 렌더링 유틸리티.
- * Gemini가 반환한 차트 플레이스홀더(<!--CHART:{...}-->)를
- * Chart.js로 렌더링하여 base64 PNG <img> 태그로 교체.
+ * 클라이언트 사이드 차트/다이어그램 렌더링 유틸리티.
+ *
+ * - 차트:    <!--CHART:{...}-->               → ECharts SSR 로 SVG 렌더 (벡터, 선명)
+ * - 다이어그램: <div class="mermaid">...</div>   → Mermaid 로 SVG 렌더
+ *
+ * 둘 다 SVG 로 출력하므로 확대해도 뭉개지지 않고, PPTX/PDF 변환에서도 선명하게 남는다.
+ * (기존 Chart.js 는 canvas → base64 PNG 라서 확대 시 흐릿하고 편집 불가였음.)
+ *
+ * echarts(~1MB), mermaid(~2MB) 는 동적 import 로 실제 사용 시점에만 로드해 초기 번들을 경량화한다.
+ * renderChartPlaceholders 는 mermaid 렌더가 비동기이므로 async 다 — 호출부에서 await 할 것.
  */
-import { Chart, registerables } from 'chart.js';
 
-Chart.register(...registerables);
+// ─── 지연 로더 (동적 import) ───
+
+let _echartsPromise = null;
+function getECharts() {
+  if (!_echartsPromise) _echartsPromise = import('echarts');
+  return _echartsPromise;
+}
+
+let _mermaidPromise = null;
+function getMermaid() {
+  if (!_mermaidPromise) {
+    _mermaidPromise = import('mermaid').then((mod) => {
+      const mermaid = mod.default;
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'loose',
+        theme: 'neutral',
+        fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+      });
+      return mermaid;
+    });
+  }
+  return _mermaidPromise;
+}
+
+// ─── 플레이스홀더 정규식 ───
+
+const CHART_PLACEHOLDER_RE = /<!--CHART:([\s\S]*?)-->/g;
+// mermaid 코드에는 `-->` 화살표가 들어가 HTML 주석과 충돌하므로, 주석이 아닌
+// mermaid 네이티브 형식 <div class="mermaid"> / <pre class="mermaid"> 로 받는다.
+const MERMAID_BLOCK_RE = /<(div|pre)([^>]*\bclass="[^"]*\bmermaid\b[^"]*"[^>]*)>([\s\S]*?)<\/\1>/g;
+
+// ─── 기본 색상 팔레트 ───
+
+const PALETTE = [
+  '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1',
+];
+
+const TEXT = '#1e293b';
+const MUTED = '#64748b';
+const GRID = '#e2e8f0';
+const FONT = "'Pretendard', 'Noto Sans KR', sans-serif";
 
 // ─── 차트 플레이스홀더 파싱 ───
 
-const CHART_PLACEHOLDER_RE = /<!--CHART:([\s\S]*?)-->/g;
-
-/**
- * HTML 내 <!--CHART:{...}--> 플레이스홀더를 모두 찾아 반환.
- * @returns {{ match: string, config: object, index: number }[]}
- */
 function findChartPlaceholders(html) {
   const results = [];
   let m;
   CHART_PLACEHOLDER_RE.lastIndex = 0;
   while ((m = CHART_PLACEHOLDER_RE.exec(html)) !== null) {
     try {
-      const config = JSON.parse(m[1].trim());
-      results.push({ match: m[0], config, index: m.index });
+      results.push({ match: m[0], config: JSON.parse(m[1].trim()) });
     } catch (e) {
       console.warn('[chartRenderer] 차트 JSON 파싱 실패:', e.message, m[1].slice(0, 100));
     }
@@ -30,165 +71,205 @@ function findChartPlaceholders(html) {
   return results;
 }
 
-// ─── 기본 색상 팔레트 ───
+// ─── 간소화된 CHART 스키마 → ECharts option ───
+//
+// { type: "line"|"bar"|"pie"|"doughnut"|"radar", title, labels, datasets:[{label,data}],
+//   xLabel?, yLabel?, stacked? }
+// (Gemini 가 보내는 형식 — Chart.js 시절과 동일하게 유지하여 프롬프트 호환)
 
-const PALETTE = [
-  '#3B82F6', // blue-500
-  '#EF4444', // red-500
-  '#10B981', // emerald-500
-  '#F59E0B', // amber-500
-  '#8B5CF6', // violet-500
-  '#EC4899', // pink-500
-  '#06B6D4', // cyan-500
-  '#84CC16', // lime-500
-  '#F97316', // orange-500
-  '#6366F1', // indigo-500
-];
+function buildEChartsOption(config) {
+  const { type = 'line', title, labels = [], datasets = [], xLabel, yLabel, stacked } = config;
 
-const PALETTE_BG = PALETTE.map((c) => c + '33'); // 20% opacity
+  const common = {
+    color: PALETTE,
+    backgroundColor: '#ffffff',
+    textStyle: { fontFamily: FONT, color: TEXT },
+    title: title
+      ? { text: title, left: 'center', top: 8, textStyle: { fontFamily: FONT, fontSize: 16, fontWeight: 'bold', color: TEXT } }
+      : undefined,
+    legend:
+      datasets.length > 1 || type === 'pie' || type === 'doughnut'
+        ? { bottom: 8, textStyle: { fontFamily: FONT, fontSize: 11, color: MUTED }, itemWidth: 14, itemHeight: 10 }
+        : undefined,
+  };
 
-/**
- * Chart config를 Chart.js 옵션으로 변환.
- * Gemini가 보내는 간소화된 형식:
- * {
- *   type: "line" | "bar" | "pie" | "doughnut" | "radar",
- *   title: "차트 제목",
- *   labels: ["1월", "2월", ...],
- *   datasets: [
- *     { label: "시리즈A", data: [1,2,3] },
- *     { label: "시리즈B", data: [4,5,6] }
- *   ],
- *   xLabel?: "X축",
- *   yLabel?: "Y축",
- *   stacked?: boolean
- * }
- */
-function buildChartJsConfig(config) {
-  const { type = 'line', title, labels, datasets, xLabel, yLabel, stacked } = config;
-
-  const chartDatasets = (datasets || []).map((ds, i) => {
-    const color = PALETTE[i % PALETTE.length];
-    const bgColor = PALETTE_BG[i % PALETTE_BG.length];
-
-    const base = {
-      label: ds.label || `데이터 ${i + 1}`,
-      data: ds.data || [],
-      borderColor: ds.borderColor || color,
-      backgroundColor: ds.backgroundColor || (type === 'line' ? bgColor : color),
-      borderWidth: ds.borderWidth || 2,
+  if (type === 'pie' || type === 'doughnut') {
+    const data = (datasets[0]?.data || []).map((v, i) => ({ value: v, name: labels[i] ?? `항목 ${i + 1}` }));
+    return {
+      ...common,
+      tooltip: { trigger: 'item' },
+      series: [{
+        type: 'pie',
+        radius: type === 'doughnut' ? ['42%', '70%'] : '68%',
+        center: ['50%', title ? '56%' : '50%'],
+        data,
+        label: { fontFamily: FONT, fontSize: 12, color: TEXT, formatter: '{b}\n{d}%' },
+        labelLine: { length: 10, length2: 10 },
+        itemStyle: { borderColor: '#ffffff', borderWidth: 2 },
+      }],
     };
-
-    if (type === 'line') {
-      base.fill = ds.fill ?? false;
-      base.tension = ds.tension ?? 0.3;
-      base.pointRadius = ds.pointRadius ?? 3;
-    }
-
-    return base;
-  });
-
-  // pie/doughnut: 단일 데이터셋에 여러 색상 적용
-  if ((type === 'pie' || type === 'doughnut') && chartDatasets.length > 0) {
-    const ds = chartDatasets[0];
-    if (!config.datasets?.[0]?.backgroundColor) {
-      ds.backgroundColor = (ds.data || []).map((_, i) => PALETTE[i % PALETTE.length]);
-      ds.borderColor = '#ffffff';
-      ds.borderWidth = 2;
-    }
   }
 
-  return {
-    type,
-    data: {
-      labels: labels || [],
-      datasets: chartDatasets,
-    },
-    options: {
-      responsive: false,
-      animation: false,
-      plugins: {
-        title: title
-          ? { display: true, text: title, font: { size: 16, weight: 'bold' }, color: '#1e293b' }
-          : { display: false },
-        legend: {
-          display: chartDatasets.length > 1 || type === 'pie' || type === 'doughnut',
-          position: 'bottom',
-          labels: { font: { size: 11 }, color: '#475569' },
-        },
+  if (type === 'radar') {
+    const maxVal = Math.max(1, ...datasets.flatMap((d) => d.data || []));
+    return {
+      ...common,
+      radar: {
+        indicator: labels.map((name) => ({ name, max: maxVal })),
+        axisName: { fontFamily: FONT, fontSize: 11, color: MUTED },
+        splitLine: { lineStyle: { color: GRID } },
+        splitArea: { areaStyle: { color: ['#ffffff', '#f8fafc'] } },
       },
-      scales:
-        type === 'pie' || type === 'doughnut' || type === 'radar'
-          ? undefined
-          : {
-              x: {
-                title: xLabel ? { display: true, text: xLabel, color: '#64748b' } : undefined,
-                stacked: !!stacked,
-                ticks: { color: '#64748b', font: { size: 10 } },
-                grid: { color: '#e2e8f0' },
-              },
-              y: {
-                title: yLabel ? { display: true, text: yLabel, color: '#64748b' } : undefined,
-                stacked: !!stacked,
-                ticks: { color: '#64748b', font: { size: 10 } },
-                grid: { color: '#e2e8f0' },
-                beginAtZero: type === 'bar',
-              },
-            },
+      series: [{
+        type: 'radar',
+        data: datasets.map((d, i) => ({
+          value: d.data || [],
+          name: d.label || `데이터 ${i + 1}`,
+          areaStyle: { opacity: 0.12 },
+          lineStyle: { width: 2 },
+        })),
+      }],
+    };
+  }
+
+  // line / bar
+  const series = datasets.map((d, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    if (type === 'bar') {
+      return {
+        name: d.label || `데이터 ${i + 1}`,
+        type: 'bar',
+        data: d.data || [],
+        stack: stacked ? 'total' : undefined,
+        barMaxWidth: 44,
+        itemStyle: { color, borderRadius: stacked ? 0 : [4, 4, 0, 0] },
+      };
+    }
+    return {
+      name: d.label || `데이터 ${i + 1}`,
+      type: 'line',
+      data: d.data || [],
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 6,
+      lineStyle: { width: 3, color },
+      itemStyle: { color },
+      areaStyle: d.fill ? { opacity: 0.12, color } : undefined,
+      stack: stacked ? 'total' : undefined,
+    };
+  });
+
+  return {
+    ...common,
+    tooltip: { trigger: 'axis' },
+    grid: { left: 56, right: 28, top: title ? 56 : 24, bottom: (common.legend ? 48 : 40) + (xLabel ? 20 : 0) },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      name: xLabel || undefined,
+      nameLocation: 'middle',
+      nameGap: 32,
+      nameTextStyle: { fontFamily: FONT, color: MUTED, fontSize: 12 },
+      axisLabel: { fontFamily: FONT, color: MUTED, fontSize: 11 },
+      axisLine: { lineStyle: { color: GRID } },
+      axisTick: { show: false },
     },
+    yAxis: {
+      type: 'value',
+      name: yLabel || undefined,
+      nameTextStyle: { fontFamily: FONT, color: MUTED, fontSize: 12 },
+      axisLabel: { fontFamily: FONT, color: MUTED, fontSize: 11 },
+      splitLine: { lineStyle: { color: GRID } },
+    },
+    series,
   };
 }
 
-// ─── 오프스크린 캔버스에서 Chart.js 렌더링 → base64 PNG ───
+// ─── ECharts SSR → SVG data-URI <img> ───
 
-function renderChartToBase64(config, width = 800, height = 500) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-
-  const ctx = canvas.getContext('2d');
-  // 흰색 배경
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
-
-  const chartJsConfig = buildChartJsConfig(config);
-
-  const chart = new Chart(ctx, chartJsConfig);
-  // Chart.js animation:false이므로 즉시 렌더링 완료
-  const dataUrl = canvas.toDataURL('image/png');
-  chart.destroy();
-
-  return dataUrl;
+function renderChartToImg(echarts, config) {
+  const width = config.width || 800;
+  const height = config.height || 500;
+  const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width, height });
+  try {
+    chart.setOption(buildEChartsOption(config));
+    const svg = chart.renderToSVGString();
+    const uri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    return `<div style="text-align:center;margin:16px 0;"><img src="${uri}" alt="${(config.title || '차트').replace(/"/g, '&quot;')}" style="max-width:100%;height:auto;" /></div>`;
+  } finally {
+    chart.dispose();
+  }
 }
 
-// ─── 메인 함수: HTML 내 차트 플레이스홀더를 이미지로 교체 ───
+// ─── 유틸 ───
+
+function decodeEntities(s) {
+  return s
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function errorBox(msg) {
+  return `<div style="padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;margin:16px 0;font-family:${FONT};">렌더링 실패: ${msg}</div>`;
+}
+
+// ─── 메인: HTML 내 차트/다이어그램 플레이스홀더를 SVG 로 교체 (async) ───
 
 /**
- * HTML 문자열 내의 <!--CHART:{...}--> 플레이스홀더를
- * Chart.js로 렌더링한 <img> 태그로 교체.
+ * HTML 문자열 내의 <!--CHART:{...}--> (ECharts) 와 <div class="mermaid">...</div> (Mermaid)
+ * 를 렌더링된 SVG 로 교체한다.
  * @param {string} html
- * @returns {string} 차트가 이미지로 교체된 HTML
+ * @returns {Promise<string>}
  */
-export function renderChartPlaceholders(html) {
-  const placeholders = findChartPlaceholders(html);
-  if (placeholders.length === 0) return html;
-
-  console.log(`[chartRenderer] ${placeholders.length}개 차트 플레이스홀더 발견`);
-
+export async function renderChartPlaceholders(html) {
   let result = html;
-  for (const { match, config } of placeholders) {
-    try {
-      const width = config.width || 800;
-      const height = config.height || 500;
-      const dataUrl = renderChartToBase64(config, width, height);
 
-      const imgTag = `<div style="text-align:center;margin:16px 0;"><img src="${dataUrl}" alt="${config.title || '차트'}" style="max-width:100%;height:auto;border:1px solid #e2e8f0;border-radius:8px;" /></div>`;
-      result = result.replace(match, imgTag);
-      console.log(`[chartRenderer] 차트 렌더링 완료: ${config.title || '(제목 없음)'}`);
+  // 1) ECharts 차트
+  const charts = findChartPlaceholders(result);
+  if (charts.length > 0) {
+    console.log(`[chartRenderer] ${charts.length}개 차트(ECharts) 렌더링`);
+    let echarts;
+    try {
+      echarts = await getECharts();
     } catch (e) {
-      console.error('[chartRenderer] 차트 렌더링 실패:', e.message, config);
-      // 실패 시 에러 메시지로 대체
-      const errorDiv = `<div style="padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;margin:16px 0;">차트 렌더링 실패: ${e.message}</div>`;
-      result = result.replace(match, errorDiv);
+      console.error('[chartRenderer] echarts 로드 실패:', e);
+    }
+    if (echarts) {
+      for (const { match, config } of charts) {
+        try {
+          result = result.replace(match, renderChartToImg(echarts, config));
+        } catch (e) {
+          console.error('[chartRenderer] 차트 렌더링 실패:', e.message, config);
+          result = result.replace(match, errorBox(e.message));
+        }
+      }
+    }
+  }
+
+  // 2) Mermaid 다이어그램
+  const blocks = [...result.matchAll(MERMAID_BLOCK_RE)];
+  if (blocks.length > 0) {
+    console.log(`[chartRenderer] ${blocks.length}개 다이어그램(Mermaid) 렌더링`);
+    let mermaid;
+    try {
+      mermaid = await getMermaid();
+    } catch (e) {
+      console.error('[chartRenderer] mermaid 로드 실패:', e);
+    }
+    if (mermaid) {
+      let i = 0;
+      for (const b of blocks) {
+        const code = decodeEntities(b[3]).trim();
+        if (!code) continue;
+        try {
+          const { svg } = await mermaid.render(`mmd-${i++}`, code);
+          result = result.replace(b[0], `<div style="text-align:center;margin:16px 0;">${svg}</div>`);
+        } catch (e) {
+          console.error('[chartRenderer] 다이어그램 렌더링 실패:', e.message);
+          result = result.replace(b[0], errorBox(e.message));
+        }
+      }
     }
   }
 
