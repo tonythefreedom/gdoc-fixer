@@ -214,6 +214,45 @@ const useAppStore = create((set, get) => ({
     }
   },
 
+  /**
+   * AI 로 수정한 HWPX 바이트를 새 type:'hwp' 파일로 사이드 메뉴에 저장한다.
+   * (수정본을 GCS+Firestore 에 영속화 — 세션이 끝나도 유실되지 않도록.)
+   * @param {Uint8Array} bytes 수정된 HWPX 바이너리
+   * @param {string} baseName 원본 파일명(확장자 무시)
+   * @returns {Promise<object|null>} 생성된 fileDoc (실패 시 null)
+   */
+  saveHwpxBytesAsFile: async (bytes, baseName = 'document') => {
+    const { uid } = get();
+    if (!uid || !bytes?.length) return null;
+    try {
+      const { uploadBlobToGcs } = await import('./storage');
+      const cleanBase = String(baseName).replace(/\.(hwp|hwpx)$/i, '') || 'document';
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const path = `wiki-images/hwp/${uid}/${id}_${Date.now()}.hwpx`;
+      const blob = new Blob([bytes], { type: 'application/vnd.hancom.hwpx' });
+      const hwpUrl = await uploadBlobToGcs(path, blob);
+
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      const fileDoc = {
+        id,
+        name: `${cleanBase} (AI수정 ${hh}:${mm})`,
+        type: 'hwp',
+        hwpUrl,
+        ext: 'hwpx',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      await createFileDoc(uid, fileDoc, '');
+      set({ files: [...get().files, fileDoc] });
+      return fileDoc;
+    } catch (err) {
+      console.error('HWPX 자동 저장 실패:', err);
+      return null;
+    }
+  },
+
   createFileFromDocx: async (file) => {
     const { uid } = get();
     if (!uid) return;

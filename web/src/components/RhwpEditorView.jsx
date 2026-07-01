@@ -237,6 +237,15 @@ export default function RhwpEditorView() {
         console.log('[hwp] download generated HWPX:', url, '- 다운로드는 콘솔에서: a=document.createElement("a");a.href="' + url + '";a.download="generated.hwpx";a.click()');
       } catch { /* noop */ }
 
+      // AI 수정본을 hwpx 파일로 사이드 메뉴에 자동 저장 (세션 종료 후에도 유실 방지)
+      setChatStatus('수정본 저장…');
+      try {
+        const savedFile = await useAppStore.getState().saveHwpxBytesAsFile(newBytes, activeFile?.name || 'document');
+        if (savedFile) console.log('[hwp] AI 수정본 사이드 메뉴 저장:', savedFile.name);
+      } catch (saveErr) {
+        console.warn('[hwp] 수정본 자동 저장 실패(무시):', saveErr);
+      }
+
       setChatStatus('에디터에 재로드…');
       try {
         const loaded = await ed.loadFile(newBytes, activeFile?.name || 'document.hwp');
