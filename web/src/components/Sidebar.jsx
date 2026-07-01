@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
-import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, Presentation, Share2, ExternalLink, Loader2, Sparkles, FolderOpen } from 'lucide-react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { FilePlus, FileUp, Trash2, FileCode, Images, Pencil, Check, X, Presentation, Share2, ExternalLink, Loader2, Sparkles, FolderOpen, Rocket } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
 import useShareStore from '../store/useShareStore';
+import usePublishStore from '../store/usePublishStore';
 import { getShareUrl } from '../utils/shareUrl';
 
 export default function Sidebar() {
@@ -164,6 +165,22 @@ export default function Sidebar() {
     setActiveFile(null);
     setActivePresentation(presId);
     setCurrentView('editor');
+  };
+
+  const publishSharedToCommunity = usePublishStore((s) => s.publishSharedToCommunity);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  useEffect(() => {
+    let unsub;
+    import('../store/useAuthStore').then(({ default: useAuthStore }) => {
+      const read = () => setIsSuperAdmin(useAuthStore.getState().userProfile?.role === 'super_admin');
+      read();
+      unsub = useAuthStore.subscribe(read);
+    });
+    return () => { if (unsub) unsub(); };
+  }, []);
+  const handlePublishShare = (e, share) => {
+    e.stopPropagation();
+    publishSharedToCommunity({ id: share.id, name: share.name });
   };
 
   const handleCopyShareUrl = (e, shareId) => {
@@ -467,6 +484,15 @@ export default function Sidebar() {
                   {share.name || new Date(share.createdAt).toLocaleDateString()}
                 </span>
                 <div className="hidden group-hover:flex items-center gap-0.5">
+                  {isSuperAdmin && (
+                    <button
+                      onClick={(e) => handlePublishShare(e, share)}
+                      className="p-1 rounded text-slate-500 hover:bg-indigo-600/40 hover:text-indigo-300"
+                      title="연쇄 게시 (tech-blog → 커뮤니티 → LinkedIn)"
+                    >
+                      <Rocket className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => handleOpenShare(e, share.id)}
                     className="p-1 rounded text-slate-500 hover:bg-slate-600 hover:text-slate-300"

@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Share2, Check, Loader2, FileText, FileDown, FileCode, FileType, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X, AtSign, ChevronDown, Download, Code2, ImagePlus, Globe } from 'lucide-react';
+import { Share2, Check, Loader2, FileText, FileDown, FileCode, FileType, Send, IndentIncrease, SeparatorHorizontal, Paperclip, X, AtSign, ChevronDown, Download, Code2, ImagePlus, Rocket } from 'lucide-react';
 import SlideDesignPicker from './slide/SlideDesignPicker';
 import useAppStore from '../store/useAppStore';
 import useSlideStore from '../store/useSlideStore';
@@ -486,12 +486,12 @@ export default function MainPanel() {
           </button>
           {isSuperAdmin && (
             <button
-              onClick={openPublishModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-              title="tony.banya.ai에 게시 (영문 자동 번역)"
+              onClick={() => openPublishModal('chain')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+              title="tech-blog → 커뮤니티 → LinkedIn 연쇄 게시"
             >
-              <Globe className="w-3.5 h-3.5" />
-              tech-blog 게시
+              <Rocket className="w-3.5 h-3.5" />
+              연쇄 게시
             </button>
           )}
           {/* 디자인 시스템 picker (미리보기 썸네일 모달) */}

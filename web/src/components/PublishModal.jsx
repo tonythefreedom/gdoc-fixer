@@ -1,46 +1,40 @@
-import { useState } from 'react';
-import { Loader2, X, ExternalLink, Copy, Check, AlertCircle, Globe } from 'lucide-react';
+import { Loader2, X, ExternalLink, Check, AlertCircle, Rocket, Circle, MinusCircle } from 'lucide-react';
 import usePublishStore from '../store/usePublishStore';
+
+// 단계 상태 아이콘
+function StepIcon({ status }) {
+  if (status === 'success') return <Check className="w-4 h-4 text-emerald-600" />;
+  if (status === 'running') return <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />;
+  if (status === 'error') return <AlertCircle className="w-4 h-4 text-red-600" />;
+  if (status === 'skipped') return <MinusCircle className="w-4 h-4 text-slate-400" />;
+  return <Circle className="w-4 h-4 text-slate-300" />;
+}
 
 export default function PublishModal() {
   const modalOpen = usePublishStore((s) => s.modalOpen);
   const status = usePublishStore((s) => s.status);
+  const steps = usePublishStore((s) => s.steps);
   const result = usePublishStore((s) => s.result);
   const error = usePublishStore((s) => s.error);
   const closeModal = usePublishStore((s) => s.closeModal);
   const startPublish = usePublishStore((s) => s.startPublish);
   const reset = usePublishStore((s) => s.reset);
-  const [copied, setCopied] = useState(false);
 
   if (!modalOpen) return null;
 
   const isPublishing = status === 'publishing';
-
-  const handleCopy = async () => {
-    if (!result?.url) return;
-    await navigator.clipboard.writeText(result.url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const handleClose = () => {
     if (isPublishing) return;
     closeModal();
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={handleClose}
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2">
-            <Globe className="w-5 h-5 text-indigo-500" />
-            <h2 className="text-base font-semibold text-slate-800">tech-blog 게시</h2>
+            <Rocket className="w-5 h-5 text-indigo-500" />
+            <h2 className="text-base font-semibold text-slate-800">연쇄 게시</h2>
           </div>
           <button
             onClick={handleClose}
@@ -52,121 +46,95 @@ export default function PublishModal() {
         </div>
 
         <div className="px-5 py-5">
-          {status === 'idle' && (
+          {status === 'idle' ? (
             <>
               <p className="text-sm text-slate-600 leading-relaxed">
-                현재 문서를 <span className="font-semibold">tony.banya.ai</span>에 게시합니다.
+                현재 문서를 <span className="font-semibold">tech-blog → 커뮤니티 → LinkedIn</span> 순으로 한 번에 게시합니다.
               </p>
               <ul className="mt-3 text-xs text-slate-500 space-y-1 list-disc list-inside">
-                <li>한글 본문을 영문으로 자동 번역합니다</li>
-                <li>제목·요약·썸네일 메타데이터를 LLM이 추출합니다</li>
-                <li>완료까지 1~2분 정도 걸릴 수 있습니다</li>
+                <li>tech-blog(tony.banya.ai)에 영문 자동 번역으로 게시</li>
+                <li>협동조합 커뮤니티(AI/LLM)에 게시 — 출처는 tech-blog 글</li>
+                <li>LinkedIn 조직 페이지에 게시 — 출처는 커뮤니티 글</li>
+                <li>각 단계가 직전 사이트를 출처로 연결해 홍보 효과를 높입니다</li>
               </ul>
               <div className="mt-5 flex gap-2 justify-end">
-                <button
-                  onClick={closeModal}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                >
+                <button onClick={closeModal} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
                   취소
                 </button>
                 <button
                   onClick={startPublish}
-                  className="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg"
                 >
-                  게시
+                  <Rocket className="w-4 h-4" />
+                  연쇄 게시 시작
                 </button>
               </div>
             </>
-          )}
-
-          {status === 'publishing' && (
-            <div className="flex flex-col items-center py-6">
-              <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-3" />
-              <p className="text-sm text-slate-700 font-medium">게시 중입니다...</p>
-              <p className="text-xs text-slate-500 mt-1">번역 → 메타 추출 → Firestore 쓰기</p>
-              <p className="text-xs text-slate-400 mt-3">창을 닫지 마세요. 보통 1~2분 소요됩니다.</p>
-            </div>
-          )}
-
-          {status === 'success' && result && (
+          ) : (
             <>
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">게시 완료</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {(result.sizeBytes / 1024).toFixed(1)} KB · {result.id}
-                  </p>
-                </div>
-              </div>
+              {/* 단계별 진행 */}
+              <ol className="space-y-3">
+                {steps.map((s, i) => (
+                  <li key={s.key} className="flex items-start gap-3">
+                    <div className="mt-0.5"><StepIcon status={s.status} /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-800">{i + 1}. {s.label}</span>
+                        {s.status === 'skipped' && <span className="text-[11px] text-slate-400">건너뜀</span>}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{s.hint}</p>
+                      {s.url && (
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline mt-1 break-all"
+                        >
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                          {s.url}
+                        </a>
+                      )}
+                      {s.error && <p className="text-xs text-red-600 mt-1 break-words">{s.error}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ol>
 
-              {result.titles && (
-                <div className="space-y-1.5 mb-4 text-xs">
-                  <div className="flex gap-2">
-                    <span className="font-semibold text-slate-500 w-8">KO</span>
-                    <span className="text-slate-700">{result.titles.ko}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="font-semibold text-slate-500 w-8">EN</span>
-                    <span className="text-slate-700">{result.titles.en}</span>
-                  </div>
+              {/* 요약 배너 */}
+              {status === 'success' && (
+                <div className="mt-4 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 text-sm font-medium">
+                  ✅ 모든 단계 게시 완료
+                </div>
+              )}
+              {status === 'partial' && (
+                <div className="mt-4 px-3 py-2 rounded-lg bg-amber-50 text-amber-700 text-sm">
+                  {result?.linkedInSkipped
+                    ? '커뮤니티까지 게시 완료 · LinkedIn은 자격증명 미설정으로 건너뜀'
+                    : `일부 단계 실패${error ? ` — ${error}` : ''}`}
+                </div>
+              )}
+              {status === 'error' && (
+                <div className="mt-4 px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm break-words">
+                  {error || '게시 중 오류가 발생했습니다.'}
                 </div>
               )}
 
-              <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 break-all">
-                {result.url}
-              </div>
-
-              <div className="mt-4 flex gap-2 justify-end">
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                >
-                  {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                  {copied ? '복사됨' : 'URL 복사'}
-                </button>
-                <a
-                  href={result.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  새 탭에서 열기
-                </a>
-              </div>
-            </>
-          )}
-
-          {status === 'error' && (
-            <>
-              <div className="flex items-start gap-3 mb-3">
-                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                  <AlertCircle className="w-4 h-4 text-red-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">게시 실패</p>
-                  <p className="text-xs text-red-600 mt-1 break-words">{error}</p>
-                </div>
-              </div>
-              <div className="mt-4 flex gap-2 justify-end">
+              <div className="mt-5 flex gap-2 justify-end">
                 <button
                   onClick={closeModal}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                  disabled={isPublishing}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-30"
                 >
                   닫기
                 </button>
-                <button
-                  onClick={() => {
-                    reset();
-                    startPublish();
-                  }}
-                  className="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg"
-                >
-                  다시 시도
-                </button>
+                {(status === 'error' || status === 'partial') && (
+                  <button
+                    onClick={() => { reset(); startPublish(); }}
+                    className="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg"
+                  >
+                    다시 시도
+                  </button>
+                )}
               </div>
             </>
           )}

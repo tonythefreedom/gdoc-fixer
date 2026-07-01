@@ -5,6 +5,8 @@ admin.initializeApp();
 const db = admin.firestore();
 
 exports.publishToTechBlog = require('./publishToTechBlog').publishToTechBlog;
+exports.publishToCommunity = require('./publishToCommunity').publishToCommunity;
+exports.publishToLinkedIn = require('./publishToLinkedIn').publishToLinkedIn;
 const coinCheckout = require('./coinCheckout');
 // createCoinCheckout 은 share URL 방식으로 전환 후 미사용 — export 제거로
 // 미사용 secrets(LEMONSQUEEZY_API_KEY/STORE_ID/VARIANTS) 요구 없음.

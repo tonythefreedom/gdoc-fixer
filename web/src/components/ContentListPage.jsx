@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
-import { Search, FileCode, Share2, ExternalLink, Trash2, Copy, Pencil, Check, X, Presentation, Loader2 } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { Search, FileCode, Share2, ExternalLink, Trash2, Copy, Pencil, Check, X, Presentation, Loader2, Rocket } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import useShareStore from '../store/useShareStore';
 import useSlideStore from '../store/useSlideStore';
+import usePublishStore from '../store/usePublishStore';
+import PublishModal from './PublishModal';
 import { filterAndRank } from '../utils/textSearch';
 import { getShareUrl } from '../utils/shareUrl';
 
@@ -33,6 +35,19 @@ export default function ContentListPage() {
   const setActivePresentation = useSlideStore((s) => s.setActivePresentation);
   const deletePresentation = useSlideStore((s) => s.deletePresentation);
   const renamePresentation = useSlideStore((s) => s.renamePresentation);
+
+  const publishSharedToCommunity = usePublishStore((s) => s.publishSharedToCommunity);
+  // 수퍼관리자 여부 (모듈 사이클 방지 위해 동적 구독)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  useEffect(() => {
+    let unsub;
+    import('../store/useAuthStore').then(({ default: useAuthStore }) => {
+      const read = () => setIsSuperAdmin(useAuthStore.getState().userProfile?.role === 'super_admin');
+      read();
+      unsub = useAuthStore.subscribe(read);
+    });
+    return () => { if (unsub) unsub(); };
+  }, []);
 
   // 키워드 검색: IME 조합 중에는 필터링을 보류해 "단어 완성 단위" 동작
   const [rawQuery, setRawQuery] = useState('');
@@ -160,7 +175,7 @@ export default function ContentListPage() {
 
   return (
     <main className="flex-1 h-full overflow-y-auto bg-slate-950">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="w-full px-6 py-8">
         <header className="mb-6">
           <h1 className="text-2xl font-bold text-slate-100">컨텐츠</h1>
           <p className="text-sm text-slate-400 mt-1">
@@ -235,6 +250,15 @@ export default function ContentListPage() {
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center justify-end gap-1">
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => publishSharedToCommunity({ id: share.id, name: share.name })}
+                                className="p-1.5 text-slate-400 hover:bg-indigo-900/40 hover:text-indigo-300 rounded"
+                                title="연쇄 게시 (tech-blog → 커뮤니티 → LinkedIn)"
+                              >
+                                <Rocket className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleCopyShareUrl(share.id)}
                               className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded"
@@ -484,6 +508,7 @@ export default function ContentListPage() {
         </section>
 
       </div>
+      <PublishModal />
     </main>
   );
 }
