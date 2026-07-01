@@ -437,7 +437,7 @@ DESIGN SYSTEM — Editorial Seriph (research / editorial, borrowed from Slidev s
 - Cover / section: centered, serif title 60px weight 400-700 with generous whitespace; kicker label above in uppercase muted.
 - Body: 20px serif, line-height 1.6, comfortable measure (max ~30em). Never dense.
 - Pull quotes: large serif italic with a thin teal left rule.
-- Hierarchy comes from whitespace + opacity, NOT color. No gradients, no shadows, no rounded cards.
+- Hierarchy comes from whitespace, size, and the muted color token (#6b7c85) — never CSS opacity. No gradients, no shadows, no rounded cards.
 - Vibe: academic paper / long-form report / whitepaper.
 `.trim(),
   },
@@ -471,7 +471,7 @@ DESIGN SYSTEM — Editorial Seriph (research / editorial, borrowed from Slidev s
     promptHint: `
 DESIGN SYSTEM — Geist Monochrome (Vercel Geist design system, via Slidev geist):
 - Pure monochrome: white background, black #000000, and a GRAYSCALE ramp (#0a0a0a text, #737373 muted, #eaeaea dividers). NO chromatic accent color at all.
-- Hierarchy is built ENTIRELY from weight, size, and opacity — never color.
+- Hierarchy is built from weight, size, and the GRAYSCALE ramp (muted #737373 as an explicit solid color) — never CSS opacity, and never a chromatic accent.
 - Cover: large 60px title weight 700, one-line subtitle in #737373. Tiny mono tag bottom-left ("2026 · v1").
 - Cards / tiles: white with thin 1px #eaeaea border, 6px radius, near-invisible shadow. Lots of negative space.
 - Labels & metadata in mono uppercase 14px muted.
@@ -540,21 +540,22 @@ export const SLIDE_BASE = {
 // 색·톤과 무관하게 모든 슬라이드에 적용하는 타이포 무드 관례.
 export const MOOD_CONVENTIONS = `
 UNIVERSAL TYPOGRAPHY CONVENTIONS (apply on top of the design system):
-- Eyebrow / kicker / category labels: UPPERCASE, letter-spacing 0.1em, weight 500, opacity 0.4.
-- Subtitle directly under a title: opacity 0.5 — build hierarchy with OPACITY and ALIGNMENT, not size alone.
+- Eyebrow / kicker / category labels: UPPERCASE, letter-spacing 0.1em, weight 500, in the MUTED color token (not full-black).
+- Subtitle directly under a title: use the MUTED color token — build hierarchy with COLOR (muted vs text) + WEIGHT + ALIGNMENT, not size alone.
+- Do NOT rely on CSS opacity/rgba-alpha for text hierarchy: the native PPTX export ignores opacity, so a 0.5-opacity subtitle would export at full strength. Always express muted text with an explicit solid color (the muted token), never opacity.
 - Large display titles: margin-left:-0.05em optical alignment so the cap edge lines up with the column below.
 - Reuse the shared type scale (px) instead of arbitrary sizes: 14(label) · 16 · 20(body) · 24(lead) · 30 · 36(heading) · 60(cover/display) · 96(hero number).
 - Body ~18-20px, line-height 1.5. Canvas 1280x720, safe padding 40px vertical / 56px horizontal.
-- AVOID conversion-fragile CSS (breaks on PPTX export): background-clip:text gradient text, and text laid over full-bleed CSS gradients. Prefer solid fills + opacity for depth.
+- Use SOLID color fills only. AVOID CSS the PPTX export cannot reproduce and will silently drop: CSS gradients (linear/radial-gradient) on backgrounds OR text, background-clip:text, box-shadow used to convey meaning, and pseudo-element (::before/::after) content or bullets. Convey depth with solid surfaces + muted colors, and put real characters/markers in the DOM instead of ::before.
 `.trim();
 
 // 슬라이드 구조 레이아웃 카탈로그 (1280x720 인라인 CSS 재현 스펙).
 export const SLIDE_LAYOUTS = [
-  { id: 'cover', name: '표지', use: '첫 슬라이드/표지', spec: 'Vertically & horizontally centered. Title 60px (line-height ~1.1), subtitle 24px opacity 0.5 below. Optional eyebrow label above title. Meta (date/version) small bottom-left.' },
+  { id: 'cover', name: '표지', use: '첫 슬라이드/표지', spec: 'Vertically & horizontally centered. Title 60px (line-height ~1.1), subtitle 24px in the muted color below. Optional eyebrow label above title. Meta (date/version) small bottom-left.' },
   { id: 'section', name: '섹션 구분', use: '챕터/파트 전환', spec: 'Centered. Section number as uppercase label above, section title 60px weight 500-700. Lots of whitespace, minimal else.' },
   { id: 'statement', name: '선언', use: '핵심 한 문장', spec: 'Whole-canvas centered single sentence, 60px bold. Nothing else. High contrast with background.' },
   { id: 'fact', name: '팩트/숫자', use: '단일 대형 지표', spec: 'Centered. One huge number/fact 96px bold (in primary), one supporting line 24px below. For a single KPI/stat slide.' },
-  { id: 'quote', name: '인용', use: '인용문', spec: 'Vertically centered. Large quote (serif italic if theme allows), source line 20px opacity 0.6 with 8px top margin.' },
+  { id: 'quote', name: '인용', use: '인용문', spec: 'Vertically centered. Large quote (serif italic if theme allows), source line 20px in the muted color with 8px top margin.' },
   { id: 'default', name: '기본', use: '일반 콘텐츠', spec: 'Top-left flow. Heading 36px at top, body 20px below. Free composition inside safe padding.' },
   { id: 'bullets', name: '불릿 리스트', use: '핵심 항목 나열', spec: 'Heading 36px, then a tight bullet list. All bullets share the SAME left x-edge, one marker style, marker-to-text gap 12px, identical size/weight/color per level.' },
   { id: 'two-cols', name: '2단', use: '비교/before-after', spec: 'grid 2 columns 50/50, each column has its own padding. Optional shared heading spanning full width on top. For comparisons.' },
