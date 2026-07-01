@@ -1,7 +1,10 @@
-// 프리젠테이션 변환에 사용할 디자인 시스템 카탈로그.
-// 이 카탈로그는 IR (Investor Relations) / 비즈니스 제안 / 컨설팅 / 연차보고서 +
-// 리서치·에디토리얼·테크(미니멀) 등 "정장 · 데이터 · 신뢰감" 톤만 모은다.
-// 마케팅 키노트나 캐주얼·플레이풀한 톤(예: bricks)은 의도적으로 제외한다.
+// 프리젠테이션 변환에 사용할 디자인 시스템 카탈로그 (총 24종).
+// 크게 두 그룹:
+//   (A) 비즈니스/IR/컨설팅/연차보고서/에디토리얼 — "정장 · 데이터 · 신뢰감" 톤
+//   (B) 예쁜/다양 — 인기 팔레트(Catppuccin/Rosé Pine/Tokyo Night/Dracula/Solarized/
+//       Gruvbox)와 2026 트렌드(warm editorial/sage/coral/mint/midnight-gold) 차용
+// 단 모든 프리셋은 클라이언트 PPTX export 제약을 지킨다: solid 컬러만, 계층은
+// muted color 로(opacity 금지), CSS gradient/box-shadow/glassmorphism 금지.
 //
 // 구조는 2축이다 (Slidev 차용):
 //   테마 = 색·폰트·무드 (아래 SLIDE_DESIGN_SYSTEMS 프리셋)
@@ -514,6 +517,306 @@ DESIGN SYSTEM — Nord Dark (Nord palette, via Slidev nord):
 - Cards: #3b4252 tiles, 8px radius, 1px #434c5e border. Calm and even — low contrast, no harsh pure-black or pure-white.
 - Mono labels for metrics. Charts: frost-blue line/area on faint white grid.
 - Vibe: technical architecture review / engineering deep-dive, calm and cold.
+`.trim(),
+  },
+
+  // ═════════════ 예쁜·다양한 프리셋 (인기 팔레트 / 2026 트렌드 차용) ═════════════
+  {
+    id: 'catppuccin-mocha',
+    name: 'Catppuccin Mocha',
+    nameEn: 'Catppuccin Mocha',
+    description: '부드러운 파스텔 다크. 개발자 최애 테마. mauve/blue 액센트.',
+    palette: {
+      background: '#1e1e2e', surface: '#313244', primary: '#cba6f7', accent: '#89b4fa',
+      text: '#cdd6f4', muted: '#a6adc8', divider: '#45475a',
+    },
+    typography: {
+      heading: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      body: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      mono: "'JetBrains Mono', monospace",
+      titleSize: 60, headingSize: 34, bodySize: 19, captionSize: 14,
+      weights: { title: 700, heading: 600, body: 400, caption: 500 },
+    },
+    layout: { padding: 56, gridGap: 24, borderRadius: 14, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Catppuccin Mocha (soft pastel dark):
+- Background #1e1e2e, cards/tiles surface #313244 with 14px radius and 1px #45475a border.
+- Text #cdd6f4, muted #a6adc8. Pastel accents: mauve #cba6f7 (primary, headings/KPIs), blue #89b4fa (links/secondary). Optional pink #f5c2e7, green #a6e3a1 for tags.
+- Soft, low-contrast, cozy. Use rounded cards and generous spacing.
+- Muted text via the muted color token (never opacity). No gradients, no glassmorphism.
+- Vibe: friendly modern product / dev-tool deck with a soothing pastel palette.
+`.trim(),
+  },
+
+  {
+    id: 'rose-pine-dawn',
+    name: 'Rosé Pine Dawn',
+    nameEn: 'Rosé Pine Dawn',
+    description: '우아한 뮤트 로즈/파인 (라이트). 클래식 미니멀 에디토리얼.',
+    palette: {
+      background: '#faf4ed', surface: '#fffaf3', primary: '#286983', accent: '#d7827e',
+      text: '#575279', muted: '#797593', divider: '#dfdad9',
+    },
+    typography: {
+      heading: "'PT Serif', 'Noto Serif KR', Georgia, serif",
+      body: "'Pretendard', 'Noto Sans KR', sans-serif",
+      mono: "'PT Mono', monospace",
+      titleSize: 56, headingSize: 34, bodySize: 20, captionSize: 14,
+      weights: { title: 700, heading: 700, body: 400, caption: 500 },
+    },
+    layout: { padding: 56, gridGap: 24, borderRadius: 10, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Rosé Pine Dawn (elegant muted, light):
+- Warm off-white background #faf4ed, surface #fffaf3. Muted plum text #575279.
+- Pine #286983 primary (titles/rules), rose #d7827e accent, gold #ea9d34 for small highlights.
+- Serif titles (PT Serif), sans body. Classy, restrained, editorial whitespace.
+- Hierarchy via muted color #797593 + size + serif/sans contrast — never opacity.
+- Soft 10px rounded surfaces, hairline #dfdad9 dividers. No gradients, no shadows-as-meaning.
+- Vibe: refined minimalist essay / boutique brand deck.
+`.trim(),
+  },
+
+  {
+    id: 'tokyo-night',
+    name: 'Tokyo Night',
+    nameEn: 'Tokyo Night',
+    description: '네온 다크. 하이테크·AI 제품 톤. blue/purple/cyan 네온.',
+    palette: {
+      background: '#1a1b26', surface: '#24283b', primary: '#7aa2f7', accent: '#bb9af7',
+      text: '#c0caf5', muted: '#9aa5ce', divider: '#414868',
+    },
+    typography: {
+      heading: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      body: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      mono: "'JetBrains Mono', monospace",
+      titleSize: 60, headingSize: 34, bodySize: 18, captionSize: 13,
+      weights: { title: 800, heading: 600, body: 400, caption: 600 },
+    },
+    layout: { padding: 56, gridGap: 20, borderRadius: 12, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Tokyo Night (neon dark, high-tech):
+- Deep night background #1a1b26, tile surface #24283b with 1px #414868 border.
+- Text #c0caf5, muted #9aa5ce. Neon accents: blue #7aa2f7 (primary), purple #bb9af7 (accent), cyan #7dcfff, green #9ece6a for status.
+- KPI numbers and headings in the neon accents; keep the rest calm.
+- Mono labels 13px for metrics. Solid fills only, muted color for de-emphasis (never opacity/gradient/glow-image).
+- Vibe: modern AI / infra / developer product keynote.
+`.trim(),
+  },
+
+  {
+    id: 'warm-editorial',
+    name: 'Warm Editorial',
+    nameEn: 'Warm Editorial',
+    description: '크림+테라코타 따뜻한 뉴트럴. 라이프스타일·브랜딩 에디토리얼.',
+    palette: {
+      background: '#fdf6ec', surface: '#f6ead6', primary: '#c65f3f', accent: '#b07d48',
+      text: '#3a2e28', muted: '#8a7563', divider: '#e5d5be',
+    },
+    typography: {
+      heading: "'Fraunces', 'Noto Serif KR', Georgia, serif",
+      body: "'Pretendard', 'Noto Sans KR', sans-serif",
+      mono: "'IBM Plex Mono', monospace",
+      titleSize: 58, headingSize: 34, bodySize: 20, captionSize: 14,
+      weights: { title: 700, heading: 700, body: 400, caption: 600 },
+    },
+    layout: { padding: 64, gridGap: 24, borderRadius: 8, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Warm Editorial (cream + terracotta):
+- Warm cream background #fdf6ec, surface #f6ead6. Espresso text #3a2e28.
+- Terracotta #c65f3f primary (titles/emphasis), warm ochre #b07d48 accent.
+- Editorial serif titles (Fraunces), clean sans body. Magazine-like generous margins.
+- Muted brown #8a7563 for captions/de-emphasis — never opacity. Hairline #e5d5be rules.
+- Solid warm blocks, no gradients. Big pull-quotes in serif.
+- Vibe: lifestyle / brand / lookbook editorial spread — warm and human.
+`.trim(),
+  },
+
+  {
+    id: 'sage-botanical',
+    name: 'Sage Botanical',
+    nameEn: 'Sage Botanical',
+    description: '내추럴 세이지 그린 + 크림 (라이트). 웰니스·지속가능·오가닉.',
+    palette: {
+      background: '#f4f6f2', surface: '#e7ede2', primary: '#3a5a40', accent: '#7a9b76',
+      text: '#2f3b30', muted: '#6a756a', divider: '#d5ddcf',
+    },
+    typography: {
+      heading: "'Pretendard', 'Inter', 'Noto Sans KR', sans-serif",
+      body: "'Pretendard', 'Inter', 'Noto Sans KR', sans-serif",
+      mono: "'IBM Plex Mono', monospace",
+      titleSize: 56, headingSize: 34, bodySize: 20, captionSize: 14,
+      weights: { title: 700, heading: 600, body: 400, caption: 500 },
+    },
+    layout: { padding: 60, gridGap: 24, borderRadius: 16, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Sage Botanical (natural green, light):
+- Soft cream-green background #f4f6f2, surface #e7ede2 with 16px rounded cards.
+- Deep forest #3a5a40 primary, sage #7a9b76 accent. Text #2f3b30, muted #6a756a.
+- Calm, organic, breathable. Rounded soft cards, generous whitespace.
+- De-emphasis via muted color (never opacity). Solid fills, no gradients.
+- Vibe: wellness / sustainability / ESG / organic brand — grounded and calm.
+`.trim(),
+  },
+
+  {
+    id: 'coral-pop',
+    name: 'Coral Pop',
+    nameEn: 'Coral Pop',
+    description: '코랄+피치 파스텔 (라이트). 친근·창의적. 밝고 에너지.',
+    palette: {
+      background: '#fff7f2', surface: '#ffe9e0', primary: '#e0533d', accent: '#ff8a5c',
+      text: '#3a2b26', muted: '#8a726a', divider: '#ffdccd',
+    },
+    typography: {
+      heading: "'Pretendard', 'Inter', 'Noto Sans KR', sans-serif",
+      body: "'Pretendard', 'Inter', 'Noto Sans KR', sans-serif",
+      mono: "'JetBrains Mono', monospace",
+      titleSize: 62, headingSize: 36, bodySize: 20, captionSize: 14,
+      weights: { title: 800, heading: 700, body: 400, caption: 600 },
+    },
+    layout: { padding: 56, gridGap: 24, borderRadius: 18, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Coral Pop (warm coral pastel, light):
+- Soft peach-white background #fff7f2, surface #ffe9e0 with big 18px rounded cards.
+- Coral #e0533d primary (bold titles/CTAs), peach #ff8a5c accent. Text #3a2b26, muted #8a726a.
+- Friendly, energetic, rounded. Oversized bold titles, playful but clean.
+- De-emphasis via muted color (never opacity). Solid color blocks, no gradients.
+- Vibe: creative studio / consumer app / community brand — approachable and warm.
+`.trim(),
+  },
+
+  {
+    id: 'dracula',
+    name: 'Dracula',
+    nameEn: 'Dracula',
+    description: '클래식 다크 퍼플/핑크. 대담하고 플레이풀한 개발자 톤.',
+    palette: {
+      background: '#282a36', surface: '#343746', primary: '#bd93f9', accent: '#ff79c6',
+      text: '#f8f8f2', muted: '#9ea4c4', divider: '#44475a',
+    },
+    typography: {
+      heading: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      body: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      mono: "'JetBrains Mono', monospace",
+      titleSize: 60, headingSize: 34, bodySize: 18, captionSize: 13,
+      weights: { title: 800, heading: 600, body: 400, caption: 600 },
+    },
+    layout: { padding: 56, gridGap: 20, borderRadius: 12, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Dracula (bold dark purple/pink):
+- Background #282a36, surface #343746 with 1px #44475a border.
+- Text #f8f8f2, muted #9ea4c4. Purple #bd93f9 primary, pink #ff79c6 accent; green #50fa7b, cyan #8be9fd for status/tags.
+- Bold, confident, a touch playful. Vivid accents on numbers/headings, calm elsewhere.
+- Muted color for de-emphasis (never opacity). Solid fills only, no gradients/glow images.
+- Vibe: energetic developer / hackathon / product-launch deck.
+`.trim(),
+  },
+
+  {
+    id: 'solarized-light',
+    name: 'Solarized Light',
+    nameEn: 'Solarized Light',
+    description: '아이코닉 밸런스 팔레트 (라이트). 크림 배경 + 블루/오렌지.',
+    palette: {
+      background: '#fdf6e3', surface: '#eee8d5', primary: '#268bd2', accent: '#cb4b16',
+      text: '#073642', muted: '#657b83', divider: '#ded8c3',
+    },
+    typography: {
+      heading: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      body: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      mono: "'IBM Plex Mono', monospace",
+      titleSize: 54, headingSize: 32, bodySize: 19, captionSize: 13,
+      weights: { title: 700, heading: 600, body: 400, caption: 600 },
+    },
+    layout: { padding: 60, gridGap: 20, borderRadius: 8, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Solarized Light (iconic balanced palette):
+- Warm paper background #fdf6e3, surface #eee8d5. Deep teal-ink text #073642.
+- Blue #268bd2 primary, orange #cb4b16 accent (use sparingly for emphasis). Muted #657b83.
+- Precise, balanced, easy on the eyes. Mono #IBM Plex for code/metrics.
+- De-emphasis via muted color (never opacity). Solid fills, hairline #ded8c3 rules, no gradients.
+- Vibe: engineering / documentation / research deck — calm and legible.
+`.trim(),
+  },
+
+  {
+    id: 'gruvbox-light',
+    name: 'Gruvbox Light',
+    nameEn: 'Gruvbox Light',
+    description: '레트로 웜 (라이트). 크림+머스터드/오렌지. 빈티지 감성.',
+    palette: {
+      background: '#fbf1c7', surface: '#f2e5bc', primary: '#b57614', accent: '#af3a03',
+      text: '#3c3836', muted: '#7c6f64', divider: '#ebdbb2',
+    },
+    typography: {
+      heading: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      body: "'Inter', 'Pretendard', 'Noto Sans KR', sans-serif",
+      mono: "'JetBrains Mono', monospace",
+      titleSize: 56, headingSize: 34, bodySize: 20, captionSize: 14,
+      weights: { title: 800, heading: 700, body: 400, caption: 600 },
+    },
+    layout: { padding: 60, gridGap: 22, borderRadius: 8, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Gruvbox Light (retro warm):
+- Warm cream background #fbf1c7, surface #f2e5bc. Dark bark text #3c3836.
+- Mustard #b57614 primary, burnt orange #af3a03 accent; olive #79740e for secondary/status.
+- Retro, cozy, high legibility. Chunky bold titles, warm solid blocks.
+- Muted #7c6f64 for de-emphasis (never opacity). No gradients.
+- Vibe: retro-tech / indie / craft brand deck — warm and characterful.
+`.trim(),
+  },
+
+  {
+    id: 'mint-fresh',
+    name: 'Mint Fresh',
+    nameEn: 'Mint Fresh',
+    description: '클린 민트/틸 (라이트). 2026 Color of the Year 톤. 프레시 SaaS.',
+    palette: {
+      background: '#f2fbf9', surface: '#dcf3ee', primary: '#0f766e', accent: '#14b8a6',
+      text: '#0f2e2a', muted: '#5b7d77', divider: '#c5e8e0',
+    },
+    typography: {
+      heading: "'Pretendard', 'Inter', 'Noto Sans KR', sans-serif",
+      body: "'Pretendard', 'Inter', 'Noto Sans KR', sans-serif",
+      mono: "'JetBrains Mono', monospace",
+      titleSize: 58, headingSize: 34, bodySize: 20, captionSize: 14,
+      weights: { title: 700, heading: 600, body: 400, caption: 500 },
+    },
+    layout: { padding: 56, gridGap: 24, borderRadius: 14, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Mint Fresh (clean teal, light):
+- Airy mint-white background #f2fbf9, surface #dcf3ee with 14px rounded cards.
+- Deep teal #0f766e primary, bright teal #14b8a6 accent (Transformative-Teal, 2026 color of the year). Text #0f2e2a, muted #5b7d77.
+- Crisp, fresh, trustworthy. Clean sans, plenty of white space.
+- De-emphasis via muted color (never opacity). Solid fills, no gradients.
+- Vibe: modern SaaS / health-tech / fintech product deck — fresh and clean.
+`.trim(),
+  },
+
+  {
+    id: 'midnight-gold',
+    name: 'Midnight Gold',
+    nameEn: 'Midnight Gold',
+    description: '딥 인디고 + 골드 (다크). 모던 프리미엄. 럭셔리하지만 테크.',
+    palette: {
+      background: '#0f1226', surface: '#1b1f3a', primary: '#f5c451', accent: '#8b93ff',
+      text: '#eef0ff', muted: '#a5adcf', divider: '#2c3157',
+    },
+    typography: {
+      heading: "'Pretendard', 'Inter', 'Noto Sans KR', sans-serif",
+      body: "'Pretendard', 'Inter', 'Noto Sans KR', sans-serif",
+      mono: "'JetBrains Mono', monospace",
+      titleSize: 60, headingSize: 34, bodySize: 19, captionSize: 14,
+      weights: { title: 800, heading: 700, body: 400, caption: 600 },
+    },
+    layout: { padding: 60, gridGap: 24, borderRadius: 12, shadow: 'none' },
+    promptHint: `
+DESIGN SYSTEM — Midnight Gold (deep indigo + gold, dark):
+- Deep indigo background #0f1226, surface #1b1f3a with 1px #2c3157 border.
+- Champagne gold #f5c451 primary (headings/KPIs), periwinkle #8b93ff accent. Text #eef0ff, muted #a5adcf.
+- Modern premium — luxurious but techy, not ornate. Gold used sparingly on key numbers.
+- De-emphasis via muted color (never opacity). Solid fills only, no gradients/glow.
+- Vibe: premium product launch / fund / awards deck — sleek and confident.
 `.trim(),
   },
 ];
