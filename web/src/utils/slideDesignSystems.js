@@ -2,7 +2,8 @@
 // 크게 두 그룹:
 //   (A) 비즈니스/IR/컨설팅/연차보고서/에디토리얼 — "정장 · 데이터 · 신뢰감" 톤
 //   (B) 예쁜/다양 — 인기 팔레트(Catppuccin/Rosé Pine/Tokyo Night/Dracula/Solarized/
-//       Gruvbox)와 2026 트렌드(warm editorial/sage/coral/mint/midnight-gold) 차용
+//       Gruvbox)와 2026 트렌드(sage/coral/mint/midnight-gold) 차용
+//   (C) 브랜드 — banya-ai (BANYA_DS.md 기반 반야에이아이 프리젠테이션 디자인 시스템)
 // 단 모든 프리셋은 클라이언트 PPTX export 제약을 지킨다: solid 컬러만, 계층은
 // muted color 로(opacity 금지), CSS gradient/box-shadow/glassmorphism 금지.
 //
@@ -604,30 +605,34 @@ DESIGN SYSTEM — Tokyo Night (neon dark, high-tech):
   },
 
   {
-    id: 'warm-editorial',
-    name: 'Warm Editorial',
-    nameEn: 'Warm Editorial',
-    description: '크림+테라코타 따뜻한 뉴트럴. 라이프스타일·브랜딩 에디토리얼.',
+    id: 'banya-ai',
+    name: 'Banya AI',
+    nameEn: 'Banya AI (CodePilot)',
+    description: '반야에이아이 브랜드. 흰 캔버스 + Banya Blue 단일 액센트 + 소프트 블루 패널. 엔터프라이즈 IR.',
     palette: {
-      background: '#fdf6ec', surface: '#f6ead6', primary: '#c65f3f', accent: '#b07d48',
-      text: '#3a2e28', muted: '#8a7563', divider: '#e5d5be',
+      background: '#ffffff', surface: '#e9f2fa', primary: '#2472ff', accent: '#5ac8e6',
+      text: '#0f1722', muted: '#7b828c', divider: '#dce5ef',
     },
     typography: {
-      heading: "'Fraunces', 'Noto Serif KR', Georgia, serif",
-      body: "'Pretendard', 'Noto Sans KR', sans-serif",
-      mono: "'IBM Plex Mono', monospace",
-      titleSize: 58, headingSize: 34, bodySize: 20, captionSize: 14,
+      heading: "'Pretendard', 'Pretendard JP', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
+      body: "'Pretendard', 'Pretendard JP', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
+      mono: "'JetBrains Mono', monospace",
+      titleSize: 64, headingSize: 43, bodySize: 20, captionSize: 15,
       weights: { title: 700, heading: 700, body: 400, caption: 600 },
     },
-    layout: { padding: 64, gridGap: 24, borderRadius: 8, shadow: 'none' },
+    layout: { padding: 58, gridGap: 28, borderRadius: 16, shadow: 'none' },
     promptHint: `
-DESIGN SYSTEM — Warm Editorial (cream + terracotta):
-- Warm cream background #fdf6ec, surface #f6ead6. Espresso text #3a2e28.
-- Terracotta #c65f3f primary (titles/emphasis), warm ochre #b07d48 accent.
-- Editorial serif titles (Fraunces), clean sans body. Magazine-like generous margins.
-- Muted brown #8a7563 for captions/de-emphasis — never opacity. Hairline #e5d5be rules.
-- Solid warm blocks, no gradients. Big pull-quotes in serif.
-- Vibe: lifestyle / brand / lookbook editorial spread — warm and human.
+DESIGN SYSTEM — Banya AI (institutional enterprise-AI brand for (주)반야에이아이 / CodePilot):
+- Single brand voltage: Banya Blue #2472ff. Use it ONLY on filled card-header bars, ONE highlight phrase per title/lead, big stat numbers, the CodePilot wordmark, and the highlighted comparison column. No second brand color.
+- Canvas white #ffffff. Signature elevation = soft BLUE panel #e9f2fa (surface) with cards layered on top. Deep navy #04243f for editorial / section-divider / dark content slides (white text on it).
+- Cover / section-divider / closing: blue→cyan hero gradient (#0770ff→#2472ff→#5ac8e6). NOTE: if gradients don't survive export, fall back to SOLID deep navy #04243f. Cyan #5ac8e6 is gradient-end only — never a flat fill.
+- Pretendard ONLY (degrade chain to Malgun Gothic). Titles & stat numbers BOLD 700 (enterprise confidence); body regular 400. Negative letter-spacing on large display only.
+- Text: ink #0f1722 titles/emphasis, body #5b6470, muted #7b828c for eyebrow/caption/source (never opacity). Hairlines #dce5ef 0.75pt.
+- Signature components: FILLED full-width blue header bar on top of a soft-blue card (two-panel layout); icon-in-soft-blue-circle rows; check-bullets (✓ in #2472ff) instead of dots; comparison tables with the CodePilot column outlined/tinted in blue; stat-callouts (48px blue number + muted label).
+- Fixed anchors every content slide: eyebrow (roman numeral + KR/EN) top-left, logo lockup top-right, slide title same baseline, page number bottom-right. Left-align body & lists; center only title/lead.
+- Depth from card-on-card layering + the soft blue panel — NEVER decorative shadows, thin accent stripes, sidebar bars, or title underlines. Semantic green #1fa971 (✓) / red #e5484d (✗) in tables only, never as fills.
+- No cream/beige backgrounds. Fill the body zone deliberately (never leave the bottom empty).
+- Vibe: quiet, white, generously spaced institutional enterprise-software brand that ships an AI agent.
 `.trim(),
   },
 
