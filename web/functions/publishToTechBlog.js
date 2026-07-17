@@ -199,11 +199,11 @@ function normalizeHtmlDeterministic(rawHtml) {
     body = body.replace(h1Match[0], '');
   }
 
-  // 4) <header> 안에 있던 부제/날짜 등은 그대로 본문 앞에 남기되, 검은 배경
-  //    hero 블록 자체는 의미 없는 wrapper 라 풀어버린다. (header → 그대로 div)
-  body = body.replace(/<header\b[^>]*>([\s\S]*?)<\/header>/gi, '$1');
-  // footer 도 동일
-  body = body.replace(/<footer\b[^>]*>([\s\S]*?)<\/footer>/gi, '$1');
+  // 4) <header>/<footer> 는 hero(배경이미지)·CTA 등 스타일을 담을 수 있으므로
+  //    언랩하지 않고 <div> 로 변환해 속성(인라인 style·background-image)을 보존한다.
+  //    (예전엔 의미없는 wrapper 로 보고 풀었으나, 자립형 콘텐츠에선 hero 이미지가 사라짐.)
+  body = body.replace(/<header\b([^>]*)>([\s\S]*?)<\/header>/gi, '<div$1>$2</div>');
+  body = body.replace(/<footer\b([^>]*)>([\s\S]*?)<\/footer>/gi, '<div$1>$2</div>');
 
   // 5) 연속 공백 정리 (가독성)
   body = body.replace(/(\s*\n){3,}/g, '\n\n').trim();
