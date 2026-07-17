@@ -23,15 +23,24 @@ const FILE_UPLOAD_URL = `https://generativelanguage.googleapis.com/upload/v1beta
 const VISUAL_HTML_RULES = `
 [Visualization rules — applied to ALL planning modes]
 - DO NOT draw diagrams, flow charts, or system architecture figures with ASCII box-drawing characters (┌ ┐ │ └ ┘ ├ ┤ ┬ ┴ ┼ ─ ━ ═ etc.).
-  Always render them as HTML + Tailwind CSS instead:
-    - Boxes: <div class="border border-gray-400 rounded-lg px-4 py-2 bg-gray-50">label</div>
-    - Hierarchy / grouping: flex or grid layouts (e.g. <div class="flex flex-col gap-2 p-4 border-2 border-dashed">…</div>)
-    - Connectors / arrows: inline SVG (<svg viewBox=…><line>·<path>·<polygon>) or simple arrow characters (→ ← ↑ ↓ ▶ ▼ ◀ ▲)
-    - Labels / captions: <span class="text-xs text-gray-500">
-- DO NOT emit markdown tables (| col1 | col2 |…). Always emit HTML <table>:
-    <table class="w-full border-collapse text-sm">
-      <thead class="bg-gray-100"><tr><th class="border px-3 py-2 text-left">…</th></tr></thead>
-      <tbody><tr><td class="border px-3 py-2">…</td></tr></tbody>
+- CRITICAL — downstream renderers (tech-blog, the community board) strip Tailwind classes, <style> blocks, and CDN scripts on republish, so anything styled by CLASS renders UNSTYLED there. Every diagram / figure / table MUST be self-contained: use a Mermaid block (renders to self-contained SVG) or plain HTML with INLINE style="" attributes only. NEVER rely on Tailwind utility classes for a diagram's visual styling.
+  - Structural diagrams (flow, sequence, architecture, tree, mindmap, timeline, ER, state) → emit a Mermaid block (the client renders it to SVG). Do NOT hand-build these from divs, and do NOT wrap Mermaid in an HTML comment (its "-->" arrows would break it):
+      <div class="mermaid">
+      flowchart LR
+        A["입력"] --> B{"판단"}
+        B -->|예| C["처리"]
+        B -->|아니오| D["종료"]
+      </div>
+  - Simple boxes / cards / callouts / labeled groups → plain HTML with INLINE styles (no utility classes):
+      Box:     <div style="border:1px solid #cbd5e1; border-radius:8px; padding:10px 16px; background:#f8fafc; color:#0f172a;">label</div>
+      Group:   <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">…boxes…</div>
+      Arrow:   <span style="color:#64748b; font-size:18px;">→</span>  (between boxes)
+      Caption: <span style="font-size:12px; color:#64748b;">…</span>
+    Keep ONE radius, ONE border color, and ONE accent across a single figure so it reads as designed. If a design system / preset is in effect, use its token hex values as the inline colors.
+- DO NOT emit markdown tables (| col1 | col2 |…). Always emit an HTML <table> with INLINE styles so borders/fills survive downstream:
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      <thead><tr><th style="border:1px solid #e2e8f0; background:#f1f5f9; padding:8px 12px; text-align:left;">…</th></tr></thead>
+      <tbody><tr><td style="border:1px solid #e2e8f0; padding:8px 12px;">…</td></tr></tbody>
     </table>
 - Use code fences (\`\`\`) ONLY for real programming code (TypeScript, Python, etc.). Never wrap diagrams, tables, structure figures, or example outputs in code fences.
 - These rules apply both to content you generate and to ASCII diagrams / markdown tables that appear in the user's original text. Preserve the user's prose (paragraphs, headings, lists, emphasis) verbatim, but rewrite ASCII diagrams and markdown tables in the HTML/CSS form above while preserving their meaning.
@@ -1624,8 +1633,8 @@ Absolute rules:
 - Never add anything that is not in the user's original text. Do not invent outside knowledge, reasoning, statistics, or sources.
 - The user's prose (paragraphs, headings, lists, emphasis) must be carried over verbatim — no summarising, compressing, reorganising, or polishing. Preserve line breaks, spacing, and even typos.
 - TWO exceptions are converted in form while preserving meaning (see [Visualization rules] below):
-    (a) ASCII box-drawing diagrams / flow charts / system architecture figures → HTML + Tailwind CSS
-    (b) Markdown tables (| col | col | …) → HTML <table>
+    (a) ASCII box-drawing diagrams / flow charts / system architecture figures → Mermaid block or INLINE-styled HTML (never Tailwind classes)
+    (b) Markdown tables (| col | col | …) → HTML <table> with inline styles
 - Real programming code inside code fences must be left exactly as-is (only diagrams are converted).
 - Split sections only where the original is clearly already split. When in doubt, keep one section.
 - If the user supplies explicit titles/subtitles, use them verbatim as headings. Otherwise create a 1-3 word heading that summarises the section (prefer reusing words from the body).
