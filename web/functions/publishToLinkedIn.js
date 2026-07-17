@@ -63,7 +63,9 @@ exports.publishToLinkedIn = onCall(
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'LinkedIn-Version': '202401',
+          // LinkedIn 버전은 릴리스 후 ~1년만 지원되고 이후 sunset 된다(YYYYMM).
+          // 오래된 값(예: 202401)은 거부되므로 지원 윈도우 안의 최신 값으로 유지할 것.
+          'LinkedIn-Version': '202506',
           'X-Restli-Protocol-Version': '2.0.0',
         },
         body: JSON.stringify({
