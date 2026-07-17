@@ -74,10 +74,20 @@ const usePublishStore = create((set, get) => ({
     set({ status: 'publishing', result: null, error: null, steps: initialSteps() });
     const result = { techBlogUrl: null, communityUrl: null, linkedInUrl: null, linkedInSkipped: false };
 
+    // 0) 게시-경계 정규화: 콘텐츠를 self-contained(inline-only)로 구워
+    //    프리뷰·tech-blog·커뮤니티·LinkedIn 어디서나 동일하게 렌더되도록.
+    let publishHtml = html;
+    try {
+      const { normalizeForPublish } = await import('../utils/normalizeForPublish');
+      publishHtml = await normalizeForPublish(html);
+    } catch (e) {
+      console.warn('[publish] 정규화 스킵 — 원본 게시:', e);
+    }
+
     // 1) tech-blog
     get()._setStep('techblog', { status: 'running' });
     try {
-      const r = await publishToTechBlog({ html, name });
+      const r = await publishToTechBlog({ html: publishHtml, name });
       result.techBlogUrl = r?.url || null;
       get()._setStep('techblog', { status: 'success', url: result.techBlogUrl });
     } catch (err) {
@@ -89,7 +99,7 @@ const usePublishStore = create((set, get) => ({
     // 2) 커뮤니티 (출처 = tech-blog 글)
     get()._setStep('community', { status: 'running' });
     try {
-      const r = await publishToCommunity({ html, name, sourceUrl: result.techBlogUrl });
+      const r = await publishToCommunity({ html: publishHtml, name, sourceUrl: result.techBlogUrl });
       result.communityUrl = r?.url || null;
       get()._setStep('community', { status: 'success', url: result.communityUrl });
     } catch (err) {
