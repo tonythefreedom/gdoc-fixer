@@ -23,18 +23,19 @@ const FILE_UPLOAD_URL = `https://generativelanguage.googleapis.com/upload/v1beta
 const VISUAL_HTML_RULES = `
 [Visualization rules — applied to ALL planning modes]
 - DO NOT draw diagrams, flow charts, or system architecture figures with ASCII box-drawing characters (┌ ┐ │ └ ┘ ├ ┤ ┬ ┴ ┼ ─ ━ ═ etc.).
-- CRITICAL — downstream renderers (tech-blog, the community board) strip Tailwind classes, <style> blocks, and CDN scripts on republish, so anything styled by CLASS renders UNSTYLED there. Every diagram / figure / table MUST be self-contained: use a Mermaid block (renders to self-contained SVG) or plain HTML with INLINE style="" attributes only. NEVER rely on Tailwind utility classes for a diagram's visual styling.
-  - Structural diagrams (flow, sequence, architecture, tree, mindmap, timeline, ER, state) → emit a Mermaid block (the client renders it to SVG). Do NOT hand-build these from divs, and do NOT wrap Mermaid in an HTML comment (its "-->" arrows would break it):
-      <div class="mermaid">
-      flowchart LR
-        A["입력"] --> B{"판단"}
-        B -->|예| C["처리"]
-        B -->|아니오| D["종료"]
+- CRITICAL — downstream renderers (tech-blog, the community board) and this app's own preview strip/ignore Tailwind classes and <style> blocks, and any diagram library loaded by <script>/CDN (e.g. mermaid) either fails to render or throws a parse error. So every diagram / figure / table MUST be self-contained plain HTML with INLINE style="" attributes only. NEVER use Tailwind utility classes for a diagram's styling, and NEVER emit a Mermaid block or any diagram <script>/CDN.
+  - Flow / process / architecture / tree diagrams → build them from INLINE-styled boxes connected by arrow characters, laid out with flexbox. Example (horizontal flow):
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0;">
+        <div style="border:1px solid #cbd5e1; border-radius:8px; padding:8px 14px; background:#f8fafc; color:#0f172a;">입력</div>
+        <span style="color:#64748b; font-size:18px;">→</span>
+        <div style="border:1px solid #2472ff; border-radius:8px; padding:8px 14px; background:#e9f2fa; color:#0f172a;">처리</div>
+        <span style="color:#64748b; font-size:18px;">→</span>
+        <div style="border:1px solid #cbd5e1; border-radius:8px; padding:8px 14px; background:#f8fafc; color:#0f172a;">출력</div>
       </div>
+    For vertical / tree flows use style="display:flex; flex-direction:column; gap:8px;" with ↓ arrows. Group parallel branches with nested flex rows.
   - Simple boxes / cards / callouts / labeled groups → plain HTML with INLINE styles (no utility classes):
       Box:     <div style="border:1px solid #cbd5e1; border-radius:8px; padding:10px 16px; background:#f8fafc; color:#0f172a;">label</div>
       Group:   <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">…boxes…</div>
-      Arrow:   <span style="color:#64748b; font-size:18px;">→</span>  (between boxes)
       Caption: <span style="font-size:12px; color:#64748b;">…</span>
     Keep ONE radius, ONE border color, and ONE accent across a single figure so it reads as designed. If a design system / preset is in effect, use its token hex values as the inline colors.
 - DO NOT emit markdown tables (| col1 | col2 |…). Always emit an HTML <table> with INLINE styles so borders/fills survive downstream:
@@ -1153,14 +1154,7 @@ Rules:
   type: "line" | "bar" | "pie" | "doughnut" | "radar"
   width/height are optional (default 800x500)
   stacked: true enables stacked charts
-- When a flow / architecture / sequence / timeline / relationship DIAGRAM is needed, do NOT hand-draw boxes with divs. Emit a Mermaid block (the client renders it to SVG). Do NOT wrap Mermaid code in an HTML comment (its "-->" arrows would break the comment):
-  <div class="mermaid">
-  flowchart LR
-    A["입력"] --> B{"판단"}
-    B -->|예| C["처리"]
-    B -->|아니오| D["종료"]
-  </div>
-  Supported: flowchart, sequenceDiagram, timeline, mindmap, erDiagram, gantt, stateDiagram. Keep all node/edge labels in Korean and wrap label text in double quotes.
+- For flow / architecture / process / tree diagrams, build them from INLINE-styled HTML boxes connected by arrow characters (see [Visualization rules] below). Do NOT use Mermaid, and do NOT add any diagram <script> or CDN — they do not render reliably downstream.
 - Output the complete modified HTML document only — no surrounding prose, HTML only.
 - All natural-language text inside the HTML must remain in Korean (한국어). Chart titles, labels, axis names go in Korean as in the example above.
 ${VISUAL_HTML_RULES}`;
@@ -1224,14 +1218,7 @@ Rules:
   type: "line" | "bar" | "pie" | "doughnut" | "radar"
   width/height are optional (default 800x500)
   stacked: true enables stacked charts
-- When a flow / architecture / sequence / timeline / relationship DIAGRAM is needed, do NOT hand-draw boxes with divs. Emit a Mermaid block (the client renders it to SVG). Do NOT wrap Mermaid code in an HTML comment (its "-->" arrows would break the comment):
-  <div class="mermaid">
-  flowchart LR
-    A["입력"] --> B{"판단"}
-    B -->|예| C["처리"]
-    B -->|아니오| D["종료"]
-  </div>
-  Supported: flowchart, sequenceDiagram, timeline, mindmap, erDiagram, gantt, stateDiagram. Keep all node/edge labels in Korean and wrap label text in double quotes.
+- For flow / architecture / process / tree diagrams, build them from INLINE-styled HTML boxes connected by arrow characters (see [Visualization rules] below). Do NOT use Mermaid, and do NOT add any diagram <script> or CDN — they do not render reliably downstream.
 - Output the delimited form only — no surrounding prose.
 - All natural-language text inside <<<REPLACE>>> must remain in Korean (한국어).`;
 
@@ -1633,7 +1620,7 @@ Absolute rules:
 - Never add anything that is not in the user's original text. Do not invent outside knowledge, reasoning, statistics, or sources.
 - The user's prose (paragraphs, headings, lists, emphasis) must be carried over verbatim — no summarising, compressing, reorganising, or polishing. Preserve line breaks, spacing, and even typos.
 - TWO exceptions are converted in form while preserving meaning (see [Visualization rules] below):
-    (a) ASCII box-drawing diagrams / flow charts / system architecture figures → Mermaid block or INLINE-styled HTML (never Tailwind classes)
+    (a) ASCII box-drawing diagrams / flow charts / system architecture figures → INLINE-styled HTML boxes + arrows (never Tailwind classes, never Mermaid/diagram CDN)
     (b) Markdown tables (| col | col | …) → HTML <table> with inline styles
 - Real programming code inside code fences must be left exactly as-is (only diagrams are converted).
 - Split sections only where the original is clearly already split. When in doubt, keep one section.

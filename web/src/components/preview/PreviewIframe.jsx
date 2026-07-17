@@ -3,6 +3,17 @@ import useAppStore from '../../store/useAppStore';
 import { patchYoutubeThumbnails } from '../../utils/youtubeThumbnail.js';
 import { injectMathJax, htmlHasLatex } from '../../utils/injectMathJax.js';
 
+// AI 가 다이어그램과 함께 관습적으로 붙이는 mermaid CDN/초기화 스크립트를 제거한다.
+// mermaid 는 다운스트림·프리뷰에서 파싱 에러("Syntax error in text, mermaid version …")를
+// 내므로 사용하지 않으며, 다이어그램은 인라인 스타일 HTML 로 생성된다.
+// 이 프리뷰 iframe 은 sandbox=allow-scripts 라 콘텐츠의 <script> 가 실행되므로 방어적으로 제거.
+function stripMermaidScripts(html) {
+  if (!html || html.indexOf('mermaid') === -1) return html;
+  return html
+    .replace(/<script\b[^>]*\bsrc=["'][^"']*mermaid[^"']*["'][^>]*>\s*<\/script>/gi, '')
+    .replace(/<script\b[^>]*>[\s\S]*?mermaid\s*\.\s*(?:initialize|run|contentLoaded|init)[\s\S]*?<\/script>/gi, '');
+}
+
 const PreviewIframe = forwardRef(function PreviewIframe(
   { htmlContent, viewportWidth, viewportHeight },
   ref
@@ -10,7 +21,7 @@ const PreviewIframe = forwardRef(function PreviewIframe(
   // 모든 미리보기 경로(LLM 응답·Firestore 로드·기존 저장본·사용자 편집)의 HTML 이
   // 이 iframe 을 통과하므로, srcDoc 직전에 maxresdefault → hqdefault fallback 과
   // LaTeX 수식이 있을 때 MathJax 로더를 함께 주입한다.
-  const patchedHtml = injectMathJax(patchYoutubeThumbnails(htmlContent));
+  const patchedHtml = injectMathJax(patchYoutubeThumbnails(stripMermaidScripts(htmlContent)));
   const localRef = useRef(null);
 
   // Fallback: srcDoc 단계에서 MathJax 주입이 누락된 경우(빌드 캐시·React
