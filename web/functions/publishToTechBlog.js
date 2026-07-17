@@ -183,13 +183,13 @@ function normalizeHtmlDeterministic(rawHtml) {
     .replace(/<meta\b[^>]*\/?>/gi, '')
     .replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '');
 
-  // 2) 모든 class 와 inline style 제거 — prose 가 typography 책임짐.
-  //    이미지의 src, a 의 href, img 의 alt 등 의미 있는 속성은 유지.
+  // 2) class 는 제거하되(prose 가 기본 typography 책임짐), INLINE style="" 은 유지한다.
+  //    gdoc-fixer 가 게시 전 normalizeForPublish 로 모든 시각 스타일을 inline 으로 구워
+  //    자립형으로 보내므로, 이 인라인 스타일을 살려야 다이어그램/도형이 렌더된다.
+  //    (external-post(커뮤니티 수신)와 대칭 — 두 소비처가 동일하게 self-contained 콘텐츠를 렌더.)
   body = body
     .replace(/\s+class="[^"]*"/gi, '')
-    .replace(/\s+class='[^']*'/gi, '')
-    .replace(/\s+style="[^"]*"/gi, '')
-    .replace(/\s+style='[^']*'/gi, '');
+    .replace(/\s+class='[^']*'/gi, '');
 
   // 3) 첫 <h1> 을 헤더 영역으로 분리
   let titleText = '';
