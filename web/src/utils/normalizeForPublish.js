@@ -66,6 +66,37 @@ async function waitForTailwind(iframe, timeoutMs = 4000) {
   await waitFrame(win);
 }
 
+// ── 테마 적응 판정 헬퍼 ──
+function parseRgb(c) {
+  const m = c && c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  return m ? [+m[1], +m[2], +m[3]] : null;
+}
+function isTransparentColor(c) {
+  if (!c || c === 'transparent') return true;
+  const m = c.match(/rgba?\([^)]*,\s*([0-9.]+)\s*\)/);
+  return !!(m && parseFloat(m[1]) === 0);
+}
+function isWhiteColor(c) {
+  const rgb = parseRgb(c);
+  return !!(rgb && rgb[0] >= 250 && rgb[1] >= 250 && rgb[2] >= 250);
+}
+// 유색 표면(카드/박스/코드블록/그라데이션) 여부 — self-contained 섬으로 취급.
+function isPaintBg(bgColor, bgImage) {
+  if (bgImage && bgImage !== 'none') return true;
+  if (isTransparentColor(bgColor)) return false;
+  if (isWhiteColor(bgColor)) return false;
+  return true;
+}
+// 유채색(하이라이트: 파랑/초록/빨강 등)만 true. 판정은 채도(최대-최소 채널)로 한다.
+// 하이라이트는 채도가 높고(>45), 본문 텍스트의 회색/슬레이트(near-black 포함)는
+// 채널차가 작다(slate-900 =15,23,42 → 27). → 어두운/밝은 base 텍스트는 테마가 제어.
+function isChromatic(c) {
+  const rgb = parseRgb(c);
+  if (!rgb) return false;
+  const [r, g, b] = rgb;
+  return (Math.max(r, g, b) - Math.min(r, g, b)) > 45;
+}
+
 function buildDefaultsGetter(idoc, win) {
   const cache = {};
   return (tag) => {
@@ -85,7 +116,9 @@ function buildDefaultsGetter(idoc, win) {
 function inlineComputedStyles(root, win, idoc) {
   const getDefaults = buildDefaultsGetter(idoc, win);
 
-  const walk = (el) => {
+  // insidePaint: 조상 중 유색 표면(카드/박스)이 있는지 — 그 안의 텍스트는
+  // 자기 섬 색을 상속해야 하므로 color 를 함께 굽는다.
+  const walk = (el, insidePaint) => {
     if (el.nodeType !== 1) return;
     const tag = el.tagName.toLowerCase();
     if (tag === 'script' || tag === 'style' || tag === 'link' || tag === 'noscript') return;
@@ -94,29 +127,39 @@ function inlineComputedStyles(root, win, idoc) {
     const prev = el.getAttribute('style') || '';
     const parts = [];
 
+    const bgColor = cs.getPropertyValue('background-color');
+    const bgImage = cs.getPropertyValue('background-image');
+    const elPaint = isPaintBg(bgColor, bgImage);
+    const paintCtx = insidePaint || elPaint;
+
     for (const p of INLINE_PROPS) {
       const v = cs.getPropertyValue(p);
       if (!v || v === defs[p]) continue;
+      // 테마 적응: 흰/투명 배경과 기본 텍스트 색은 굽지 않아 각 사이트 테마가 제어.
+      // 유색 표면(섬)·그 내부 텍스트·유채색 하이라이트만 self-contained 로 굽는다.
+      if (p === 'background-color') {
+        if (!elPaint || isTransparentColor(v) || isWhiteColor(v)) continue;
+      } else if (p === 'background-image') {
+        if (v === 'none') continue;
+      } else if (p === 'color') {
+        if (!(paintCtx || isChromatic(v))) continue;
+      }
       parts.push(`${p}:${v}`);
     }
 
-    // 명시적 px width 는 인라인하지 않는다: flex/grid + padding + 콘텐츠로 자연
-    // 사이징(원본과 동일)해야 shrink-to-fit 박스가 반올림/줄바꿈으로 깨지지 않는다.
-    // 단, 부모 콘텐츠 폭을 꽉 채우는 블록(예: w-full 테이블/컨테이너)만 width:100% 로 복원.
+    // 명시적 px width 는 인라인하지 않는다(flex/grid+padding 자연 사이징).
+    // 단, 부모 콘텐츠 폭을 꽉 채우는 블록(w-full 표/컨테이너)만 width:100% 복원.
     if (cs.display !== 'inline' && el.parentElement) {
       const pcs = win.getComputedStyle(el.parentElement);
       const parentContent = el.parentElement.clientWidth - parseFloat(pcs.paddingLeft || 0) - parseFloat(pcs.paddingRight || 0);
       const elW = el.getBoundingClientRect().width;
       if (parentContent > 0 && Math.abs(elW - parentContent) <= 1.5) parts.push('width:100%');
     }
-    // 이미지는 유동 처리.
     if (tag === 'img') {
       parts.push('max-width:100%', 'height:auto');
     }
 
     if (parts.length) {
-      // Tailwind 는 border-box 를 가정 → 소비처에 border-box 리셋이 없어도
-      // 패딩/보더가 폭을 늘리지 않도록 명시.
       if (!parts.some((p) => p.startsWith('box-sizing')) && cs.getPropertyValue('box-sizing') === 'border-box') {
         parts.unshift('box-sizing:border-box');
       }
@@ -124,10 +167,10 @@ function inlineComputedStyles(root, win, idoc) {
       el.setAttribute('style', merged);
     }
 
-    for (const c of Array.from(el.children)) walk(c);
+    for (const c of Array.from(el.children)) walk(c, paintCtx);
   };
 
-  for (const c of Array.from(root.children)) walk(c);
+  for (const c of Array.from(root.children)) walk(c, false);
 }
 
 /**
