@@ -42,6 +42,10 @@
         "function": "blogAgentStatus"
       },
       {
+        "source": "/api/blog/posts/**",
+        "function": "blogAgentDelete"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

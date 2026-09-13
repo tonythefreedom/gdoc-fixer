@@ -23,6 +23,8 @@ const crypto = require('crypto');
 const {
   runTechBlogPublish,
   getGcsBucket,
+  getTechBlogDb,
+  TECH_BLOG_COLLECTION,
   TECH_BLOG_SECRETS,
 } = require('./publishToTechBlog');
 const { postToCommunity, COMMUNITY_SECRETS } = require('./publishToCommunity');
@@ -125,6 +127,11 @@ function parseRequest(req) {
         ? payload.callbackUrl
         : null,
     client: payload.client ? String(payload.client).slice(0, 80) : 'api',
+    // 주면 새 글을 만들지 않고 그 글을 덮어쓴다 (URL 유지). 게시 후 오류 수정용.
+    replaceId:
+      typeof payload.replaceId === 'string' && /^[a-zA-Z0-9._-]{1,200}$/.test(payload.replaceId)
+        ? payload.replaceId
+        : null,
   };
 }
 
@@ -234,6 +241,7 @@ async function runBlogAgentJob(jobId, job, update) {
     name,
     publishedBy: `blog-agent:${job.client}`,
     sourceApp: 'gdoc-fixer-blog-agent',
+    replaceId: job.replaceId || null,
   });
 
   const result = {
@@ -241,12 +249,14 @@ async function runBlogAgentJob(jobId, job, update) {
     techBlogUrl: techBlog.url,
     titles: techBlog.titles,
     seoDispatched: techBlog.seoDispatched,
+    replaced: !!techBlog.replaced,
     communityUrl: null,
     linkedInUrl: null,
     linkedInSkipped: false,
   };
 
-  if (!job.chain) return result;
+  // 교체 게시는 이미 퍼진 글을 고치는 것이므로 커뮤니티/LinkedIn 에 다시 뿌리지 않는다.
+  if (!job.chain || job.replaceId) return result;
 
   // 5) 커뮤니티 (출처 = tech-blog 글) — 실패해도 tech-blog 게시는 되돌리지 않는다.
   await update({ step: 'publishing-community', result });
@@ -538,5 +548,78 @@ exports.blogAgentStatus = onRequest(
       result: d.result || null,
       error: d.error || null,
     });
+  }
+);
+
+
+/**
+ * DELETE /api/blog/posts/{techBlogId} — 게시된 글을 tech-blog 에서 내린다.
+ *
+ * tech-blog/scripts/delete-report.js 와 같은 동작(static-wiki 문서 삭제)을 API 로 노출한 것.
+ * 본문이 GCS 로 분리된 글이면 그 JSON 도 함께 지운다.
+ * 정적 SEO 페이지(dist/report/{id})는 다음 SEO 빌드에서 정리된다.
+ */
+exports.blogAgentDelete = onRequest(
+  {
+    secrets: [BLOG_AGENT_API_KEY, ...TECH_BLOG_SECRETS],
+    timeoutSeconds: 60,
+    memory: '256MiB',
+    cors: false,
+  },
+  async (req, res) => {
+    if (req.method !== 'DELETE' && req.method !== 'POST') {
+      res.status(405).json({ ok: false, error: 'DELETE 또는 POST 만 허용됩니다.' });
+      return;
+    }
+    if (!isAuthorized(req)) {
+      res.status(401).json({ ok: false, error: 'x-api-key 인증에 실패했습니다.' });
+      return;
+    }
+
+    const fromPath = (req.path.match(/\/posts\/([A-Za-z0-9._-]+)\/?$/) || [])[1];
+    const id = fromPath || (typeof req.body?.id === 'string' ? req.body.id : '');
+    if (!id) {
+      res.status(400).json({ ok: false, error: '글 id 가 필요합니다 (/api/blog/posts/{id}).' });
+      return;
+    }
+
+    try {
+      const ref = getTechBlogDb().collection(TECH_BLOG_COLLECTION).doc(id);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        res.status(404).json({ ok: false, error: `글을 찾을 수 없습니다: ${id}` });
+        return;
+      }
+
+      const data = snap.data();
+      await ref.delete();
+
+      // 본문이 GCS 에 분리 저장된 글이면 그 파일도 정리한다(남겨두면 고아 객체가 된다).
+      let contentDeleted = false;
+      if (data?.contentUrl) {
+        try {
+          const bucket = getGcsBucket();
+          const path = decodeURIComponent(
+            new URL(data.contentUrl).pathname.replace(`/${bucket.name}/`, '')
+          );
+          await bucket.file(path).delete();
+          contentDeleted = true;
+        } catch (err) {
+          console.warn(`[blogAgent] GCS 본문 삭제 실패(문서는 삭제됨): ${err.message}`);
+        }
+      }
+
+      console.log(`[blogAgent] 글 삭제: ${id} (title=${data?.titles?.ko || '?'})`);
+      res.status(200).json({
+        ok: true,
+        id,
+        deleted: true,
+        title: data?.titles?.ko || null,
+        contentDeleted,
+      });
+    } catch (err) {
+      console.error(`[blogAgent] 삭제 실패 ${id}:`, err.message);
+      res.status(500).json({ ok: false, error: err.message });
+    }
   }
 );

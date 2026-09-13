@@ -15,6 +15,7 @@ gdoc-fixer 프론트엔드에서 사람이 직접 기획안을 만들 때와 **�
 |--------|------|------|
 | `POST` | `https://gdoc-fixer.web.app/api/blog/publish` | 원고 접수 |
 | `GET`  | `https://gdoc-fixer.web.app/api/blog/jobs/{jobId}` | 진행 상황 조회 |
+| `DELETE` | `https://gdoc-fixer.web.app/api/blog/posts/{techBlogId}` | 게시된 글 내리기 |
 
 인증은 두 방식 모두 지원한다. 헤더에 키를 실어 보낸다.
 
@@ -59,6 +60,7 @@ Authorization: Bearer <BLOG_AGENT_API_KEY>
 | `chain` | `true` | tech-blog 게시 후 커뮤니티 → LinkedIn 까지 연쇄 게시 |
 | `tags` | — | 커뮤니티 게시글 태그 (최대 10개) |
 | `callbackUrl` | — | 완료·실패 시 결과를 POST 로 통지받을 https URL |
+| `replaceId` | — | 주면 새 글을 만들지 않고 이 id 의 글을 덮어쓴다(= URL 유지). 아래 참조 |
 | `client` | `api` | 호출자 식별용 라벨. 게시 문서의 `publishedBy` 에 기록된다 |
 
 원고만 통째로 보내는 것도 된다. 이때 옵션은 쿼리스트링으로 준다.
@@ -118,6 +120,46 @@ planning → generating-images → composing → uploading-images
 ```
 
 `callbackUrl` 을 줬다면 완료 시 같은 형태의 JSON 이 그 URL 로 POST 된다.
+
+## 게시된 글 수정 — replaceId
+
+게시 후 오류를 발견했을 때 쓴다. `replaceId` 에 기존 글의 id(`result.techBlogId`)를 주면
+새 글을 만들지 않고 그 문서를 덮어쓴다. **URL 이 그대로 유지**되고, 최초 게시 시각(`createdAt`)은
+보존한 채 `lastUpdated` 만 갱신된다.
+
+```bash
+jq -Rs '{markdown: ., replaceId: "why-ai-dance-video-hands-break-2chzc0"}' fixed.md \
+| curl -X POST "https://gdoc-fixer.web.app/api/blog/publish" \
+    -H "x-api-key: $BLOG_API_KEY" -H "Content-Type: application/json" -d @-
+```
+
+원고는 **수정본 전문**을 보낸다. 부분 수정(패치)이 아니라 전체 교체다 — 본문은 새 원고 기준으로
+다시 기획·조립·번역된다. 결과의 `result.replaced` 가 `true` 면 교체가 일어난 것이다.
+
+주의할 점 두 가지:
+
+- 존재하지 않는 id 를 주면 새로 만들지 않고 **404 로 실패**한다. 오타로 엉뚱한 글이 생기는 것을 막기 위해서다.
+- 교체 게시는 `chain` 을 켜도 **커뮤니티·LinkedIn 으로 다시 보내지 않는다.** 이미 퍼진 글을 고치는
+  것이므로 다시 뿌리면 중복 게시가 된다. 그쪽 글까지 고쳐야 한다면 각 사이트에서 직접 수정해야 한다.
+
+새 id 로 다시 올리면 **덮이지 않고 중복 글이 된다**(id 에 랜덤 6자가 붙는다). 수정할 때는 반드시 `replaceId` 를 쓸 것.
+
+## 게시된 글 내리기
+
+```bash
+curl -X DELETE "https://gdoc-fixer.web.app/api/blog/posts/{techBlogId}" \
+  -H "x-api-key: $BLOG_API_KEY"
+```
+
+```json
+{"ok":true,"id":"...","deleted":true,"title":"글 제목","contentDeleted":false}
+```
+
+Firestore 의 `static-wiki` 문서를 지운다(= `tech-blog/scripts/delete-report.js` 와 같은 동작).
+본문이 GCS 로 분리 저장된 큰 글이면 그 JSON 도 함께 지우고 `contentDeleted: true` 로 알린다.
+없는 글이면 `404`. 정적 SEO 페이지는 다음 SEO 빌드에서 정리된다.
+
+커뮤니티·LinkedIn 에 이미 퍼진 글은 이 API 로 내려가지 않는다 — 각 사이트에서 직접 지워야 한다.
 
 ## 처리 파이프라인
 

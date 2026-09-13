@@ -17,6 +17,7 @@ const blogAgent = require('./blogAgent');
 exports.blogAgentPublish = blogAgent.blogAgentPublish;
 exports.blogAgentWorker = blogAgent.blogAgentWorker;
 exports.blogAgentStatus = blogAgent.blogAgentStatus;
+exports.blogAgentDelete = blogAgent.blogAgentDelete;
 
 function escapeHtml(str) {
   return String(str)

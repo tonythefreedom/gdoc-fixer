@@ -487,8 +487,10 @@ function publishError(code, message) {
  * @param {string} [opts.name]       제목 힌트 (메타데이터 추출이 우선)
  * @param {string} opts.publishedBy  게시 주체 식별자 (uid 또는 API 클라이언트명)
  * @param {string} [opts.sourceApp]  출처 표기
+ * @param {string} [opts.replaceId]  주면 새 글을 만들지 않고 이 문서를 덮어쓴다(= URL 유지).
+ *                                   게시 후 발견된 오류를 고칠 때 쓴다.
  */
-async function runTechBlogPublish({ html, name, publishedBy, sourceApp = 'gdoc-fixer' }) {
+async function runTechBlogPublish({ html, name, publishedBy, sourceApp = 'gdoc-fixer', replaceId = null }) {
     if (!html || typeof html !== 'string') {
       throw publishError('invalid-argument', 'html 문자열이 필요합니다.');
     }
@@ -578,7 +580,26 @@ Output JSON only, no preamble or code fence:`;
     const wrappedKo = ensureArticleWrap(normalizedHtml);
     const wrappedEn = ensureArticleWrap(englishHtml);
 
-    const docId = `${slug}-${shortId()}`;
+    // replaceId 를 주면 기존 문서를 덮어쓴다. 없는 id 로 새 글이 생기면 오타를
+    // 알아채기 어려우므로, 존재하지 않으면 만들지 않고 실패시킨다.
+    let docId;
+    let createdAt = now.toISOString();
+    if (replaceId) {
+      let existing;
+      try {
+        existing = await getTechBlogDb().collection(TECH_BLOG_COLLECTION).doc(replaceId).get();
+      } catch (err) {
+        throw publishError('internal', `기존 글 조회 실패: ${err.message}`);
+      }
+      if (!existing.exists) {
+        throw publishError('not-found', `교체할 글을 찾을 수 없습니다: ${replaceId}`);
+      }
+      docId = replaceId;
+      // 최초 게시 시각은 보존하고 lastUpdated 만 갱신한다.
+      createdAt = existing.data()?.createdAt || createdAt;
+    } else {
+      docId = `${slug}-${shortId()}`;
+    }
     const koBytes = Buffer.byteLength(wrappedKo, 'utf-8');
     const enBytes = Buffer.byteLength(wrappedEn, 'utf-8');
     const needsGcs =
@@ -610,7 +631,7 @@ Output JSON only, no preamble or code fence:`;
       thumbnailUrl: extractFirstImageUrl(normalizedHtml) || extractFirstImageUrl(html),
       excerpt,
       lastUpdated: now.toISOString().slice(0, 10),
-      createdAt: now.toISOString(),
+      createdAt,
       type: 'firestore-content',
       publishedBy,
       sourceApp,
@@ -639,12 +660,16 @@ Output JSON only, no preamble or code fence:`;
       titles: doc.titles,
       sizeBytes,
       seoDispatched,
+      replaced: !!replaceId,
     };
 }
 
 exports.runTechBlogPublish = runTechBlogPublish;
 // blogAgent 가 생성 이미지(data URI)를 올릴 때 같은 버킷/자격증명을 재사용한다.
 exports.getGcsBucket = getGcsBucket;
+// 삭제 엔드포인트(blogAgent)가 같은 자격증명으로 tech-blog Firestore 에 접근한다.
+exports.getTechBlogDb = getTechBlogDb;
+exports.TECH_BLOG_COLLECTION = TECH_BLOG_COLLECTION;
 exports.TECH_BLOG_SECRETS = TECH_BLOG_SECRETS;
 exports.TECH_BLOG_SITE = TECH_BLOG_SITE;
 
