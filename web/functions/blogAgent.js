@@ -3,8 +3,8 @@
  *
  * 흐름:
  *   POST /api/blog/publish  (x-api-key)
- *     → blogAgentJobs/{jobId} 문서 생성 → Cloud Tasks 큐에 적재 → 즉시 202 반환
- *   Cloud Tasks 워커(blogAgentWorker)
+ *     → blogAgentJobs/{jobId} 문서 생성 → 워커를 깨우고(응답은 안 기다림) 즉시 202 반환
+ *   워커(blogAgentWorker, HTTP)
  *     → 기획안 생성 → 이미지 생성 → HTML 조립   (프론트와 같은 프롬프트: shared/planningPrompts.mjs)
  *     → 생성 이미지 GCS 업로드
  *     → Tailwind 인라인화                      (프론트 normalizeForPublish 의 서버 대응)
@@ -15,8 +15,7 @@
  * 함수 호출은 60초에서 끊긴다. 그래서 접수(빠름)와 처리(느림)를 분리한다.
  */
 const { onRequest } = require('firebase-functions/v2/https');
-const { onTaskDispatched } = require('firebase-functions/v2/tasks');
-const { getFunctions } = require('firebase-admin/functions');
+
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
@@ -35,6 +34,11 @@ const BLOG_AGENT_API_KEY = defineSecret('BLOG_AGENT_API_KEY');
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
 const JOBS_COLLECTION = 'blogAgentJobs';
+// 접수 함수가 워커를 깨울 때 쓰는 주소. 리전은 두 함수 모두 us-central1 고정.
+const WORKER_URL = `https://us-central1-${process.env.GCLOUD_PROJECT || 'gdoc-fixer'}.cloudfunctions.net/blogAgentWorker`;
+// 워커를 깨우고 응답을 기다리는 최대 시간. 파이프라인은 이보다 훨씬 오래 걸리므로
+// 이 시간 안에 오는 응답은 사실상 오류뿐이다. 타임아웃은 "정상 착수"로 해석한다.
+const WORKER_HANDSHAKE_MS = 10000;
 // Firestore 문서 1MiB 한도 안에서 원고 + 메타데이터가 모두 들어가야 한다.
 const MAX_MARKDOWN_BYTES = 400 * 1024;
 const VALID_MODES = ['custom', 'research'];
@@ -101,7 +105,8 @@ function parseRequest(req) {
   const mode = VALID_MODES.includes(payload.mode) ? payload.mode : 'custom';
   const template = VALID_TEMPLATES.includes(payload.template) ? payload.template : 'custom';
 
-  let tags;
+  // Firestore 는 undefined 를 값으로 받지 않는다 — 없으면 null 로 둔다.
+  let tags = null;
   if (Array.isArray(payload.tags)) tags = payload.tags.map(String).slice(0, 10);
   else if (typeof payload.tags === 'string' && payload.tags.trim()) {
     tags = payload.tags.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 10);
@@ -293,6 +298,37 @@ async function notifyCallback(job, body) {
   }
 }
 
+/**
+ * 워커를 깨운다. 성공하면 null, 실패하면 사유 문자열을 돌려준다.
+ * 타임아웃(AbortError)은 "워커가 요청을 받아 처리 중" 이라는 뜻이므로 성공으로 본다.
+ */
+async function wakeWorker(jobId) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), WORKER_HANDSHAKE_MS);
+  try {
+    const res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': BLOG_AGENT_API_KEY.value(),
+      },
+      body: JSON.stringify({ jobId }),
+      signal: controller.signal,
+    });
+    // 이 시간 안에 응답이 왔다면 파이프라인을 돈 것이 아니라 거부당한 것이다.
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      return `워커 HTTP ${res.status}: ${body.slice(0, 200)}`;
+    }
+    return null; // 드물게 아주 짧은 원고가 제시간에 끝난 경우
+  } catch (err) {
+    if (err?.name === 'AbortError') return null; // 정상 착수
+    return err?.message || String(err);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ─────────────────────────────── 엔드포인트 ───────────────────────────────
 
 // GEMINI_API_KEY 는 여기서도 쓰고 TECH_BLOG_SECRETS 에도 들어 있다. defineSecret 은
@@ -341,7 +377,11 @@ exports.blogAgentPublish = onRequest(
 
     const now = new Date().toISOString();
     const ref = db().collection(JOBS_COLLECTION).doc();
-    await ref.set({
+    // 필드가 하나라도 undefined 면 Firestore 쓰기 전체가 거부된다. 접수 단계에서
+    // 막히면 원인이 원고 내용처럼 보여 진단이 어려우니 여기서 한 번 걸러 둔다.
+    const dropUndefined = (obj) =>
+      Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+    await ref.set(dropUndefined({
       ...job,
       titleHint: job.title || titleFromMarkdown(job.markdown),
       status: 'queued',
@@ -351,15 +391,16 @@ exports.blogAgentPublish = onRequest(
       finishedAt: null,
       result: null,
       error: null,
-    });
+    }));
 
-    // 큐 적재 실패는 곧 "영원히 처리되지 않는 job" 이므로 접수 자체를 실패로 돌린다.
-    try {
-      await getFunctions().taskQueue('blogAgentWorker').enqueue({ jobId: ref.id });
-    } catch (err) {
-      console.error(`[blogAgent] job ${ref.id} 큐 적재 실패:`, err.message);
-      await ref.update({ status: 'failed', error: `큐 적재 실패: ${err.message}` });
-      res.status(500).json({ ok: false, error: `작업 큐 적재에 실패했습니다: ${err.message}` });
+    // 워커를 깨운다. 파이프라인은 수 분~수십 분이므로 응답은 기다리지 않고,
+    // 연결이 수립된 것만 확인하고 끊는다(Cloud Run 은 클라이언트가 끊어도 처리를 계속한다).
+    // 깨우기에 실패하면 job 이 영영 queued 로 남으므로 접수 자체를 실패로 돌린다.
+    const dispatchError = await wakeWorker(ref.id);
+    if (dispatchError) {
+      console.error(`[blogAgent] job ${ref.id} 워커 호출 실패:`, dispatchError);
+      await ref.update({ status: 'failed', error: `워커 호출 실패: ${dispatchError}` });
+      res.status(500).json({ ok: false, error: `작업 시작에 실패했습니다: ${dispatchError}` });
       return;
     }
 
@@ -381,39 +422,61 @@ exports.blogAgentPublish = onRequest(
  * 실행 시간이 540초로 묶이는데, 큰 원고는 기획·이미지·조립·번역을 합쳐 그보다 오래 걸린다.
  * Cloud Tasks 워커는 30분까지 쓸 수 있고 재시도 정책도 명시할 수 있다.
  */
-exports.blogAgentWorker = onTaskDispatched(
+exports.blogAgentWorker = onRequest(
   {
     secrets: ALL_SECRETS,
-    timeoutSeconds: 1800,
+    // HTTP 함수는 60분까지 쓸 수 있다. 접수 함수가 응답을 기다리지 않으므로
+    // Hosting 의 60초 제한과는 무관하다 (이 함수는 rewrite 에 걸지 않는다).
+    timeoutSeconds: 3600,
     memory: '2GiB',
-    // 같은 원고를 두 번 게시하는 것이 타임아웃보다 나쁘다 — 자동 재시도는 끈다.
-    retryConfig: { maxAttempts: 1 },
-    rateLimits: { maxConcurrentDispatches: 3 },
+    maxInstances: 3,
+    cors: false,
   },
-  async (request) => {
-    const jobId = request.data?.jobId;
+  async (req, res) => {
+    if (req.method !== 'POST' || !isAuthorized(req)) {
+      res.status(req.method === 'POST' ? 401 : 405).json({ ok: false });
+      return;
+    }
+
+    const jobId = req.body?.jobId;
     if (!jobId) {
-      console.error('[blogAgent] jobId 없는 task — 무시');
+      res.status(400).json({ ok: false, error: 'jobId 가 필요합니다.' });
       return;
     }
 
     const ref = db().collection(JOBS_COLLECTION).doc(jobId);
-    const snap = await ref.get();
-    if (!snap.exists) {
-      console.error(`[blogAgent:${jobId}] job 문서를 찾을 수 없음`);
+
+    // queued → running 전환을 트랜잭션으로 선점한다. 같은 job 에 대한 호출이
+    // 겹쳐도 한 번만 실행되며, 이미 처리된 job 의 재실행(= 중복 게시)도 막는다.
+    let job;
+    try {
+      job = await db().runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return null;
+        const data = snap.data();
+        if (data.status !== 'queued') return null;
+        tx.update(ref, {
+          status: 'running',
+          step: 'starting',
+          startedAt: new Date().toISOString(),
+        });
+        return data;
+      });
+    } catch (err) {
+      console.error(`[blogAgent:${jobId}] 선점 실패:`, err.message);
+      res.status(500).json({ ok: false, error: err.message });
       return;
     }
-    const job = snap.data();
 
-    // 중복 디스패치 가드
-    if (job.status && job.status !== 'queued') {
-      console.log(`[blogAgent:${jobId}] status=${job.status} — 건너뜀`);
+    if (!job) {
+      console.log(`[blogAgent:${jobId}] 이미 처리됐거나 존재하지 않음 — 건너뜀`);
+      res.status(200).json({ ok: true, skipped: true });
       return;
     }
 
+    // 여기서부터가 긴 작업. 접수 함수는 이미 연결을 끊었지만 Cloud Run 은
+    // 처리를 계속하므로 그대로 끝까지 진행한다.
     const update = (patch) => ref.update(patch);
-
-    await update({ status: 'running', step: 'starting', startedAt: new Date().toISOString() });
 
     try {
       const result = await runBlogAgentJob(jobId, job, update);
@@ -425,6 +488,7 @@ exports.blogAgentWorker = onTaskDispatched(
       });
       console.log(`[blogAgent:${jobId}] 완료 → ${result.techBlogUrl}`);
       await notifyCallback(job, { ok: true, jobId, status: 'succeeded', result });
+      res.status(200).json({ ok: true, jobId, result });
     } catch (err) {
       const message = err?.message || String(err);
       console.error(`[blogAgent:${jobId}] 실패:`, message);
@@ -434,6 +498,7 @@ exports.blogAgentWorker = onTaskDispatched(
         finishedAt: new Date().toISOString(),
       });
       await notifyCallback(job, { ok: false, jobId, status: 'failed', error: message });
+      res.status(500).json({ ok: false, jobId, error: message });
     }
   }
 );
