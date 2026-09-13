@@ -3,8 +3,8 @@
  *
  * 흐름:
  *   POST /api/blog/publish  (x-api-key)
- *     → blogAgentJobs/{jobId} 문서 생성 → 즉시 202 반환
- *   onDocumentCreated 트리거(blogAgentWorker)
+ *     → blogAgentJobs/{jobId} 문서 생성 → Cloud Tasks 큐에 적재 → 즉시 202 반환
+ *   Cloud Tasks 워커(blogAgentWorker)
  *     → 기획안 생성 → 이미지 생성 → HTML 조립   (프론트와 같은 프롬프트: shared/planningPrompts.mjs)
  *     → 생성 이미지 GCS 업로드
  *     → Tailwind 인라인화                      (프론트 normalizeForPublish 의 서버 대응)
@@ -15,7 +15,8 @@
  * 함수 호출은 60초에서 끊긴다. 그래서 접수(빠름)와 처리(느림)를 분리한다.
  */
 const { onRequest } = require('firebase-functions/v2/https');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onTaskDispatched } = require('firebase-functions/v2/tasks');
+const { getFunctions } = require('firebase-admin/functions');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
@@ -294,12 +295,19 @@ async function notifyCallback(job, body) {
 
 // ─────────────────────────────── 엔드포인트 ───────────────────────────────
 
+// GEMINI_API_KEY 는 여기서도 쓰고 TECH_BLOG_SECRETS 에도 들어 있다. defineSecret 은
+// 같은 이름이라도 호출할 때마다 다른 객체를 주므로, 이름 기준으로 중복을 걷어내지 않으면
+// Cloud Run 이 "Duplicate secret environment variable" 로 배포를 거부한다.
 const ALL_SECRETS = [
-  BLOG_AGENT_API_KEY,
-  GEMINI_API_KEY,
-  ...TECH_BLOG_SECRETS,
-  ...COMMUNITY_SECRETS,
-  ...LINKEDIN_SECRETS,
+  ...new Map(
+    [
+      BLOG_AGENT_API_KEY,
+      GEMINI_API_KEY,
+      ...TECH_BLOG_SECRETS,
+      ...COMMUNITY_SECRETS,
+      ...LINKEDIN_SECRETS,
+    ].map((secret) => [secret.name, secret])
+  ).values(),
 ];
 
 /** POST /api/blog/publish — 원고 접수 (빠르게 반환). */
@@ -345,6 +353,16 @@ exports.blogAgentPublish = onRequest(
       error: null,
     });
 
+    // 큐 적재 실패는 곧 "영원히 처리되지 않는 job" 이므로 접수 자체를 실패로 돌린다.
+    try {
+      await getFunctions().taskQueue('blogAgentWorker').enqueue({ jobId: ref.id });
+    } catch (err) {
+      console.error(`[blogAgent] job ${ref.id} 큐 적재 실패:`, err.message);
+      await ref.update({ status: 'failed', error: `큐 적재 실패: ${err.message}` });
+      res.status(500).json({ ok: false, error: `작업 큐 적재에 실패했습니다: ${err.message}` });
+      return;
+    }
+
     console.log(`[blogAgent] job ${ref.id} 접수 (client=${job.client}, mode=${job.mode}, chain=${job.chain})`);
     res.status(202).json({
       ok: true,
@@ -356,28 +374,43 @@ exports.blogAgentPublish = onRequest(
   }
 );
 
-/** blogAgentJobs 문서 생성 트리거 — 실제 파이프라인을 돌린다. */
-exports.blogAgentWorker = onDocumentCreated(
+/**
+ * 실제 파이프라인을 돌리는 워커.
+ *
+ * Firestore 문서 생성 트리거가 아니라 Cloud Tasks 를 쓰는 이유: 이벤트 트리거 함수는
+ * 실행 시간이 540초로 묶이는데, 큰 원고는 기획·이미지·조립·번역을 합쳐 그보다 오래 걸린다.
+ * Cloud Tasks 워커는 30분까지 쓸 수 있고 재시도 정책도 명시할 수 있다.
+ */
+exports.blogAgentWorker = onTaskDispatched(
   {
-    document: `${JOBS_COLLECTION}/{jobId}`,
     secrets: ALL_SECRETS,
-    timeoutSeconds: 3600,
+    timeoutSeconds: 1800,
     memory: '2GiB',
-    retry: false,
+    // 같은 원고를 두 번 게시하는 것이 타임아웃보다 나쁘다 — 자동 재시도는 끈다.
+    retryConfig: { maxAttempts: 1 },
+    rateLimits: { maxConcurrentDispatches: 3 },
   },
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const jobId = event.params.jobId;
+  async (request) => {
+    const jobId = request.data?.jobId;
+    if (!jobId) {
+      console.error('[blogAgent] jobId 없는 task — 무시');
+      return;
+    }
+
+    const ref = db().collection(JOBS_COLLECTION).doc(jobId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      console.error(`[blogAgent:${jobId}] job 문서를 찾을 수 없음`);
+      return;
+    }
     const job = snap.data();
 
-    // 재시도/중복 트리거 가드
+    // 중복 디스패치 가드
     if (job.status && job.status !== 'queued') {
       console.log(`[blogAgent:${jobId}] status=${job.status} — 건너뜀`);
       return;
     }
 
-    const ref = snap.ref;
     const update = (patch) => ref.update(patch);
 
     await update({ status: 'running', step: 'starting', startedAt: new Date().toISOString() });

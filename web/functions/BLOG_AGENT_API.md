@@ -27,7 +27,8 @@ Authorization: Bearer <BLOG_AGENT_API_KEY>
 ## 접수 — POST /api/blog/publish
 
 게시는 5~20분이 걸리는 반면 Firebase Hosting 을 경유한 호출은 60초에서 끊긴다.
-그래서 접수와 처리를 분리했다. 이 엔드포인트는 작업을 큐에 넣고 **즉시 202** 로 답한다.
+그래서 접수와 처리를 분리했다. 이 엔드포인트는 작업을 Cloud Tasks 큐에 넣고 **즉시 202** 로 답한다.
+(Firestore 트리거가 아니라 Cloud Tasks 를 쓰는 이유는 이벤트 함수의 540초 실행 한도 때문이다.)
 
 ### 요청
 
@@ -163,7 +164,7 @@ npx firebase deploy --only firestore:rules
 |------|-----|
 | 원고 크기 | 400KB |
 | 게시 HTML | 1.5MB (초과 시 `invalid-argument`) |
-| 워커 실행 시간 | 최대 60분 (`timeoutSeconds: 3600`, 2GiB) |
+| 워커 실행 시간 | 최대 30분 (Cloud Tasks 워커, 2GiB). 초과하면 job 이 `running` 인 채로 끊긴다 |
 | 작업 큐 | Firestore `blogAgentJobs` — 원고 전문이 담기므로 클라이언트 접근 전면 차단 |
 
 ### 실패 시 확인 순서
