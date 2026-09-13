@@ -7,7 +7,11 @@
   },
   "hosting": {
     "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
       {
         "source": "/share/**",
@@ -28,6 +32,14 @@
       {
         "source": "/api/welcome-email",
         "function": "welcomeEmail"
+      },
+      {
+        "source": "/api/blog/publish",
+        "function": "blogAgentPublish"
+      },
+      {
+        "source": "/api/blog/jobs/**",
+        "function": "blogAgentStatus"
       },
       {
         "source": "**",

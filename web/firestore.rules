@@ -27,6 +27,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 블로그 에이전트 작업 큐 — 외부 API 가 접수하고 Cloud Function 이 처리한다.
+    // 원고 전문이 담기므로 클라이언트 접근은 전면 차단 (admin SDK 만 읽고 쓴다).
+    match /blogAgentJobs/{jobId} {
+      allow read, write: if false;
+    }
+
     // 결제 이력 — 본인만 읽기, write 는 Cloud Function (admin SDK).
     match /userProfiles/{uid}/coinCharges/{chargeId} {
       allow read: if request.auth != null && request.auth.uid == uid;

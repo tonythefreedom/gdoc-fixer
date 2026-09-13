@@ -12,6 +12,11 @@ const coinCheckout = require('./coinCheckout');
 // 미사용 secrets(LEMONSQUEEZY_API_KEY/STORE_ID/VARIANTS) 요구 없음.
 exports.lemonsqueezyWebhook = coinCheckout.lemonsqueezyWebhook;
 exports.welcomeEmail = require('./welcomeEmail').welcomeEmail;
+// 커스텀 블로그 작성 에이전트 — 외부 API 로 받은 MD 를 tech-blog 에 자동 게시
+const blogAgent = require('./blogAgent');
+exports.blogAgentPublish = blogAgent.blogAgentPublish;
+exports.blogAgentWorker = blogAgent.blogAgentWorker;
+exports.blogAgentStatus = blogAgent.blogAgentStatus;
 
 function escapeHtml(str) {
   return String(str)

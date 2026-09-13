@@ -28,20 +28,21 @@ async function isAuthorizedAdmin(authCtx) {
 //   · gdoc 수퍼관리자만 호출 가능
 //   · 출처(링크)는 원문이 아니라 직전 체인 사이트(커뮤니티 글 URL)
 //   · 자격증명 미설정 시 { skipped:true } 로 우아하게 종료
-exports.publishToLinkedIn = onCall(
-  {
-    secrets: [LINKEDIN_ACCESS_TOKEN, LINKEDIN_ORG_URN],
-    timeoutSeconds: 60,
-    memory: '256MiB',
-  },
-  async (request) => {
-    if (!(await isAuthorizedAdmin(request.auth))) {
-      throw new HttpsError('permission-denied', '수퍼관리자만 게시할 수 있습니다.');
-    }
+const LINKEDIN_SECRETS = [LINKEDIN_ACCESS_TOKEN, LINKEDIN_ORG_URN];
 
-    const { title, url } = request.data || {};
+function linkedInError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+/**
+ * LinkedIn 조직 페이지 게시 코어 — onCall(UI)과 blogAgent(외부 API)가 공유.
+ * 자격증명 미설정 시 { skipped:true } 로 우아하게 종료(체인을 막지 않는다).
+ */
+async function postToLinkedIn({ title, url }) {
     if (!url || typeof url !== 'string') {
-      throw new HttpsError('invalid-argument', 'url(커뮤니티 글 링크)이 필요합니다.');
+      throw linkedInError('invalid-argument', 'url(커뮤니티 글 링크)이 필요합니다.');
     }
 
     const token = LINKEDIN_ACCESS_TOKEN.value();
@@ -82,17 +83,38 @@ exports.publishToLinkedIn = onCall(
         }),
       });
     } catch (err) {
-      throw new HttpsError('internal', `LinkedIn 호출 실패: ${err.message}`);
+      throw linkedInError('internal', `LinkedIn 호출 실패: ${err.message}`);
     }
 
     if (res.status !== 201 && res.status !== 200) {
       body = await res.text().catch(() => '');
-      throw new HttpsError('internal', `LinkedIn 게시 실패 (HTTP ${res.status}): ${body.slice(0, 300)}`);
+      throw linkedInError('internal', `LinkedIn 게시 실패 (HTTP ${res.status}): ${body.slice(0, 300)}`);
     }
 
     // 생성된 게시물 URN → 피드 URL
     const postUrn = res.headers.get('x-restli-id') || res.headers.get('x-linkedin-id') || '';
     const postUrl = postUrn ? `https://www.linkedin.com/feed/update/${postUrn}` : 'https://www.linkedin.com/';
     return { url: postUrl, urn: postUrn };
+}
+
+exports.postToLinkedIn = postToLinkedIn;
+exports.LINKEDIN_SECRETS = LINKEDIN_SECRETS;
+
+exports.publishToLinkedIn = onCall(
+  {
+    secrets: LINKEDIN_SECRETS,
+    timeoutSeconds: 60,
+    memory: '256MiB',
+  },
+  async (request) => {
+    if (!(await isAuthorizedAdmin(request.auth))) {
+      throw new HttpsError('permission-denied', '수퍼관리자만 게시할 수 있습니다.');
+    }
+    const { title, url } = request.data || {};
+    try {
+      return await postToLinkedIn({ title, url });
+    } catch (err) {
+      throw new HttpsError(err.code || 'internal', err.message);
+    }
   }
 );

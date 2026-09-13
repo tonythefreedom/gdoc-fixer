@@ -27,30 +27,31 @@ async function isAuthorizedAdmin(authCtx) {
 //   · gdoc 수퍼관리자만 호출 가능
 //   · aidev-home Edge Function(external-post)으로 공유 시크릿과 함께 전달
 //   · 본문 정규화(스타일/스크립트 제거)는 수신측(aidev)에서 처리
-exports.publishToCommunity = onCall(
-  {
-    secrets: [AIDEV_COMMUNITY_URL, AIDEV_COMMUNITY_SECRET],
-    timeoutSeconds: 120,
-    memory: '256MiB',
-  },
-  async (request) => {
-    if (!(await isAuthorizedAdmin(request.auth))) {
-      throw new HttpsError('permission-denied', '수퍼관리자만 커뮤니티에 게시할 수 있습니다.');
-    }
+const COMMUNITY_SECRETS = [AIDEV_COMMUNITY_URL, AIDEV_COMMUNITY_SECRET];
 
-    const { html, name, sourceUrl, tags } = request.data || {};
+function communityError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+/**
+ * 커뮤니티 게시 코어 — onCall(UI)과 blogAgent(외부 API)가 공유.
+ * 본문 정규화(스타일/스크립트 제거)는 수신측(aidev-home)에서 처리한다.
+ */
+async function postToCommunity({ html, name, sourceUrl, tags }) {
     if (!html || typeof html !== 'string') {
-      throw new HttpsError('invalid-argument', 'html 문자열이 필요합니다.');
+      throw communityError('invalid-argument', 'html 문자열이 필요합니다.');
     }
     const inputBytes = Buffer.byteLength(html, 'utf-8');
     if (inputBytes > MAX_INPUT_BYTES) {
-      throw new HttpsError('invalid-argument', `문서가 너무 큽니다 (현재 ${(inputBytes / 1024).toFixed(0)}KB, 한도 ${MAX_INPUT_BYTES / 1024}KB).`);
+      throw communityError('invalid-argument', `문서가 너무 큽니다 (현재 ${(inputBytes / 1024).toFixed(0)}KB, 한도 ${MAX_INPUT_BYTES / 1024}KB).`);
     }
 
     const url = AIDEV_COMMUNITY_URL.value();
     const secret = AIDEV_COMMUNITY_SECRET.value();
     if (!url || !secret) {
-      throw new HttpsError('failed-precondition', 'AIDEV_COMMUNITY_URL / AIDEV_COMMUNITY_SECRET 시크릿이 설정되지 않았습니다.');
+      throw communityError('failed-precondition', 'AIDEV_COMMUNITY_URL / AIDEV_COMMUNITY_SECRET 시크릿이 설정되지 않았습니다.');
     }
 
     let res, data;
@@ -68,12 +69,33 @@ exports.publishToCommunity = onCall(
       });
       data = await res.json().catch(() => ({}));
     } catch (err) {
-      throw new HttpsError('internal', `커뮤니티 서버 호출 실패: ${err.message}`);
+      throw communityError('internal', `커뮤니티 서버 호출 실패: ${err.message}`);
     }
     if (!res.ok || !data.ok) {
-      throw new HttpsError('internal', `커뮤니티 게시 실패: ${data.error || `HTTP ${res.status}`}`);
+      throw communityError('internal', `커뮤니티 게시 실패: ${data.error || `HTTP ${res.status}`}`);
     }
 
     return { url: data.url, topicId: data.topic_id };
+}
+
+exports.postToCommunity = postToCommunity;
+exports.COMMUNITY_SECRETS = COMMUNITY_SECRETS;
+
+exports.publishToCommunity = onCall(
+  {
+    secrets: COMMUNITY_SECRETS,
+    timeoutSeconds: 120,
+    memory: '256MiB',
+  },
+  async (request) => {
+    if (!(await isAuthorizedAdmin(request.auth))) {
+      throw new HttpsError('permission-denied', '수퍼관리자만 커뮤니티에 게시할 수 있습니다.');
+    }
+    const { html, name, sourceUrl, tags } = request.data || {};
+    try {
+      return await postToCommunity({ html, name, sourceUrl, tags });
+    } catch (err) {
+      throw new HttpsError(err.code || 'internal', err.message);
+    }
   }
 );

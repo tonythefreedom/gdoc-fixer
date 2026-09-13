@@ -456,31 +456,45 @@ async function triggerSeoBuild(token, docId) {
   }
 }
 
-exports.publishToTechBlog = onCall(
-  {
-    secrets: [
-      GEMINI_API_KEY,
-      TECH_BLOG_SERVICE_ACCOUNT,
-      GITHUB_DISPATCH_TOKEN,
-      GCS_BUCKET,
-      GCS_SA_EMAIL,
-      GCS_PRIVATE_KEY,
-    ],
-    timeoutSeconds: 1200,
-    memory: '1GiB',
-  },
-  async (request) => {
-    if (!(await isAuthorizedAdmin(request.auth))) {
-      throw new HttpsError('permission-denied', '관리자 권한이 필요합니다.');
-    }
+// 이 함수(그리고 외부 API 인 blogAgent)가 요구하는 시크릿 묶음.
+// blogAgent 쪽 함수 정의에도 같은 배열을 넘겨야 런타임에 .value() 가 바인딩된다.
+const TECH_BLOG_SECRETS = [
+  GEMINI_API_KEY,
+  TECH_BLOG_SERVICE_ACCOUNT,
+  GITHUB_DISPATCH_TOKEN,
+  GCS_BUCKET,
+  GCS_SA_EMAIL,
+  GCS_PRIVATE_KEY,
+];
 
-    const { html, name } = request.data || {};
+// 코어는 HttpsError 대신 code 를 실은 평범한 Error 를 던진다.
+// onCall 래퍼가 HttpsError 로, HTTP 래퍼(blogAgent)가 상태코드로 각각 변환한다.
+function publishError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+/**
+ * tech-blog 게시 코어 — 정규화 → 영문 번역 → 메타데이터 → Firestore/GCS → SEO 트리거.
+ *
+ * 두 경로가 공유한다:
+ *   · publishToTechBlog (onCall)  — gdoc-fixer UI 의 수퍼관리자 게시
+ *   · blogAgent (onRequest)       — 외부에서 MD 를 받아 자동 게시하는 API
+ *
+ * @param {object} opts
+ * @param {string} opts.html         게시할 HTML (인라인 스타일로 자립한 상태여야 함)
+ * @param {string} [opts.name]       제목 힌트 (메타데이터 추출이 우선)
+ * @param {string} opts.publishedBy  게시 주체 식별자 (uid 또는 API 클라이언트명)
+ * @param {string} [opts.sourceApp]  출처 표기
+ */
+async function runTechBlogPublish({ html, name, publishedBy, sourceApp = 'gdoc-fixer' }) {
     if (!html || typeof html !== 'string') {
-      throw new HttpsError('invalid-argument', 'html 문자열이 필요합니다.');
+      throw publishError('invalid-argument', 'html 문자열이 필요합니다.');
     }
     const inputBytes = Buffer.byteLength(html, 'utf-8');
     if (inputBytes > MAX_INPUT_BYTES) {
-      throw new HttpsError(
+      throw publishError(
         'invalid-argument',
         `문서가 너무 큽니다 (현재 ${(inputBytes / 1024).toFixed(0)}KB, 한도 ${MAX_INPUT_BYTES / 1024}KB).`
       );
@@ -493,7 +507,7 @@ exports.publishToTechBlog = onCall(
     // 큰 본문도 토큰 한도 영향 없이 안전하게 변환.
     const normalizedHtml = normalizeHtmlDeterministic(html);
     if (!/^<article\b/i.test(normalizedHtml.trim())) {
-      throw new HttpsError('internal', '정규화 결과가 article 로 시작하지 않습니다.');
+      throw publishError('internal', '정규화 결과가 article 로 시작하지 않습니다.');
     }
 
     // 1. Translate normalized Ko → En
@@ -503,7 +517,7 @@ exports.publishToTechBlog = onCall(
     try {
       englishHtml = await translateInChunks(normalizedHtml, apiKey);
     } catch (err) {
-      throw new HttpsError('internal', `번역 실패: ${err.message}`);
+      throw publishError('internal', `번역 실패: ${err.message}`);
     }
 
     // 2. Extract metadata via Flash
@@ -546,7 +560,7 @@ Output JSON only, no preamble or code fence:`;
       meta = JSON.parse(stripCodeFence(metaRaw));
     } catch (err) {
       console.error('Metadata extraction failed. Raw response:', metaRaw.slice(0, 500));
-      throw new HttpsError(
+      throw publishError(
         'internal',
         `메타데이터 생성 실패: ${err.message} (raw: ${metaRaw.slice(0, 200)})`
       );
@@ -582,7 +596,7 @@ Output JSON only, no preamble or code fence:`;
         );
         contentField = {}; // Firestore inline 비움
       } catch (err) {
-        throw new HttpsError('internal', `GCS 업로드 실패: ${err.message}`);
+        throw publishError('internal', `GCS 업로드 실패: ${err.message}`);
       }
     } else {
       contentField = { ko: wrappedKo, en: wrappedEn };
@@ -598,13 +612,13 @@ Output JSON only, no preamble or code fence:`;
       lastUpdated: now.toISOString().slice(0, 10),
       createdAt: now.toISOString(),
       type: 'firestore-content',
-      publishedBy: request.auth.uid,
-      sourceApp: 'gdoc-fixer',
+      publishedBy,
+      sourceApp,
     };
 
     const sizeBytes = approxByteSize(doc);
     if (sizeBytes > MAX_DOC_BYTES) {
-      throw new HttpsError(
+      throw publishError(
         'resource-exhausted',
         `문서가 Firestore 한도를 초과합니다 (현재 ${(sizeBytes / 1024).toFixed(0)}KB, 한도 ${MAX_DOC_BYTES / 1024}KB).`
       );
@@ -614,7 +628,7 @@ Output JSON only, no preamble or code fence:`;
       const techBlogDb = getTechBlogDb();
       await techBlogDb.collection(TECH_BLOG_COLLECTION).doc(docId).set(doc);
     } catch (err) {
-      throw new HttpsError('internal', `tech-blog Firestore 쓰기 실패: ${err.message}`);
+      throw publishError('internal', `tech-blog Firestore 쓰기 실패: ${err.message}`);
     }
 
     const seoDispatched = await triggerSeoBuild(GITHUB_DISPATCH_TOKEN.value(), docId);
@@ -626,5 +640,35 @@ Output JSON only, no preamble or code fence:`;
       sizeBytes,
       seoDispatched,
     };
+}
+
+exports.runTechBlogPublish = runTechBlogPublish;
+// blogAgent 가 생성 이미지(data URI)를 올릴 때 같은 버킷/자격증명을 재사용한다.
+exports.getGcsBucket = getGcsBucket;
+exports.TECH_BLOG_SECRETS = TECH_BLOG_SECRETS;
+exports.TECH_BLOG_SITE = TECH_BLOG_SITE;
+
+// gdoc-fixer UI 에서 호출하는 기존 진입점 — 동작은 그대로.
+exports.publishToTechBlog = onCall(
+  {
+    secrets: TECH_BLOG_SECRETS,
+    timeoutSeconds: 1200,
+    memory: '1GiB',
+  },
+  async (request) => {
+    if (!(await isAuthorizedAdmin(request.auth))) {
+      throw new HttpsError('permission-denied', '관리자 권한이 필요합니다.');
+    }
+    const { html, name } = request.data || {};
+    try {
+      return await runTechBlogPublish({
+        html,
+        name,
+        publishedBy: request.auth.uid,
+        sourceApp: 'gdoc-fixer',
+      });
+    } catch (err) {
+      throw new HttpsError(err.code || 'internal', err.message);
+    }
   }
 );
