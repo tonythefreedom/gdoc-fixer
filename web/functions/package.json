@@ -2,7 +2,7 @@
   "name": "gdoc-fixer-functions",
   "main": "index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.22.0",
