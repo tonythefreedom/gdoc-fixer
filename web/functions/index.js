@@ -23,6 +23,7 @@ const hwpxAgent = require('./hwpxAgent');
 exports.hwpxFill = hwpxAgent.hwpxFill;       // 양식 + MD → 알아서 채움 (Gemini)
 exports.hwpxInspect = hwpxAgent.hwpxInspect; // 양식 구조 조회 (직접 제어용)
 exports.hwpxApply = hwpxAgent.hwpxApply;     // 단락 배열 직접 적용 (LLM 미사용)
+exports.hwpxExpandRows = hwpxAgent.hwpxExpandRows; // 표 행 복제
 
 function escapeHtml(str) {
   return String(str)

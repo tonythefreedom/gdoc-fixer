@@ -287,3 +287,156 @@ export async function applyParagraphsToHwpx(bytes, paragraphs, originalXmls = []
   }
   return await out.generateAsync({ type: 'uint8array' });
 }
+
+/**
+ * 태그의 여는/닫는 짝을 세어 영역의 끝을 찾는다. 중첩된 표/행을 건너뛰기 위해 필요하다.
+ * @returns 닫는 태그 바로 뒤 인덱스
+ */
+function findMatchingEnd(xml, tag, startIdx) {
+  const re = new RegExp(`<(/?)${tag}\\b[^>]*?(/?)>`, 'g');
+  re.lastIndex = startIdx;
+  let depth = 0;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    if (m[2] === '/') continue; // self-closing
+    depth += m[1] === '/' ? -1 : 1;
+    if (depth === 0) return re.lastIndex;
+  }
+  return -1;
+}
+
+/** 한 표(<hp:tbl>…</hp:tbl>) 안의 **직계** <hp:tr> 영역들을 찾는다. */
+function findDirectRows(tableXml) {
+  const rows = [];
+  const openRe = /<hp:tr\b[^>]*?>/g;
+  let m;
+  while ((m = openRe.exec(tableXml)) !== null) {
+    // 이 tr 이 중첩 표 안에 있으면 건너뛴다.
+    // tableXml 은 이 표의 여는 태그로 시작하므로, 직계 행은 열린 표가 정확히 1개인 지점에 있다.
+    const before = tableXml.slice(0, m.index);
+    const opens = (before.match(/<hp:tbl\b[^>]*?[^/]>/g) || []).length;
+    const closes = (before.match(/<\/hp:tbl>/g) || []).length;
+    if (opens - closes !== 1) continue; // 중첩 표 내부
+    const end = findMatchingEnd(tableXml, 'hp:tr', m.index);
+    if (end === -1) continue;
+    rows.push({ start: m.index, end, xml: tableXml.slice(m.index, end) });
+    openRe.lastIndex = end;
+  }
+  return rows;
+}
+
+/**
+ * 양식 표의 행을 복제해 늘린다.
+ *
+ * 양식은 데이터 행이 2~3개로 고정돼 있는데 채울 항목은 그보다 많은 경우가 흔하다.
+ * 행을 복제해 두면 이후 applyParagraphsToHwpx 로 각 칸을 채울 수 있다.
+ *
+ * 복제본은 서식·셀 폭·테두리를 원본 행에서 그대로 물려받는다. 복제 후에는 표 전체의
+ * cellAddr/rowAddr 을 0부터 다시 매기고 rowCnt 를 갱신한다 — 이 값이 어긋나면 한컴이
+ * 표를 깨진 것으로 본다.
+ *
+ * @param {Uint8Array|Buffer} bytes 원본 HWPX
+ * @param {Array<{table:number,row:number,count:number}>} expansions
+ *        table/row 는 extractParagraphsFromHwpx 가 준 인덱스. count 는 **추가할** 행 수.
+ * @returns {Promise<Uint8Array>} 행이 늘어난 HWPX
+ */
+export async function duplicateTableRows(bytes, expansions) {
+  if (!Array.isArray(expansions) || expansions.length === 0) {
+    throw new Error('expansions 가 비어 있습니다.');
+  }
+  const zip = await JSZip.loadAsync(bytes);
+  const sec = zip.file(SECTION_PATH);
+  if (!sec) throw new Error('HWPX section0.xml 을 찾을 수 없습니다.');
+  let xml = await sec.async('string');
+
+  // 표 영역 수집 (문서 순서 = extract 의 table index 와 동일)
+  const tables = [];
+  const tblOpenRe = /<hp:tbl\b[^>]*?>/g;
+  let tm;
+  while ((tm = tblOpenRe.exec(xml)) !== null) {
+    const before = xml.slice(0, tm.index);
+    const opens = (before.match(/<hp:tbl\b[^>]*?[^/]>/g) || []).length;
+    const closes = (before.match(/<\/hp:tbl>/g) || []).length;
+    if (opens !== closes) continue; // 중첩 표는 별도 index 를 받지만 여기선 최상위만 처리
+    const end = findMatchingEnd(xml, 'hp:tbl', tm.index);
+    if (end === -1) continue;
+    tables.push({ start: tm.index, end });
+    tblOpenRe.lastIndex = end;
+  }
+
+  // 인덱스가 밀리지 않도록 뒤에서부터 적용
+  const sorted = [...expansions].sort((a, b) => (b.table ?? 0) - (a.table ?? 0));
+  const applied = [];
+
+  for (const exp of sorted) {
+    const tIdx = exp.table ?? 0;
+    const count = Math.max(0, parseInt(exp.count, 10) || 0);
+    if (count === 0) continue;
+    const t = tables[tIdx];
+    if (!t) throw new Error(`표 ${tIdx} 를 찾을 수 없습니다 (문서에 표 ${tables.length}개).`);
+
+    let tableXml = xml.slice(t.start, t.end);
+    const rows = findDirectRows(tableXml);
+    if (rows.length === 0) throw new Error(`표 ${tIdx} 에 행이 없습니다.`);
+
+    const rIdx = exp.row != null ? exp.row : rows.length - 1;
+    if (rIdx < 0 || rIdx >= rows.length) {
+      throw new Error(`표 ${tIdx} 의 행 ${rIdx} 를 찾을 수 없습니다 (행 ${rows.length}개).`);
+    }
+
+    // 행 XML 배열을 만들어 복제본을 끼워 넣는다
+    const rowXmls = rows.map((r) => r.xml);
+    const template = rowXmls[rIdx];
+    rowXmls.splice(rIdx + 1, 0, ...Array.from({ length: count }, () => template));
+
+    // rowAddr 을 0부터 다시 매긴다 (복제로 어긋난 주소를 일괄 정정)
+    const renumbered = rowXmls.map((rx, i) =>
+      rx.replace(/(<hp:cellAddr\b[^>]*?\browAddr=")\d+(")/g, `$1${i}$2`)
+    );
+
+    // 표 XML 재조립: 첫 행 앞 + 행들 + 마지막 행 뒤
+    const head = tableXml.slice(0, rows[0].start);
+    const tail = tableXml.slice(rows[rows.length - 1].end);
+    tableXml = head + renumbered.join('\n      ') + tail;
+
+    // rowCnt 갱신 — 없으면 추가하지 않는다(양식이 안 쓰는 경우도 있다)
+    tableXml = tableXml.replace(
+      /(<hp:tbl\b[^>]*?\browCnt=")(\d+)(")/,
+      (_m, a, _n, c) => `${a}${renumbered.length}${c}`
+    );
+
+    xml = xml.slice(0, t.start) + tableXml + xml.slice(t.end);
+    applied.push({ table: tIdx, row: rIdx, added: count, rows: renumbered.length });
+  }
+
+  const out = await rebuildHwpxZip(zip, { [SECTION_PATH]: xml });
+  out.expansions = applied;
+  return out;
+}
+
+/**
+ * HWPX ZIP 을 규칙에 맞게 다시 만든다.
+ *
+ * HWPX 는 OPC 표준이라 mimetype 이 **첫 entry + 비압축(STORE)** 이어야 한컴이 인식한다.
+ * JSZip 기본 generateAsync 는 전부 같은 압축으로 묶고 디렉터리 entry 도 자동 추가해
+ * 표준을 위반하므로, 순서·압축·디렉터리를 직접 통제한다.
+ *
+ * @param {JSZip} zip 원본 zip
+ * @param {Record<string,string>} replacements 경로 → 새 내용
+ */
+async function rebuildHwpxZip(zip, replacements = {}) {
+  const out = new JSZip();
+  const mimeFile = zip.file('mimetype');
+  if (!mimeFile) throw new Error('HWPX mimetype entry 가 없습니다.');
+  out.file('mimetype', await mimeFile.async('uint8array'), {
+    compression: 'STORE',
+    createFolders: false,
+  });
+  for (const [name, file] of Object.entries(zip.files)) {
+    if (name === 'mimetype' || file.dir) continue;
+    const data =
+      replacements[name] != null ? replacements[name] : await file.async('uint8array');
+    out.file(name, data, { compression: 'DEFLATE', createFolders: false });
+  }
+  return out.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+}

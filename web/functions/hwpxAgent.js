@@ -14,8 +14,9 @@
  * 위 /fill 은 "알아서 채워주는" 편의 경로다. 호출하는 쪽이 이미 LLM(예: Claude)이라면
  * 안에서 Gemini 를 한 번 더 부를 이유가 없으므로, 직접 제어용 저수준 경로를 함께 연다:
  *
- *   POST /api/hwpx/inspect  양식 구조(단락·표·안내문)를 JSON 으로 본다
- *   POST /api/hwpx/apply    내가 만든 단락 배열을 그대로 적용해 HWPX 를 받는다
+ *   POST /api/hwpx/inspect      양식 구조(단락·표·안내문)를 JSON 으로 본다
+ *   POST /api/hwpx/expand-rows  표 행이 모자랄 때 복제해 늘린다
+ *   POST /api/hwpx/apply        내가 만든 단락 배열을 그대로 적용해 HWPX 를 받는다
  *
  * inspect → (호출자가 판단) → apply 순서로 쓰면 채울 내용을 전적으로 호출자가 정한다.
  */
@@ -266,7 +267,7 @@ exports.hwpxInspect = onRequest(
           plainText:
             'HWP 단락은 평문입니다. 마크다운(**, ##, -, |)이나 HTML 태그를 넣으면 글자 그대로 보입니다. 굵기·크기는 양식의 서식이 결정합니다.',
           noNewParagraphs:
-            '단락을 늘리거나 줄일 수 없습니다. 표 행 추가도 불가능하니, 항목이 많으면 한 단락 안에서 줄바꿈 없이 이어 쓰세요.',
+            '본문 단락은 늘리거나 줄일 수 없습니다. 항목이 많으면 한 단락 안에서 이어 쓰세요. 표 행이 모자라면 /api/hwpx/expand-rows 로 먼저 늘린 뒤 다시 inspect 하세요.',
         },
         paragraphs,
         tables: paras.tables || [],
@@ -373,6 +374,89 @@ exports.hwpxApply = onRequest(
     } catch (err) {
       console.error('[hwpxApply] 실패:', err.message);
       res.status(500).json({ ok: false, error: err.message });
+    }
+  }
+);
+
+
+/**
+ * POST /api/hwpx/expand-rows — 표 행을 복제해 늘린다.
+ *
+ * 양식의 데이터 행은 2~3개로 고정인데 채울 항목이 그보다 많을 때 쓴다.
+ * 행이 늘면 단락 인덱스가 전부 바뀌므로, 응답을 받은 뒤 inspect 를 다시 호출해
+ * 새 구조로 paragraphs 배열을 만들어야 한다.
+ */
+exports.hwpxExpandRows = onRequest(
+  { secrets: [BLOG_AGENT_API_KEY], timeoutSeconds: 120, memory: '1GiB', cors: false },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ ok: false, error: 'POST 만 허용됩니다.' });
+      return;
+    }
+    if (!isAuthorized(req)) {
+      res.status(401).json({ ok: false, error: 'x-api-key 인증에 실패했습니다.' });
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = await parseMultipart(req);
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err.message });
+      return;
+    }
+
+    const { files, fields } = parsed;
+    const template = files.template;
+    if (!template || template.buffer.length === 0) {
+      res.status(400).json({ ok: false, error: '양식 파일(template)이 필요합니다.' });
+      return;
+    }
+
+    const rawExp = files.expansions
+      ? files.expansions.buffer.toString('utf-8')
+      : String(fields.expansions || '');
+    if (!rawExp.trim()) {
+      res.status(400).json({
+        ok: false,
+        error: 'expansions 가 필요합니다. 예: [{"table":0,"row":2,"count":5}]',
+      });
+      return;
+    }
+
+    let expansions;
+    try {
+      expansions = JSON.parse(rawExp);
+    } catch (err) {
+      res.status(400).json({ ok: false, error: `expansions JSON 파싱 실패: ${err.message}` });
+      return;
+    }
+    if (!Array.isArray(expansions) || expansions.length === 0) {
+      res.status(400).json({ ok: false, error: 'expansions 는 비어 있지 않은 배열이어야 합니다.' });
+      return;
+    }
+
+    try {
+      const { duplicateTableRows, extractParagraphsFromHwpx } = await import('./shared/hwpxText.mjs');
+      const before = await extractParagraphsFromHwpx(template.buffer);
+      const bytes = await duplicateTableRows(template.buffer, expansions);
+      const after = await extractParagraphsFromHwpx(bytes);
+
+      const filename = deriveFilename('', fields.filename || template.filename?.replace(/\.hwpx$/i, ''));
+      console.log(
+        `[hwpxExpandRows] 단락 ${before.length} → ${after.length}, ` +
+          `표 ${JSON.stringify(after.tables.map((t) => t.rows))}`
+      );
+
+      res.set('Content-Type', 'application/haansofthwpx');
+      res.set('Content-Disposition', contentDisposition(filename));
+      res.set('X-Hwpx-Paragraphs-Before', String(before.length));
+      res.set('X-Hwpx-Paragraphs', String(after.length));
+      res.set('X-Hwpx-Table-Rows', after.tables.map((t) => t.rows).join(','));
+      res.status(200).send(Buffer.from(bytes));
+    } catch (err) {
+      console.error('[hwpxExpandRows] 실패:', err.message);
+      res.status(400).json({ ok: false, error: err.message });
     }
   }
 );

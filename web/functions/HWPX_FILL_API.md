@@ -8,6 +8,7 @@
 | 메서드 | 경로 | 용도 |
 |--------|------|------|
 | `POST` | `/api/hwpx/inspect` | 양식 구조(단락·표·안내문)를 JSON 으로 본다 |
+| `POST` | `/api/hwpx/expand-rows` | 표 행이 모자랄 때 복제해 늘린다 |
 | `POST` | `/api/hwpx/apply` | 내가 만든 단락 배열을 그대로 적용해 HWPX 를 받는다 |
 | `POST` | `/api/hwpx/fill` | 양식 + 마크다운만 주면 Gemini 가 알아서 채운다 |
 
@@ -69,6 +70,34 @@ curl -X POST "https://docs.prototypebench.org/api/hwpx/inspect" \
 `text` 가 `제목을 여기에`, `본문 자리`, `○○○` 처럼 **채워 넣으라는 빈칸**인지,
 `항목`, `작성일자:`, `1. 사업 개요` 처럼 **유지해야 할 항목명**인지는 호출자가 판단한다.
 
+## 중간 단계 — 표 행이 모자랄 때
+
+양식의 데이터 행은 보통 2~3개로 고정인데 채울 항목은 그보다 많다. 행을 먼저 늘린 뒤 채운다.
+
+```bash
+curl -X POST "https://docs.prototypebench.org/api/hwpx/expand-rows" \
+  -H "x-api-key: $BLOG_API_KEY" \
+  -F "template=@양식.hwpx" \
+  -F 'expansions=[{"table":0,"row":2,"count":5}]' \
+  -o 확장된_양식.hwpx
+```
+
+`table`/`row` 는 inspect 가 준 인덱스이고 `count` 는 **추가할** 행 수다. 지정한 행을 그 수만큼
+복제해 바로 뒤에 넣는다. 복제본은 원본 행의 서식·셀 폭·테두리를 그대로 물려받는다.
+`row` 를 생략하면 마지막 행을 복제한다. 머리글이 아니라 **데이터 행**을 지정해야 한다.
+
+```
+X-Hwpx-Paragraphs-Before: 12   ← 늘리기 전 단락 수
+X-Hwpx-Paragraphs: 21          ← 늘린 뒤 단락 수
+X-Hwpx-Table-Rows: 6           ← 표별 행 수
+```
+
+**행이 늘면 단락 인덱스가 전부 바뀐다.** 확장된 파일로 `inspect` 를 다시 호출해 새 구조를 받고,
+그 개수에 맞춰 `apply` 한다. 즉 순서는 inspect → expand-rows → inspect → apply 가 된다.
+
+복제 후 표 전체의 `cellAddr`/`rowAddr` 을 0부터 다시 매기고 `rowCnt` 를 갱신한다.
+이 값이 어긋나면 한컴이 표를 깨진 것으로 보기 때문이다.
+
 ## 2단계 — 채워서 되돌려받기
 
 `paragraphs` 는 JSON 문자열 배열이고, 길이는 `paragraphCount` 와 정확히 같아야 한다.
@@ -120,8 +149,9 @@ curl -X POST "https://docs.prototypebench.org/api/hwpx/fill" \
 
 ## 제약
 
-- **단락이 늘거나 줄지 않는다.** 양식에 단락이 10개면 결과도 10개다. 마크다운에 항목이 더 많아도
-  새 줄이 생기지 않으므로 한 단락 안에 이어 써야 하고, **표 행 추가도 불가능하다.**
+- **단락이 저절로 늘거나 줄지 않는다.** 양식에 단락이 10개면 `apply` 결과도 10개다. 본문 문단은
+  늘릴 수 없으므로 항목이 많으면 한 단락 안에 이어 써야 한다.
+  **표 행만은 `expand-rows` 로 늘릴 수 있다.**
 - **이미지는 양식의 것이 그대로 남는다.** 새 이미지를 넣으려면 HWPX 의 BinData 항목과 참조 XML 을
   다뤄야 해서 별도 작업이다.
 - 양식 파일 8MB, 마크다운 400KB, 단락 배열은 본문 크기 제한 안에서.
@@ -136,7 +166,7 @@ curl -X POST "https://docs.prototypebench.org/api/hwpx/fill" \
 
 ```bash
 cd gdoc-fixer/web
-npx firebase deploy --only functions:hwpxFill,functions:hwpxInspect,functions:hwpxApply
+npx firebase deploy --only functions:hwpxFill,functions:hwpxInspect,functions:hwpxApply,functions:hwpxExpandRows
 npx firebase deploy --only hosting     # /api/hwpx/* rewrite
 ```
 

@@ -58,6 +58,10 @@
         "function": "hwpxApply"
       },
       {
+        "source": "/api/hwpx/expand-rows",
+        "function": "hwpxExpandRows"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
