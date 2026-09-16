@@ -42,10 +42,14 @@ const { safeEqual } = (() => {
   };
 })();
 
-function isAuthorized(req) {
+function extractKey(req) {
   const header = req.get('x-api-key');
   const auth = req.get('authorization') || '';
-  const provided = (header || (auth.match(/^Bearer\s+(.+)$/i) || [])[1] || '').trim();
+  return (header || (auth.match(/^Bearer\s+(.+)$/i) || [])[1] || '').trim();
+}
+
+/** 운영자용 공유 키(시크릿에 설정된 값). 사용자 키와 달리 uid 가 없다. */
+function isSharedKey(provided) {
   if (!provided) return false;
   const configured = (BLOG_AGENT_API_KEY.value() || '')
     .split(',')
@@ -53,6 +57,22 @@ function isAuthorized(req) {
     .filter((k) => k && k !== 'UNSET');
   return configured.some((k) => safeEqual(k, provided));
 }
+
+/**
+ * 호출자를 확인한다.
+ *   · 사용자 API 키(gdk_…) → 그 사용자로 인증
+ *   · 운영 공유 키          → uid 없는 내부 호출로 인증
+ * @returns {Promise<{uid: string|null, via: string} | null>} 실패 시 null
+ */
+async function authenticate(req) {
+  const provided = extractKey(req);
+  if (!provided) return null;
+  if (isSharedKey(provided)) return { uid: null, via: 'shared' };
+  const { resolveApiKey } = require('./apiKeys');
+  const found = await resolveApiKey(provided);
+  return found ? { uid: found.uid, via: `user:${found.name || found.uid}` } : null;
+}
+
 
 /**
  * multipart/form-data 를 파싱한다.
@@ -126,7 +146,8 @@ exports.hwpxFill = onRequest(
       res.status(405).json({ ok: false, error: 'POST 만 허용됩니다.' });
       return;
     }
-    if (!isAuthorized(req)) {
+    const caller = await authenticate(req);
+    if (!caller) {
       res.status(401).json({ ok: false, error: 'x-api-key 인증에 실패했습니다.' });
       return;
     }
@@ -231,7 +252,8 @@ exports.hwpxInspect = onRequest(
       res.status(405).json({ ok: false, error: 'POST 만 허용됩니다.' });
       return;
     }
-    if (!isAuthorized(req)) {
+    const caller = await authenticate(req);
+    if (!caller) {
       res.status(401).json({ ok: false, error: 'x-api-key 인증에 실패했습니다.' });
       return;
     }
@@ -296,7 +318,8 @@ exports.hwpxApply = onRequest(
       res.status(405).json({ ok: false, error: 'POST 만 허용됩니다.' });
       return;
     }
-    if (!isAuthorized(req)) {
+    const caller = await authenticate(req);
+    if (!caller) {
       res.status(401).json({ ok: false, error: 'x-api-key 인증에 실패했습니다.' });
       return;
     }
@@ -404,7 +427,8 @@ exports.hwpxExpandRows = onRequest(
       res.status(405).json({ ok: false, error: 'POST 만 허용됩니다.' });
       return;
     }
-    if (!isAuthorized(req)) {
+    const caller = await authenticate(req);
+    if (!caller) {
       res.status(401).json({ ok: false, error: 'x-api-key 인증에 실패했습니다.' });
       return;
     }

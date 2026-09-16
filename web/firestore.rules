@@ -27,6 +27,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 사용자가 만든 디자인 시스템 — 읽기는 API(Cloud Function)를 통해서만.
+    match /designSystems/{dsId} {
+      allow read, write: if false;
+    }
+
+    // API 키 — 해시만 저장되지만 소유자 매핑이 드러나면 안 된다.
+    // 발급·조회·폐기는 모두 Cloud Function(onCall)이 admin SDK 로 처리한다.
+    match /apiKeys/{keyHash} {
+      allow read, write: if false;
+    }
+
     // 블로그 에이전트 작업 큐 — 외부 API 가 접수하고 Cloud Function 이 처리한다.
     // 원고 전문이 담기므로 클라이언트 접근은 전면 차단 (admin SDK 만 읽고 쓴다).
     match /blogAgentJobs/{jobId} {

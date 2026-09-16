@@ -23,6 +23,23 @@ exports.hwpxInspect = hwpxAgent.hwpxInspect; // 양식 구조 조회 (직접 제
 exports.hwpxApply = hwpxAgent.hwpxApply;     // 단락 배열 직접 적용 (LLM 미사용)
 exports.hwpxExpandRows = hwpxAgent.hwpxExpandRows; // 표 행 복제
 
+// 사용자별 API 키 — 외부 AI 가 사용자를 대신해 호출할 때 쓰는 자격증명
+const apiKeys = require('./apiKeys');
+exports.createApiKey = apiKeys.createApiKey;
+exports.listApiKeys = apiKeys.listApiKeys;
+exports.revokeApiKey = apiKeys.revokeApiKey;
+
+// AI 에이전트 진입점 — 인증 없이 읽는 사용법과 도구 스키마
+const agentGuide = require('./agentGuide');
+exports.agentGuide = agentGuide.agentGuide;
+exports.agentTools = agentGuide.agentTools;
+
+// 게시 API — 사용자의 AI 가 만든 HTML·슬라이드를 URL 로 올린다
+const publishApi = require('./publishApi');
+exports.designSystems = publishApi.designSystems;
+exports.publishPage = publishApi.publishPage;
+exports.publishPresentation = publishApi.publishPresentation;
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')

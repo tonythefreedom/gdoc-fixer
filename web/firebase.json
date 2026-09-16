@@ -58,6 +58,38 @@
         "function": "paddleWebhook"
       },
       {
+        "source": "/api/guide",
+        "function": "agentGuide"
+      },
+      {
+        "source": "/api/tools",
+        "function": "agentTools"
+      },
+      {
+        "source": "/api/design-systems",
+        "function": "designSystems"
+      },
+      {
+        "source": "/api/design-systems/**",
+        "function": "designSystems"
+      },
+      {
+        "source": "/api/pages",
+        "function": "publishPage"
+      },
+      {
+        "source": "/api/pages/**",
+        "function": "publishPage"
+      },
+      {
+        "source": "/api/presentations",
+        "function": "publishPresentation"
+      },
+      {
+        "source": "/api/presentations/**",
+        "function": "publishPresentation"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
