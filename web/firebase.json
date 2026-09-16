@@ -46,6 +46,18 @@
         "function": "blogAgentDelete"
       },
       {
+        "source": "/api/hwpx/fill",
+        "function": "hwpxFill"
+      },
+      {
+        "source": "/api/hwpx/inspect",
+        "function": "hwpxInspect"
+      },
+      {
+        "source": "/api/hwpx/apply",
+        "function": "hwpxApply"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

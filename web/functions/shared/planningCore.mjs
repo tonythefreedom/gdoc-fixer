@@ -162,7 +162,7 @@ async function callGeminiStream({ model, parts, generationConfig, tools, apiKey,
  * 프론트 callProModel 과 같은 역할. 기본 generationConfig 도 프론트와 일치시킨다.
  * 일시적 네트워크 오류는 1s/2s backoff 로 최대 3회 시도.
  */
-async function callProModel(systemPrompt, userText, options = {}, apiKey) {
+export async function callProModel(systemPrompt, userText, options = {}, apiKey) {
   const {
     maxOutputTokens = 32768,
     temperature = 0.7,
