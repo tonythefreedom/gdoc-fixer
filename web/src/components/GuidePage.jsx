@@ -342,7 +342,7 @@ export default function GuidePage() {
               <span className="text-slate-100 font-semibold">차감 시점:</span> AI 호출이 들어가는 액션은 <span className="text-amber-300">사전 차감</span>(잔액 부족 시 작업 차단). 단순 다운로드 / 공유 링크는 <span className="text-amber-300">사후 차감</span>(실패 시 차감 없음).
             </p>
             <p>
-              <span className="text-slate-100 font-semibold">충전:</span> 프로필 페이지의 「코인 충전」 섹션에서 패키지 선택 → 결제. 결제 완료 즉시 잔액 자동 반영 (실시간 동기화).
+              <span className="text-slate-100 font-semibold">충전:</span> 프로필 페이지의 「코인 충전」 섹션에서 패키지 선택 → 결제창에서 바로 결제. 결제 완료 후 몇 초 안에 잔액이 자동 반영됩니다 (실시간 동기화).
             </p>
             <p>
               <span className="text-slate-100 font-semibold">잔액 확인:</span> 헤더 우상단의 코인 칩에 항상 표시됨. 클릭하면 프로필 페이지로 이동해 사용 내역 확인.
@@ -366,7 +366,7 @@ export default function GuidePage() {
               「액션별 코인 비용 / 사용량」 표에서 각 기능을 몇 번 썼는지 누적 통계 확인.
             </StepCard>
             <StepCard n={5} title="코인 충전" icon={<Send className="w-4 h-4 text-emerald-400" />}>
-              「코인 충전」 섹션 → 4 패키지 (체험 / 스타터 / 프로 / 비즈니스) 중 선택 → 안전 결제 페이지로 이동.
+              「코인 충전」 섹션 → 2 패키지 (체험 1,000 coin / 스타터 5,000 coin) 중 선택 → 결제창이 화면 위에 열립니다. 페이지를 벗어나지 않습니다.
             </StepCard>
           </div>
         </Section>
