@@ -24,16 +24,19 @@ You receive:
   1. The form's paragraphs, in order, as a numbered list. Each line is tagged:
      [GUIDE]  — an instruction written by the form's author (italic, coloured).
                 Replace it with the actual content it is asking for.
-     [EMPTY]  — the paragraph has no text. It is structural (a table container,
-                a blank line). It MUST stay empty.
-     [CELL:n] — the paragraph sits inside a table cell that is n HWPUNIT wide.
-                Narrow cells are labels; wide cells are values.
+     [EMPTY]  — an empty paragraph OUTSIDE any table. It is structural (a table
+                container, a blank line). It MUST stay empty.
+     [CELL]   — a table cell that already has text (usually a label or header).
+     [CELL-EMPTY] — a table cell left blank ON PURPOSE. This is a slot to FILL.
+     [W:n]    — the cell is n HWPUNIT wide. Narrow cells are labels; wide cells are values.
      [TEXT]   — ordinary paragraph with existing text.
   2. The user's source document in Markdown.
 
 Rules — these are absolute:
 - Output EXACTLY as many strings as there are input paragraphs, in the same order.
 - [EMPTY] paragraphs MUST be returned as "" (empty string). Never put text in them.
+- [CELL-EMPTY] paragraphs are the opposite: they are blanks waiting for a value. Fill them
+  from the Markdown. Leave "" only when the Markdown genuinely has nothing for that row.
 - [GUIDE] paragraphs: write the content the guide asks for, drawn from the Markdown.
   Do not repeat the guide text itself. If the Markdown has nothing for it, return "".
 - Decide for each [TEXT] paragraph whether it is a PLACEHOLDER or a FIXED LABEL:
@@ -56,12 +59,14 @@ Rules — these are absolute:
 Return JSON: an array of strings, nothing else.`;
 
 /** 단락 하나를 LLM 에게 보여줄 한 줄로 만든다. */
-function describeParagraph(text, index, isGuide, width) {
+function describeParagraph(text, index, isGuide, width, inCell) {
   const tags = [];
-  if (!text) tags.push('EMPTY');
+  // 표 안의 빈 칸은 채우라고 비워둔 자리이고, 표 밖의 빈 단락은 구조다. 구분해서 알린다.
+  if (inCell) tags.push(text ? 'CELL' : 'CELL-EMPTY');
+  else if (!text) tags.push('EMPTY');
   else if (isGuide) tags.push('GUIDE');
   else tags.push('TEXT');
-  if (width != null && width < PAGE_WIDTH) tags.push(`CELL:${width}`);
+  if (width != null && width < PAGE_WIDTH) tags.push(`W:${width}`);
   return `${index}. [${tags.join('][')}] ${text || ''}`;
 }
 
@@ -70,15 +75,15 @@ function describeParagraph(text, index, isGuide, width) {
  * 모자라면 원본을 그대로 두고, 넘치면 버린다 — 개수가 어긋나면 apply 가 실패하므로
  * 게시 자체를 못 하게 두는 것보다 원본 유지가 낫다.
  */
-function fitToLength(filled, original) {
-  const out = original.map((orig, i) => {
+function fitToLength(filled, original, cells = {}) {
+  return original.map((orig, i) => {
     const v = filled[i];
     if (typeof v !== 'string') return orig; // 누락 → 원본 유지
-    // 구조용 빈 단락에 글자가 들어오면 되돌린다 (레이아웃 보호)
-    if (orig === '' && v !== '') return '';
+    // 표 밖의 구조용 빈 단락에 글자가 들어오면 되돌린다 (레이아웃 보호).
+    // 표 안의 빈 칸은 채우라고 있는 자리이므로 건드리지 않는다.
+    if (orig === '' && !cells[i] && v !== '') return '';
     return v;
   });
-  return out;
 }
 
 /**
@@ -96,12 +101,13 @@ export async function fillHwpxTemplate({ templateBytes, markdown, callModel, onS
   }
 
   const { isGuide = [], widths = [] } = paragraphs;
+  const cells = paragraphs.cells || {};
   const listing = paragraphs
-    .map((t, i) => describeParagraph(t, i, isGuide[i], widths[i]))
+    .map((t, i) => describeParagraph(t, i, isGuide[i], widths[i], !!cells[i]))
     .join('\n');
 
   const guideCount = isGuide.filter(Boolean).length;
-  const emptyCount = paragraphs.filter((t) => !t).length;
+  const emptyCount = paragraphs.filter((t, i) => !t && !cells[i]).length;
   onStep('filling', { paragraphs: paragraphs.length, guides: guideCount, empty: emptyCount });
 
   const userText = `Form paragraphs (${paragraphs.length} total — return exactly ${paragraphs.length} strings):
@@ -130,7 +136,7 @@ ${markdown}`;
     throw new Error('양식 채우기 응답이 배열이 아닙니다.');
   }
 
-  const adjusted = fitToLength(filled, Array.from(paragraphs));
+  const adjusted = fitToLength(filled, Array.from(paragraphs), cells);
   const mismatch = filled.length !== paragraphs.length;
   if (mismatch) {
     console.warn(
