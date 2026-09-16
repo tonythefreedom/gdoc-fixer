@@ -36,6 +36,9 @@ const BLOG_AGENT_API_KEY = defineSecret('BLOG_AGENT_API_KEY');
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
 const JOBS_COLLECTION = 'blogAgentJobs';
+// 정식 도메인. gdoc-fixer.web.app / firebaseapp.com 으로 들어와도 같은 사이트가 서빙된다.
+const PRIMARY_HOST = 'docs.prototypebench.org';
+const KNOWN_HOSTS = new Set([PRIMARY_HOST, 'gdoc-fixer.web.app', 'gdoc-fixer.firebaseapp.com']);
 // 접수 함수가 워커를 깨울 때 쓰는 주소. 리전은 두 함수 모두 us-central1 고정.
 const WORKER_URL = `https://us-central1-${process.env.GCLOUD_PROJECT || 'gdoc-fixer'}.cloudfunctions.net/blogAgentWorker`;
 // 워커를 깨우고 응답을 기다리는 최대 시간. 파이프라인은 이보다 훨씬 오래 걸리므로
@@ -292,6 +295,15 @@ async function runBlogAgentJob(jobId, job, update) {
   return result;
 }
 
+/**
+ * 응답에 실어 줄 base URL. 호출자가 쓴 도메인을 그대로 돌려주되,
+ * host 헤더는 임의로 위조될 수 있으므로 아는 도메인일 때만 사용한다.
+ */
+function publicBase(req) {
+  const host = (req.get('host') || '').toLowerCase();
+  return `https://${KNOWN_HOSTS.has(host) ? host : PRIMARY_HOST}`;
+}
+
 /** 완료 통지 — 실패해도 job 결과에는 영향을 주지 않는다. */
 async function notifyCallback(job, body) {
   if (!job.callbackUrl) return;
@@ -419,7 +431,7 @@ exports.blogAgentPublish = onRequest(
       ok: true,
       jobId: ref.id,
       status: 'queued',
-      statusUrl: `https://gdoc-fixer.web.app/api/blog/jobs/${ref.id}`,
+      statusUrl: `${publicBase(req)}/api/blog/jobs/${ref.id}`,
       message: '접수되었습니다. 게시까지 보통 5~20분 걸립니다.',
     });
   }

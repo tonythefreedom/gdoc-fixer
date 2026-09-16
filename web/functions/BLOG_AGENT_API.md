@@ -13,9 +13,12 @@ gdoc-fixer 프론트엔드에서 사람이 직접 기획안을 만들 때와 **�
 
 | 메서드 | 경로 | 용도 |
 |--------|------|------|
-| `POST` | `https://gdoc-fixer.web.app/api/blog/publish` | 원고 접수 |
-| `GET`  | `https://gdoc-fixer.web.app/api/blog/jobs/{jobId}` | 진행 상황 조회 |
-| `DELETE` | `https://gdoc-fixer.web.app/api/blog/posts/{techBlogId}` | 게시된 글 내리기 |
+| `POST` | `https://docs.prototypebench.org/api/blog/publish` | 원고 접수 |
+| `GET`  | `https://docs.prototypebench.org/api/blog/jobs/{jobId}` | 진행 상황 조회 |
+| `DELETE` | `https://docs.prototypebench.org/api/blog/posts/{techBlogId}` | 게시된 글 내리기 |
+
+`https://gdoc-fixer.web.app` 과 `https://gdoc-fixer.firebaseapp.com` 도 같은 사이트를 서빙하므로
+그대로 쓸 수 있다. 위 주소가 정식 도메인이다.
 
 인증은 두 방식 모두 지원한다. 헤더에 키를 실어 보낸다.
 
@@ -66,7 +69,7 @@ Authorization: Bearer <BLOG_AGENT_API_KEY>
 원고만 통째로 보내는 것도 된다. 이때 옵션은 쿼리스트링으로 준다.
 
 ```bash
-curl -X POST "https://gdoc-fixer.web.app/api/blog/publish?generateImages=false" \
+curl -X POST "https://docs.prototypebench.org/api/blog/publish?generateImages=false" \
   -H "x-api-key: $BLOG_AGENT_API_KEY" \
   -H "Content-Type: text/markdown" \
   --data-binary @article.md
@@ -79,7 +82,7 @@ curl -X POST "https://gdoc-fixer.web.app/api/blog/publish?generateImages=false" 
   "ok": true,
   "jobId": "8fK2mQ...",
   "status": "queued",
-  "statusUrl": "https://gdoc-fixer.web.app/api/blog/jobs/8fK2mQ...",
+  "statusUrl": "https://docs.prototypebench.org/api/blog/jobs/8fK2mQ...",
   "message": "접수되었습니다. 게시까지 보통 5~20분 걸립니다."
 }
 ```
@@ -90,7 +93,7 @@ curl -X POST "https://gdoc-fixer.web.app/api/blog/publish?generateImages=false" 
 
 ```bash
 curl -H "x-api-key: $BLOG_AGENT_API_KEY" \
-  https://gdoc-fixer.web.app/api/blog/jobs/8fK2mQ...
+  https://docs.prototypebench.org/api/blog/jobs/8fK2mQ...
 ```
 
 ```json
@@ -129,7 +132,7 @@ planning → generating-images → composing → uploading-images
 
 ```bash
 jq -Rs '{markdown: ., replaceId: "why-ai-dance-video-hands-break-2chzc0"}' fixed.md \
-| curl -X POST "https://gdoc-fixer.web.app/api/blog/publish" \
+| curl -X POST "https://docs.prototypebench.org/api/blog/publish" \
     -H "x-api-key: $BLOG_API_KEY" -H "Content-Type: application/json" -d @-
 ```
 
@@ -147,7 +150,7 @@ jq -Rs '{markdown: ., replaceId: "why-ai-dance-video-hands-break-2chzc0"}' fixed
 ## 게시된 글 내리기
 
 ```bash
-curl -X DELETE "https://gdoc-fixer.web.app/api/blog/posts/{techBlogId}" \
+curl -X DELETE "https://docs.prototypebench.org/api/blog/posts/{techBlogId}" \
   -H "x-api-key: $BLOG_API_KEY"
 ```
 
