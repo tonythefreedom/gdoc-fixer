@@ -7,10 +7,8 @@ const db = admin.firestore();
 exports.publishToTechBlog = require('./publishToTechBlog').publishToTechBlog;
 exports.publishToCommunity = require('./publishToCommunity').publishToCommunity;
 exports.publishToLinkedIn = require('./publishToLinkedIn').publishToLinkedIn;
-const coinCheckout = require('./coinCheckout');
-// createCoinCheckout 은 share URL 방식으로 전환 후 미사용 — export 제거로
-// 미사용 secrets(LEMONSQUEEZY_API_KEY/STORE_ID/VARIANTS) 요구 없음.
-exports.lemonsqueezyWebhook = coinCheckout.lemonsqueezyWebhook;
+// 결제는 Paddle 로 전환했다 (LemonSqueezy 제거).
+exports.paddleWebhook = require('./paddleWebhook').paddleWebhook;
 exports.welcomeEmail = require('./welcomeEmail').welcomeEmail;
 // 커스텀 블로그 작성 에이전트 — 외부 API 로 받은 MD 를 tech-blog 에 자동 게시
 const blogAgent = require('./blogAgent');

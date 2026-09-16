@@ -22,14 +22,6 @@
         "function": "presentationOg"
       },
       {
-        "source": "/api/coin-checkout",
-        "function": "createCoinCheckout"
-      },
-      {
-        "source": "/api/lemonsqueezy-webhook",
-        "function": "lemonsqueezyWebhook"
-      },
-      {
         "source": "/api/welcome-email",
         "function": "welcomeEmail"
       },
@@ -60,6 +52,10 @@
       {
         "source": "/api/hwpx/expand-rows",
         "function": "hwpxExpandRows"
+      },
+      {
+        "source": "/api/paddle-webhook",
+        "function": "paddleWebhook"
       },
       {
         "source": "**",

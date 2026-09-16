@@ -16,9 +16,8 @@ import { ACTION_COSTS, ACTION_LABELS, INITIAL_COIN_GRANT } from '../utils/coin';
 import { uploadBlobToGcs, dataUriToBlob } from '../store/storage';
 
 // 가격 정책: 100 coin = $1. functions/coinCheckout.js 의 COIN_PACKAGES 와 동기화.
-// Lemon Squeezy 결제 URL. 각 variant 별 직접 buy / share URL.
-// uid / email / coins 는 checkout[custom][...] query param 으로 주입되어
-// webhook(order_created) 의 meta.custom_data 에 도달.
+// Paddle 오버레이 체크아웃. uid/coins 는 customData 로 넘어가 webhook
+// (transaction.completed) 의 data.custom_data 에 그대로 도착한다.
 const COIN_PACKAGES = [
   {
     key: 1000,
@@ -26,7 +25,7 @@ const COIN_PACKAGES = [
     usd: 10,
     label: '체험',
     highlight: false,
-    checkoutUrl: 'https://app.lemonsqueezy.com/share/1185899',
+    priceId: import.meta.env.VITE_PADDLE_PRICE_1000,
   },
   {
     key: 5000,
@@ -34,7 +33,7 @@ const COIN_PACKAGES = [
     usd: 50,
     label: '스타터',
     highlight: true,
-    checkoutUrl: 'https://gdoc-fixer.lemonsqueezy.com/checkout/buy/532df188-8a58-4301-96c2-5340eb15b189',
+    priceId: import.meta.env.VITE_PADDLE_PRICE_5000,
   },
 ];
 
@@ -59,7 +58,8 @@ export default function ProfilePage() {
   const [chargingPkg, setChargingPkg] = useState(null);
   const [chargeBanner, setChargeBanner] = useState(null);
 
-  // Stripe Checkout 에서 돌아온 후 ?charge=success / cancel 처리
+  // 예전 리다이렉트 결제(?charge=success)로 돌아오는 링크가 남아 있을 수 있어 그대로 둔다.
+  // Paddle 오버레이는 페이지를 벗어나지 않으므로 평소에는 타지 않는 경로다.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const charge = params.get('charge');
@@ -78,7 +78,7 @@ export default function ProfilePage() {
     window.history.replaceState({}, '', newUrl);
   }, []);
 
-  const handleCharge = (pkg) => {
+  const handleCharge = async (pkg) => {
     if (chargingPkg) return;
     const u = auth.currentUser;
     if (!u?.uid) {
@@ -86,18 +86,24 @@ export default function ProfilePage() {
       return;
     }
     setChargingPkg(pkg.key);
-    // Lemon Squeezy Share URL 로 직접 redirect. checkout[custom][*] 가 webhook
-    // (order_created) 의 meta.custom_data 로 forward 되어 자동 코인 충전.
-    const params = new URLSearchParams();
-    if (u.email) params.set('checkout[email]', u.email);
-    params.set('checkout[custom][uid]', u.uid);
-    params.set('checkout[custom][coins]', String(pkg.coins));
-    params.set('checkout[custom][packageKey]', String(pkg.key));
-    params.set(
-      'checkout[success_url]',
-      `${window.location.origin}${window.location.pathname}?charge=success&coins=${pkg.coins}`
-    );
-    window.location.href = `${pkg.checkoutUrl}?${params.toString()}`;
+    setChargeBanner(null);
+    try {
+      const { openCoinCheckout } = await import('../utils/paddle');
+      await openCoinCheckout(pkg, { uid: u.uid, email: u.email }, (reason) => {
+        setChargingPkg(null);
+        if (reason === 'checkout.completed') {
+          // 실제 잔액은 webhook 이 처리한다. 프로필이 실시간 구독 중이라 곧 반영된다.
+          setChargeBanner({
+            type: 'success',
+            msg: `${pkg.coins.toLocaleString()} 코인 결제가 완료됐어요. 잔액 반영까지 몇 초 걸릴 수 있습니다.`,
+          });
+        }
+      });
+    } catch (err) {
+      console.error('결제창 열기 실패:', err);
+      setChargingPkg(null);
+      setChargeBanner({ type: 'cancel', msg: `결제창을 열지 못했어요: ${err.message}` });
+    }
   };
 
   if (!profile) {
