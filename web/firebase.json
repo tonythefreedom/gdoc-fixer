@@ -94,6 +94,26 @@
         "function": "aiSetupPage"
       },
       {
+        "source": "/terms",
+        "function": "legalPages"
+      },
+      {
+        "source": "/refund",
+        "function": "legalPages"
+      },
+      {
+        "source": "/privacy",
+        "function": "legalPages"
+      },
+      {
+        "source": "/pricing",
+        "function": "legalPages"
+      },
+      {
+        "source": "/contact",
+        "function": "legalPages"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

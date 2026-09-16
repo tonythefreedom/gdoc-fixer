@@ -35,6 +35,9 @@ exports.agentGuide = agentGuide.agentGuide;
 exports.agentTools = agentGuide.agentTools;
 exports.aiSetupPage = agentGuide.aiSetupPage; // /ai — 서버 렌더 (AI 가 직접 읽는다)
 
+// 약관·환불·개인정보·요금·연락처 — 결제 서비스 승인과 크롤러 노출에 모두 필요
+exports.legalPages = require('./legalPages').legalPages;
+
 // 게시 API — 사용자의 AI 가 만든 HTML·슬라이드를 URL 로 올린다
 const publishApi = require('./publishApi');
 exports.designSystems = publishApi.designSystems;
