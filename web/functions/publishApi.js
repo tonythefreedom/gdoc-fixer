@@ -21,6 +21,7 @@ const crypto = require('crypto');
 
 const { getGcsBucket, TECH_BLOG_SECRETS } = require('./publishToTechBlog');
 const { resolveApiKey } = require('./apiKeys');
+const { chargeCoin, refundCoin, InsufficientCoin, sendInsufficient } = require('./coinCharge');
 
 const BLOG_AGENT_API_KEY = defineSecret('BLOG_AGENT_API_KEY');
 
@@ -266,6 +267,14 @@ exports.publishPage = onRequest(
     const caller = await authenticate(req);
     if (!caller) return unauthorized(res);
 
+    let charge;
+    try {
+      charge = await chargeCoin(caller.uid, 'apiPublishPage');
+    } catch (err) {
+      if (err instanceof InsufficientCoin) return sendInsufficient(res, err);
+      throw err;
+    }
+
     const { html, name } = req.body || {};
     if (!html || typeof html !== 'string') {
       res.status(400).json({ ok: false, error: 'html 문자열이 필요합니다.' });
@@ -282,7 +291,10 @@ exports.publishPage = onRequest(
     }
 
     const bytes = Buffer.byteLength(processed, 'utf-8');
-    if (bytes > MAX_DOC_BYTES) return tooLarge(res, bytes);
+    if (bytes > MAX_DOC_BYTES) {
+      if (charge?.charged) await refundCoin(caller.uid, 'apiPublishPage');
+      return tooLarge(res, bytes);
+    }
 
     await db().collection(PAGES).doc(id).set({
       html: processed,
@@ -293,7 +305,10 @@ exports.publishPage = onRequest(
     });
 
     console.log(`[publishApi] 페이지 게시 ${id} (uid=${caller.uid || 'shared'}, ${(bytes / 1024).toFixed(0)}KB)`);
-    res.status(200).json({ ok: true, id, url: `${SITE}/share/${id}` });
+    res.status(200).json({
+      ok: true, id, url: `${SITE}/share/${id}`,
+      ...(charge?.charged && { coinsCharged: charge.cost, coinBalance: charge.balanceAfter }),
+    });
   }
 );
 
@@ -314,6 +329,14 @@ exports.publishPresentation = onRequest(
     const caller = await authenticate(req);
     if (!caller) return unauthorized(res);
 
+    let charge;
+    try {
+      charge = await chargeCoin(caller.uid, 'apiPublishPresentation');
+    } catch (err) {
+      if (err instanceof InsufficientCoin) return sendInsufficient(res, err);
+      throw err;
+    }
+
     const { slides, name } = req.body || {};
     if (!Array.isArray(slides) || slides.length === 0 || slides.some((s) => typeof s !== 'string')) {
       res.status(400).json({ ok: false, error: 'slides 는 비어 있지 않은 HTML 문자열 배열이어야 합니다.' });
@@ -331,7 +354,10 @@ exports.publishPresentation = onRequest(
     }
 
     const bytes = Buffer.byteLength(JSON.stringify(processed), 'utf-8');
-    if (bytes > MAX_DOC_BYTES) return tooLarge(res, bytes);
+    if (bytes > MAX_DOC_BYTES) {
+      if (charge?.charged) await refundCoin(caller.uid, 'apiPublishPresentation');
+      return tooLarge(res, bytes);
+    }
 
     await db().collection(DECKS).doc(id).set({
       slides: processed,
@@ -342,7 +368,10 @@ exports.publishPresentation = onRequest(
     });
 
     console.log(`[publishApi] 슬라이드 게시 ${id} (${processed.length}장, ${(bytes / 1024).toFixed(0)}KB)`);
-    res.status(200).json({ ok: true, id, url: `${SITE}/p/${id}`, slideCount: processed.length });
+    res.status(200).json({
+      ok: true, id, url: `${SITE}/p/${id}`, slideCount: processed.length,
+      ...(charge?.charged && { coinsCharged: charge.cost, coinBalance: charge.balanceAfter }),
+    });
   }
 );
 

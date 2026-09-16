@@ -21,6 +21,7 @@
  * inspect → (호출자가 판단) → apply 순서로 쓰면 채울 내용을 전적으로 호출자가 정한다.
  */
 const { onRequest } = require('firebase-functions/v2/https');
+const { chargeCoin, refundCoin, InsufficientCoin, sendInsufficient } = require('./coinCharge');
 const { defineSecret } = require('firebase-functions/params');
 const Busboy = require('busboy');
 
@@ -152,6 +153,15 @@ exports.hwpxFill = onRequest(
       return;
     }
 
+    // 코인 차감. 운영 공유 키(uid 없음)와 무료 액션은 그대로 통과한다.
+    let charge;
+    try {
+      charge = await chargeCoin(caller.uid, 'hwpxFill');
+    } catch (err) {
+      if (err instanceof InsufficientCoin) return sendInsufficient(res, err);
+      throw err;
+    }
+
     let parsed;
     try {
       parsed = await parseMultipart(req);
@@ -206,10 +216,17 @@ exports.hwpxFill = onRequest(
       res.set('Content-Disposition', contentDisposition(filename));
       // 호출자가 본문을 읽지 않고도 결과를 알 수 있게 통계를 헤더로도 싣는다.
       res.set('X-Hwpx-Paragraphs', String(stats.paragraphs));
+      // 바이너리 응답이라 본문에 못 싣는다. 호출자가 잔액을 추적할 수 있게 헤더로 준다.
+      if (charge?.charged) {
+        res.set('X-Coins-Charged', String(charge.cost));
+        res.set('X-Coin-Balance', String(charge.balanceAfter));
+      }
       res.set('X-Hwpx-Changed', String(stats.changed));
       res.status(200).send(Buffer.from(bytes));
     } catch (err) {
       console.error('[hwpxFill] 실패:', err.message);
+      // 결과를 못 준 채 코인만 빠지는 일이 없도록 되돌린다.
+      if (charge?.charged) await refundCoin(caller.uid, 'hwpxFill');
       res.status(500).json({ ok: false, error: err.message });
     }
   }
@@ -260,6 +277,15 @@ exports.hwpxInspect = onRequest(
     if (!caller) {
       res.status(401).json({ ok: false, error: 'x-api-key 인증에 실패했습니다.' });
       return;
+    }
+
+    // 코인 차감. 운영 공유 키(uid 없음)와 무료 액션은 그대로 통과한다.
+    let charge;
+    try {
+      charge = await chargeCoin(caller.uid, 'hwpxInspect');
+    } catch (err) {
+      if (err instanceof InsufficientCoin) return sendInsufficient(res, err);
+      throw err;
     }
 
     let parsed;
@@ -328,6 +354,15 @@ exports.hwpxApply = onRequest(
       return;
     }
 
+    // 코인 차감. 운영 공유 키(uid 없음)와 무료 액션은 그대로 통과한다.
+    let charge;
+    try {
+      charge = await chargeCoin(caller.uid, 'hwpxApply');
+    } catch (err) {
+      if (err instanceof InsufficientCoin) return sendInsufficient(res, err);
+      throw err;
+    }
+
     let parsed;
     try {
       parsed = await parseMultipart(req);
@@ -370,6 +405,7 @@ exports.hwpxApply = onRequest(
 
       // 개수가 어긋나면 고쳐서 다시 보낼 수 있도록 기대값을 알려준다.
       if (paragraphs.length !== original.length) {
+        if (charge?.charged) await refundCoin(caller.uid, 'hwpxApply');
         res.status(400).json({
           ok: false,
           error: `단락 개수가 맞지 않습니다. 양식은 ${original.length}개인데 ${paragraphs.length}개를 보냈습니다.`,
@@ -407,11 +443,17 @@ exports.hwpxApply = onRequest(
       res.set('Content-Type', 'application/haansofthwpx');
       res.set('Content-Disposition', contentDisposition(filename));
       res.set('X-Hwpx-Paragraphs', String(original.length));
+      // 바이너리 응답이라 본문에 못 싣는다. 호출자가 잔액을 추적할 수 있게 헤더로 준다.
+      if (charge?.charged) {
+        res.set('X-Coins-Charged', String(charge.cost));
+        res.set('X-Coin-Balance', String(charge.balanceAfter));
+      }
       res.set('X-Hwpx-Changed', String(changed));
       if (protectedIdx.length) res.set('X-Hwpx-Protected-Empty', protectedIdx.join(','));
       res.status(200).send(Buffer.from(bytes));
     } catch (err) {
       console.error('[hwpxApply] 실패:', err.message);
+      if (charge?.charged) await refundCoin(caller.uid, 'hwpxApply');
       res.status(500).json({ ok: false, error: err.message });
     }
   }
@@ -436,6 +478,15 @@ exports.hwpxExpandRows = onRequest(
     if (!caller) {
       res.status(401).json({ ok: false, error: 'x-api-key 인증에 실패했습니다.' });
       return;
+    }
+
+    // 코인 차감. 운영 공유 키(uid 없음)와 무료 액션은 그대로 통과한다.
+    let charge;
+    try {
+      charge = await chargeCoin(caller.uid, 'hwpxExpandRows');
+    } catch (err) {
+      if (err instanceof InsufficientCoin) return sendInsufficient(res, err);
+      throw err;
     }
 
     let parsed;
@@ -492,10 +543,16 @@ exports.hwpxExpandRows = onRequest(
       res.set('Content-Disposition', contentDisposition(filename));
       res.set('X-Hwpx-Paragraphs-Before', String(before.length));
       res.set('X-Hwpx-Paragraphs', String(after.length));
+      // 바이너리 응답이라 본문에 못 싣는다. 호출자가 잔액을 추적할 수 있게 헤더로 준다.
+      if (charge?.charged) {
+        res.set('X-Coins-Charged', String(charge.cost));
+        res.set('X-Coin-Balance', String(charge.balanceAfter));
+      }
       res.set('X-Hwpx-Table-Rows', after.tables.map((t) => t.rows).join(','));
       res.status(200).send(Buffer.from(bytes));
     } catch (err) {
       console.error('[hwpxExpandRows] 실패:', err.message);
+      if (charge?.charged) await refundCoin(caller.uid, 'hwpxExpandRows');
       res.status(400).json({ ok: false, error: err.message });
     }
   }

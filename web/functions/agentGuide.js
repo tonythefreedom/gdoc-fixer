@@ -187,6 +187,24 @@ curl -X POST "${BASE}/api/design-systems" -H "x-api-key: $GDOC_KEY" \\
        "primary":"#3ddc97","accent":"#ffd166","text":"#e8f1f5","muted":"#8aa0ad","divider":"#24323d"}}'
 \`\`\`
 
+## 코인
+
+API 호출은 웹에서 쓸 때와 같은 코인을 소모한다. 가입 시 무료 코인이 지급되고,
+모자라면 ${BASE}/pricing 에서 충전한다.
+
+| 호출 | 코인 |
+|------|------|
+| inspect | 0 (무료) |
+| expand-rows | 1 |
+| apply | 3 |
+| fill | 80 (LLM 사용) |
+| pages / presentations 게시 | 2 / 1 |
+
+inspect 가 무료인 이유는 expand-rows 전후로 여러 번 부르는 것이 올바른 사용 흐름이기 때문이다.
+잔액이 모자라면 \`402\` 와 함께 부족한 양을 알려준다. 작업이 실패하면 차감분은 자동으로 환원된다.
+
+응답에서 잔액을 확인할 수 있다 — JSON 응답은 \`coinBalance\`, 파일 응답은 \`X-Coin-Balance\` 헤더.
+
 ## 반드시 지켜야 하는 계약 3가지
 
 1. **단락 개수가 정확히 같아야 한다.** apply 에 보내는 배열 길이는 inspect 의 \`paragraphCount\` 와 일치해야 하고, 다르면 400 으로 거부된다.
