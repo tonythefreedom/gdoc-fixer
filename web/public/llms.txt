@@ -1,0 +1,35 @@
+# GDoc Fixer
+
+> 한글(HWP) 양식을 서식 그대로 채우고, AI 가 만든 문서·슬라이드를 웹에 게시하는 API.
+> AI 에이전트가 사용자를 대신해 직접 호출하도록 만들어졌습니다.
+
+한국어 문서 작업에 특화된 서비스입니다. 특히 **한글(.hwpx) 양식 채우기**는 다른 곳에서
+찾기 어려운 기능으로, 양식의 서식·표·글꼴을 하나도 건드리지 않고 텍스트만 채웁니다.
+정부 지원사업 신청서, 사업계획서, 각종 제출 양식처럼 "형식이 정해진 문서"를 다룰 때 씁니다.
+
+## 시작하기
+
+- [전체 사용법 (마크다운)](https://docs.prototypebench.org/api/guide): 이 한 문서만 읽으면 모든 엔드포인트를 쓸 수 있습니다. 규칙과 제약이 본문에 포함돼 있습니다.
+- [도구 스키마 (Anthropic 형식)](https://docs.prototypebench.org/api/tools): tool use 에 그대로 등록합니다.
+- [도구 스키마 (OpenAI 형식)](https://docs.prototypebench.org/api/tools?format=openai): function calling / GPTs Actions 에 등록합니다.
+- [연동 안내 페이지](https://docs.prototypebench.org/ai): Claude · ChatGPT · Gemini · Grok 별 설정 방법.
+
+## 인증
+
+사용자가 https://docs.prototypebench.org 에 로그인해 프로필에서 API 키를 발급합니다.
+요청 헤더에 `x-api-key: gdk_...` 로 싣습니다.
+
+## 할 수 있는 일
+
+- 한글 양식 구조 읽기: `POST /api/hwpx/inspect` — 단락·표·안내문을 JSON 으로. 무엇을 어디에 채울지 판단할 근거를 줍니다.
+- 표 행 늘리기: `POST /api/hwpx/expand-rows` — 양식의 고정 행보다 항목이 많을 때 복제합니다.
+- 양식 채우기: `POST /api/hwpx/apply` — 단락 배열을 그대로 적용해 .hwpx 를 돌려받습니다.
+- 문서 게시: `POST /api/pages` — HTML 을 URL 로 올립니다.
+- 슬라이드 게시: `POST /api/presentations` — 슬라이드 배열을 URL 로 올립니다.
+- 디자인 시스템: `GET /api/design-systems` — 프롬프트에 그대로 넣는 디자인 규칙 24종. 내 브랜드 색으로 만들 수도 있습니다.
+
+## 알아둘 점
+
+- 양식 채우기는 단락 개수를 정확히 맞춰야 합니다. inspect 가 알려주는 `paragraphCount` 와 같아야 합니다.
+- HWP 단락은 평문입니다. 마크다운이나 HTML 태그를 넣으면 글자 그대로 보입니다.
+- 본문 단락은 늘리거나 줄일 수 없습니다. 표 행만 늘릴 수 있습니다.

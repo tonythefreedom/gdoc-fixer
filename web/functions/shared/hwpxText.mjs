@@ -68,12 +68,21 @@ export async function extractParagraphsFromHwpx(bytes) {
   const paragraphs = [];
   const widths = [];
   const isGuide = []; // paragraph 별 가이드 여부 (italic charPr 사용)
+  const hasTable = []; // 표를 감싸는 구조용 단락인지
   for (let i = 0; i < pStarts.length; i++) {
     const startPos = pStarts[i];
     const endPos = i + 1 < pStarts.length ? pStarts[i + 1] : xml.length;
     const region = xml.slice(startPos, endPos);
-    const tm = region.match(/<hp:t\b[^>]*>([\s\S]*?)<\/hp:t>/);
-    paragraphs.push(tm ? decodeXmlEntities(tm[1]) : '');
+    // 한 단락이 여러 런(<hp:run>)으로 쪼개져 있는 일이 흔하다. 예를 들어 체크박스 칸은
+    // ["  ", "□ AI 반도체"] 처럼 나뉜다. 첫 런만 읽으면 "□ AI 반도체" 가 빈 칸으로 보여
+    // "원본에 글자가 없다"고 오판하게 되므로, 런 전체를 이어붙여 단락의 실제 텍스트를 만든다.
+    const texts = [...region.matchAll(/<hp:t\b[^>]*>([\s\S]*?)<\/hp:t>/g)].map((m) =>
+      decodeXmlEntities(m[1])
+    );
+    paragraphs.push(texts.join(''));
+    // 표를 품은 단락인지. 여기에 글자를 넣으면 표 앞에 텍스트가 끼어 레이아웃이 깨진다.
+    // "텍스트가 없다"와 "구조용이다"는 다른 얘기다 — 양식에는 채우라고 비워둔 빈 칸이 많다.
+    hasTable.push(/<hp:tbl\b/.test(region));
     // 가이드 판정: italic + 검은색 아닌 색 (양식 관례상 회색/붉은/파란).
     // italic 만으로는 표 헤더 같은 강조 단락도 잡혀 광범위.
     const runM = region.match(/<hp:run\s+charPrIDRef="(\d+)"/);
@@ -167,6 +176,7 @@ export async function extractParagraphsFromHwpx(bytes) {
   paragraphs.xmls = [];
   paragraphs.widths = widths;
   paragraphs.isGuide = isGuide;
+  paragraphs.hasTable = hasTable; // 표를 품은 구조용 단락
   paragraphs.cells = cells;   // paraIndex -> { table, row, col }
   paragraphs.tables = tables; // [{ index, rows, cols, paragraphs }]
   return paragraphs;
@@ -226,18 +236,50 @@ export async function applyParagraphsToHwpx(bytes, paragraphs, originalXmls = []
     );
   }
 
+  // 문서에서 가장 흔한 charPrIDRef — 런을 새로 만들어야 할 때 서식 기준으로 쓴다.
+  const charPrCounts = {};
+  for (const m of xml.matchAll(/<hp:run\s+charPrIDRef="(\d+)"/g)) {
+    charPrCounts[m[1]] = (charPrCounts[m[1]] || 0) + 1;
+  }
+  const commonCharPr =
+    Object.entries(charPrCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '0';
+
   // 뒤에서부터 처리 — 앞쪽 슬라이스 인덱스가 무너지지 않게.
-  // 첫 <hp:t> 텍스트만 in-place 교체. paraPrIDRef 는 원본 그대로 유지
-  // (원본의 "첫 줄 = 보통" 서식 유지).
+  // paraPrIDRef 는 건드리지 않는다(원본 단락 서식 유지).
   let result = xml;
   for (let i = pStarts.length - 1; i >= 0; i--) {
     const startPos = pStarts[i];
     const endPos = i + 1 < pStarts.length ? pStarts[i + 1] : result.length;
     const region = result.slice(startPos, endPos);
-    const replaced = region.replace(
-      /(<hp:t\b[^>]*>)([\s\S]*?)(<\/hp:t>)/,
-      (_full, open, _txt, close) => open + escapeXml(paragraphs[i]) + close
-    );
+    const text = paragraphs[i];
+
+    const runs = [...region.matchAll(/(<hp:t\b[^>]*>)([\s\S]*?)(<\/hp:t>)/g)];
+
+    let replaced;
+    if (runs.length > 0) {
+      // 한 단락이 여러 런으로 쪼개진 경우, 첫 런에만 쓰고 나머지를 그대로 두면
+      // 옛 글자가 뒤에 남는다("☑ AI 반도체□ AI 반도체"). 첫 런에 쓰고 나머지는 비운다.
+      let out = '';
+      let cursor = 0;
+      runs.forEach((m, k) => {
+        out += region.slice(cursor, m.index);
+        out += m[1] + (k === 0 ? escapeXml(text) : '') + m[3];
+        cursor = m.index + m[0].length;
+      });
+      out += region.slice(cursor);
+      replaced = out;
+    } else if (text) {
+      // 런이 하나도 없는 빈 칸. 쓸 자리가 없으므로 런을 만들어 넣는다.
+      // (빈 문자열이면 만들지 않는다 — 표 컨테이너 같은 구조용 단락을 건드리지 않기 위해.)
+      const nearby = region.match(/<hp:run\s+charPrIDRef="(\d+)"/);
+      const charPr = nearby ? nearby[1] : commonCharPr;
+      const run = `<hp:run charPrIDRef="${charPr}"><hp:t>${escapeXml(text)}</hp:t></hp:run>`;
+      // region 은 <hp:p ...> 여는 태그 **뒤**에서 시작하므로 맨 앞에 넣으면 단락 첫 자식이 된다.
+      replaced = run + region;
+    } else {
+      replaced = region;
+    }
+
     if (replaced !== region) {
       result = result.slice(0, startPos) + replaced + result.slice(endPos);
     }

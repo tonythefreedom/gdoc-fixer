@@ -1,0 +1,26 @@
+# GDoc Fixer — https://docs.prototypebench.org
+#
+# 검색엔진과 AI 크롤러를 모두 환영합니다. 이 서비스는 AI 에이전트가 직접 호출하도록
+# 만들어졌으므로 학습·검색·실시간 조회 어느 쪽도 막지 않습니다.
+#
+# 아래 한 블록이 모든 크롤러에 적용됩니다. 봇을 개별로 나열하면 그 봇이 자기 블록만
+# 읽어 공유 문서 제외가 새어나가므로, 규칙은 여기 한 곳에만 둡니다.
+#
+# 명시적으로 환영하는 봇들:
+#   검색      Googlebot, Bingbot
+#   학습      GPTBot, ClaudeBot, anthropic-ai, Google-Extended, Applebot-Extended
+#   검색·인용  OAI-SearchBot, Claude-SearchBot, PerplexityBot
+#   링크 열기  ChatGPT-User, Claude-User, Perplexity-User
+#   xAI       GrokBot, xAI-Bot (실제로는 일반 브라우저 UA 로 와서 robots.txt 로는 제어되지 않음)
+#
+# 참고: Google-Extended 는 Gemini 학습·그라운딩에만 관여하며 Googlebot 의 색인·순위와
+# 별개입니다. 둘 다 허용합니다.
+
+User-agent: *
+Allow: /
+
+# 사용자가 올린 문서는 링크를 아는 사람만 보는 것이 원칙이라 색인에서 제외합니다.
+Disallow: /share/
+Disallow: /p/
+
+Sitemap: https://docs.prototypebench.org/sitemap.xml

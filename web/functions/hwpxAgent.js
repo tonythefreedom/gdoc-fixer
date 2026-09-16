@@ -226,7 +226,11 @@ function describeForApi(text, index, paras) {
   const width = paras.widths?.[index];
   // 표 안의 빈 칸은 '채워야 할 자리'이고, 표 밖의 빈 단락은 '건드리면 안 되는 구조'다.
   // 둘을 같은 empty 로 묶으면 빈 셀을 채울 수 없게 된다.
-  const kind = cell ? 'cell' : !text ? 'empty' : 'text';
+  // 표를 품은 단락만 'empty'(구조용)로 표시한다. 그냥 비어 있는 칸은 채울 수 있는
+  // 자리이므로 text/cell 로 둔다 — 여기서 잘못 분류하면 "채우라"고 안내해 놓고
+  // 실제로는 못 채우는 상황이 된다.
+  const structural = !!paras.hasTable?.[index];
+  const kind = structural ? 'empty' : cell ? 'cell' : 'text';
   return {
     index,
     text,
@@ -235,9 +239,9 @@ function describeForApi(text, index, paras) {
     ...(width != null && { width }),
     ...(cell && { table: cell.table, row: cell.row, col: cell.col }),
     ...(kind === 'empty' && {
-      note: '표 밖의 구조용 단락입니다. apply 할 때 반드시 빈 문자열("")로 두세요.',
+      note: '표를 감싸는 구조용 단락입니다. apply 할 때 반드시 빈 문자열("")로 두세요.',
     }),
-    ...(kind === 'cell' && !text && { note: '비어 있는 표 칸입니다. 여기에 값을 채우면 됩니다.' }),
+    ...(kind !== 'empty' && !text && { note: '비어 있는 자리입니다. 여기에 값을 채우면 됩니다.' }),
     ...(paras.isGuide?.[index] && {
       note: '양식 작성자가 쓴 안내문입니다. 안내가 요구하는 내용으로 바꾸세요.',
     }),
@@ -277,7 +281,7 @@ exports.hwpxInspect = onRequest(
       const paras = await extractParagraphsFromHwpx(file.buffer);
       const paragraphs = Array.from(paras).map((t, i) => describeForApi(t, i, paras));
       const emptyIdx = paragraphs.filter((p) => p.kind === 'empty').map((p) => p.index);
-      const emptyCellIdx = paragraphs.filter((p) => p.kind === 'cell' && !p.text).map((p) => p.index);
+      const emptyCellIdx = paragraphs.filter((p) => p.kind !== 'empty' && !p.text).map((p) => p.index);
 
       res.status(200).json({
         ok: true,
@@ -288,12 +292,12 @@ exports.hwpxInspect = onRequest(
           exactCount: `apply 의 paragraphs 배열은 정확히 ${paragraphs.length}개여야 합니다. 많아도 적어도 거부됩니다.`,
           keepEmpty:
             emptyIdx.length > 0
-              ? `인덱스 [${emptyIdx.join(', ')}] 는 표 밖의 구조용 빈 단락입니다. 빈 문자열로 두세요.`
+              ? `인덱스 [${emptyIdx.join(', ')}] 는 표를 감싸는 구조용 단락입니다. 빈 문자열로 두세요.`
               : '구조용 빈 단락은 없습니다.',
           fillableCells:
             emptyCellIdx.length > 0
-              ? `인덱스 [${emptyCellIdx.join(', ')}] 는 비어 있는 표 칸입니다. 여기에 값을 채우세요.`
-              : '비어 있는 표 칸은 없습니다.',
+              ? `인덱스 [${emptyCellIdx.join(', ')}] 는 비어 있는 자리입니다. 여기에 값을 채우세요.`
+              : '비어 있는 자리는 없습니다.',
           plainText:
             'HWP 단락은 평문입니다. 마크다운(**, ##, -, |)이나 HTML 태그를 넣으면 글자 그대로 보입니다. 굵기·크기는 양식의 서식이 결정합니다.',
           noNewParagraphs:
@@ -379,9 +383,10 @@ exports.hwpxApply = onRequest(
       // allowFillEmpty=true 로 끌 수 있다.
       const allowFillEmpty = String(fields.allowFillEmpty || '').toLowerCase() === 'true';
       const protectedIdx = [];
-      // 표 안의 빈 칸은 채우라고 있는 자리이므로 보호 대상이 아니다.
-      // 표 밖의 빈 단락(표를 감싸는 컨테이너, 빈 줄)만 되돌린다.
-      const isStructuralEmpty = (i) => original[i] === '' && !original.cells?.[i];
+      // 보호 대상은 '표를 감싸는 단락' 뿐이다. 여기에 글자를 넣으면 표 앞에 텍스트가
+      // 끼어 레이아웃이 깨진다. 그 밖의 빈 단락은 양식이 채우라고 비워둔 자리이므로
+      // (본점 소재지, 기업현황 칸처럼) 건드리지 않는다.
+      const isStructuralEmpty = (i) => !!original.hasTable?.[i];
       const finalParagraphs = paragraphs.map((v, i) => {
         if (!allowFillEmpty && isStructuralEmpty(i) && v !== '') {
           protectedIdx.push(i);

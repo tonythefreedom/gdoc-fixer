@@ -5,10 +5,82 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" type="image/x-icon" href="/icon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GDoc Fixer · HTML 문서 + AI 슬라이드</title>
+
+    <title>GDoc Fixer · 한글 양식 자동 작성 + AI 문서·슬라이드</title>
+    <meta name="description" content="한글(HWP) 양식의 서식을 그대로 둔 채 내용만 채웁니다. AI 가 만든 문서와 슬라이드를 웹에 바로 게시할 수도 있습니다. Claude · ChatGPT · Gemini · Grok 이 API 로 직접 호출합니다." />
+    <link rel="canonical" href="https://docs.prototypebench.org/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GDoc Fixer" />
+    <meta property="og:title" content="GDoc Fixer · 한글 양식 자동 작성 + AI 문서·슬라이드" />
+    <meta property="og:description" content="한글(HWP) 양식의 서식을 그대로 둔 채 내용만 채웁니다. AI 에이전트가 API 로 직접 호출할 수 있습니다." />
+    <meta property="og:url" content="https://docs.prototypebench.org/" />
+    <meta property="og:image" content="https://docs.prototypebench.org/icon.png" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="GDoc Fixer · 한글 양식 자동 작성" />
+    <meta name="twitter:description" content="한글 양식을 서식 그대로 채우고, AI 문서·슬라이드를 웹에 게시합니다." />
+
+    <!-- AI 에이전트가 사용법을 바로 찾아갈 수 있게 -->
+    <link rel="alternate" type="text/markdown" href="/api/guide" title="AI 에이전트용 API 가이드" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "GDoc Fixer",
+      "url": "https://docs.prototypebench.org/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "inLanguage": "ko",
+      "description": "한글(HWP) 양식의 서식을 유지한 채 내용만 자동으로 채우고, AI 가 만든 문서와 슬라이드를 웹에 게시하는 서비스. Claude, ChatGPT, Gemini, Grok 이 API 로 직접 호출할 수 있습니다.",
+      "featureList": [
+        "한글(.hwpx) 양식 구조 분석 및 자동 채우기",
+        "양식 표 행 복제",
+        "AI 문서·슬라이드 웹 게시",
+        "디자인 시스템 24종 제공",
+        "AI 에이전트용 REST API"
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "가입 시 무료 코인 지급, 이후 사용량만큼 충전"
+      }
+    }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      크롤러와 AI 봇을 위한 정적 소개. 대부분의 AI 크롤러는 JS 를 실행하지 않아
+      빈 SPA 껍데기만 가져간다. React 는 createRoot().render() 로 마운트하면서
+      이 내용을 통째로 대체하므로 사용자 화면에는 영향이 없다(로딩 중 잠깐 보일 뿐).
+    -->
+    <div id="root">
+      <main style="max-width:760px;margin:0 auto;padding:56px 20px;font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif;line-height:1.75;color:#d7e0e8;background:#0b0f14;min-height:100vh">
+        <h1 style="font-size:28px;color:#f0f5f9;margin:0 0 12px">GDoc Fixer — 한글 양식 자동 작성과 AI 문서 게시</h1>
+        <p style="color:#c4d0db">한글(HWP) 양식의 <strong>서식을 그대로 둔 채 내용만 채웁니다.</strong> 표·글꼴·페이지 설정이 원본 그대로 유지되므로, 정부 지원사업 신청서나 사업계획서처럼 형식이 정해진 문서를 그대로 제출할 수 있습니다.</p>
+
+        <h2 style="font-size:19px;color:#eaf1f7;margin:32px 0 10px">할 수 있는 일</h2>
+        <ul style="color:#c4d0db">
+          <li><strong>한글 양식 채우기</strong> — 양식(.hwpx)의 단락과 표 구조를 읽고, 각 칸에 맞는 내용을 채워 넣습니다. 안내문이 적힌 칸은 무엇을 써야 하는지 알아냅니다.</li>
+          <li><strong>표 행 늘리기</strong> — 양식의 데이터 행보다 항목이 많을 때 서식을 유지한 채 행을 복제합니다.</li>
+          <li><strong>문서·슬라이드 웹 게시</strong> — HTML 문서와 슬라이드를 URL 로 올립니다. 링크를 아는 사람만 볼 수 있습니다.</li>
+          <li><strong>디자인 시스템 24종</strong> — 슬라이드·문서 디자인 규칙을 AI 프롬프트에 그대로 넣을 수 있는 형태로 제공합니다. 내 브랜드 색으로 직접 만들 수도 있습니다.</li>
+          <li><strong>HTML 문서 편집기와 AI 슬라이드 생성기</strong> — 웹에서 직접 쓸 수 있습니다.</li>
+        </ul>
+
+        <h2 style="font-size:19px;color:#eaf1f7;margin:32px 0 10px">AI 가 직접 씁니다</h2>
+        <p style="color:#c4d0db">Claude · ChatGPT · Gemini · Grok 이 사용자를 대신해 API 를 호출하도록 만들어졌습니다. API 키를 발급하고 아래 주소만 알려주면, AI 가 사용법을 스스로 읽고 씁니다.</p>
+        <ul style="color:#c4d0db">
+          <li><a href="/api/guide" style="color:#6ea8fe">/api/guide</a> — 전체 사용법 (마크다운)</li>
+          <li><a href="/api/tools" style="color:#6ea8fe">/api/tools</a> — 도구 스키마 (Anthropic · OpenAI 형식)</li>
+          <li><a href="/ai" style="color:#6ea8fe">/ai</a> — 플랫폼별 연동 방법</li>
+        </ul>
+
+        <p style="color:#9fb0c0;font-size:14px;margin-top:32px">Google 계정으로 로그인하면 바로 쓸 수 있고, 가입 시 무료 코인이 지급됩니다.</p>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
