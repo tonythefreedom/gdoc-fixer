@@ -21,13 +21,15 @@ const BASE = 'https://docs.prototypebench.org';
  */
 const COMPANY = {
   serviceName: 'GDoc Fixer',
-  legalName: '(상호를 입력하세요)',
-  ceo: '(대표자명)',
-  address: '(사업장 주소)',
-  regNo: '(사업자등록번호)',
-  mailOrderNo: '(통신판매업 신고번호)',
-  email: 'tony@banya.ai',
-  phone: '(연락처)',
+  // 사업자등록증 기재 그대로. 사업계획서에는 "주식회사 뉴타입/법인"으로 적혀 있으나
+  // 등록증상 개인사업자이므로 법적 고지는 등록증을 따른다.
+  legalName: '뉴 타입(NEWTYPE)',
+  ceo: '맹기완',
+  address: '대전광역시 유성구 반석로 36, 5층 5120호(반석동, 예건프라자)',
+  regNo: '286-55-01054',
+  mailOrderNo: '(통신판매업 신고번호 — 신고 후 기입)',
+  email: 'sales@newtype-ai.com',
+  phone: '(대표 연락처)',
   // 결제는 Paddle 이 판매자(Merchant of Record)로서 처리한다. 영수증·세금계산서·
   // 환불 실행이 Paddle 명의로 이루어지므로 약관에 명시해야 한다.
   merchantOfRecord: 'Paddle.com Market Ltd.',
