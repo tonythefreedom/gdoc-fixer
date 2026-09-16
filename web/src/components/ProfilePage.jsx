@@ -14,6 +14,7 @@ import { auth } from '../firebase';
 import useAuthStore from '../store/useAuthStore';
 import { ACTION_COSTS, ACTION_LABELS, INITIAL_COIN_GRANT } from '../utils/coin';
 import { uploadBlobToGcs, dataUriToBlob } from '../store/storage';
+import ApiKeySection from './ApiKeySection';
 
 // 가격 정책: 100 coin = $1. functions/coinCheckout.js 의 COIN_PACKAGES 와 동기화.
 // Paddle 오버레이 체크아웃. uid/coins 는 customData 로 넘어가 webhook
@@ -282,6 +283,8 @@ export default function ProfilePage() {
             </div>
           </div>
         </section>
+
+        <ApiKeySection />
 
         {/* 코인 충전 */}
         <section className="bg-slate-900 rounded-2xl border border-slate-800 p-6 mb-6">

@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  Coins,
-  Users,
-  UserCircle2,
-  LogOut,
-  ChevronDown,
-  UserCog,
-  BookOpen,
-} from 'lucide-react';
+import { Coins, Users, UserCircle2, LogOut, ChevronDown, UserCog, BookOpen, Bot } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import useAppStore from '../store/useAppStore';
 
@@ -69,6 +61,22 @@ export default function Header() {
           >
             <BookOpen className="w-3.5 h-3.5" />
             가이드
+          </button>
+        )}
+
+        {/* AI 연동 */}
+        {user && (
+          <button
+            onClick={() => setCurrentView('ai')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              currentView === 'ai'
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+            }`}
+            title="Claude · ChatGPT · Gemini · Grok 연동"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            AI 연동
           </button>
         )}
 

@@ -7,6 +7,7 @@ import ContentListPage from './ContentListPage';
 import ProfilePage from './ProfilePage';
 import AdminUserManagement from './AdminUserManagement';
 import GuidePage from './GuidePage';
+import AiIntegrationPage from './AiIntegrationPage';
 import useAppStore from '../store/useAppStore';
 
 export default function Layout() {
@@ -23,6 +24,8 @@ export default function Layout() {
             <ProfilePage />
           ) : currentView === 'guide' ? (
             <GuidePage />
+          ) : currentView === 'ai' ? (
+            <AiIntegrationPage />
           ) : currentView === 'contents' ? (
             <ContentListPage />
           ) : (
