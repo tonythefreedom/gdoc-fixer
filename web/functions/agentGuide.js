@@ -3,6 +3,11 @@
  *
  *   GET /api/guide   사람이든 AI 든 한 번 읽으면 전체 사용법을 아는 마크다운
  *   GET /api/tools   OpenAI / Anthropic 도구 스키마 (그대로 등록해 쓰면 됨)
+ *   GET /ai          같은 내용을 사람이 보기 좋게 렌더한 HTML
+ *
+ * /ai 를 서버에서 렌더하는 이유: SPA 는 JS 를 실행해야 내용이 생기므로, AI 가 그 주소를
+ * 가져가면 빈 껍데기만 받는다. 서버가 완성된 HTML 을 주면 사람도 AI 도 같은 것을 읽는다.
+ * 본문은 위 GUIDE 하나에서 나오므로 두 경로가 어긋날 일이 없다.
  *
  * 문서를 사람이 복사해 붙여넣는 대신, 에이전트가 URL 하나를 읽고 스스로 쓰게 하는 것이
  * 목적이다. 그래서 규칙(단락 개수 일치, 빈 단락 유지 등)을 응답 안에 같이 싣는다.
@@ -106,6 +111,81 @@ x-api-key: gdk_...
 \`\`\`
 
 \`Authorization: Bearer gdk_...\` 도 된다.
+
+## AI 별 연동 방법
+
+어느 쪽이든 이 문서 주소(\`${BASE}/api/guide\`)와 API 키만 있으면 된다.
+
+### Claude · Claude Code
+
+대화에 그대로 알려주면 된다. 파일을 다루므로 Claude Code 가 가장 잘 맞는다.
+
+\`\`\`bash
+export GDOC_KEY=gdk_...
+curl -s ${BASE}/api/guide      # 이 문서
+curl -X POST "${BASE}/api/hwpx/inspect" -H "x-api-key: $GDOC_KEY" -F "template=@양식.hwpx"
+\`\`\`
+
+### ChatGPT (GPTs Actions)
+
+GPT 편집 화면의 Actions 에 스키마 주소를 넣고, 인증을 API Key / Custom header \`x-api-key\` 로 설정한다.
+
+\`\`\`
+${BASE}/api/tools?format=openai
+\`\`\`
+
+### Gemini
+
+function calling 을 쓴다면 같은 스키마를 function declarations 로 등록한다.
+대화에서는 이 문서 주소를 주는 편이 간단하다.
+
+\`\`\`
+${BASE}/api/tools?format=openai
+\`\`\`
+
+### Grok
+
+tool use 형식을 지원한다. 아래 주소의 tools 배열을 그대로 넘긴다.
+
+\`\`\`
+${BASE}/api/tools
+\`\`\`
+
+## 문서·슬라이드를 웹에 게시
+
+한글 양식 외에, AI 가 만든 HTML 을 URL 로 올릴 수도 있다. 링크를 아는 사람만 볼 수 있다.
+
+\`\`\`bash
+curl -X POST "${BASE}/api/pages" -H "x-api-key: $GDOC_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"제목","html":"<!DOCTYPE html>..."}'
+# → { "url": "${BASE}/share/AbC12xYz" }
+
+curl -X POST "${BASE}/api/presentations" -H "x-api-key: $GDOC_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"덱 제목","slides":["<div>...</div>","<div>...</div>"]}'
+# → { "url": "${BASE}/p/KNr7u3xj" }
+\`\`\`
+
+내가 올린 것은 \`DELETE ${BASE}/api/pages/{id}\` 로 내린다.
+
+## 디자인 시스템
+
+슬라이드·문서를 만들 때 이 규칙을 프롬프트에 넣으면 서비스와 같은 디자인이 나온다.
+
+\`\`\`bash
+curl "${BASE}/api/design-systems"              # 내장 24종 목록
+curl "${BASE}/api/design-systems?id=banya-ai"  # promptBlock 을 프롬프트에 넣는다
+\`\`\`
+
+내 브랜드 색으로 직접 만들 수도 있다. 팔레트 7색만 주면 타이포·레이아웃은 기본값으로 채워진다.
+
+\`\`\`bash
+curl -X POST "${BASE}/api/design-systems" -H "x-api-key: $GDOC_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"우리 브랜드","palette":{"background":"#0f1720","surface":"#16212b",
+       "primary":"#3ddc97","accent":"#ffd166","text":"#e8f1f5","muted":"#8aa0ad","divider":"#24323d"}}'
+\`\`\`
 
 ## 반드시 지켜야 하는 계약 3가지
 
@@ -251,5 +331,95 @@ exports.agentTools = onRequest(
       auth: { header: 'x-api-key', format: 'gdk_...' },
       tools: TOOLS,
     });
+  }
+);
+
+// ─────────────────────────── 사람이 보는 페이지 ───────────────────────────
+
+const PAGE_TITLE = 'AI 연동 — GDoc Fixer';
+const PAGE_DESC =
+  'Claude · ChatGPT · Gemini · Grok 이 한글 양식을 채우고 문서·슬라이드를 웹에 게시하게 하는 방법.';
+
+/** 마크다운을 그대로 감쌀 최소한의 스타일. 외부 자원을 쓰지 않아 어디서든 같게 보인다. */
+const PAGE_CSS = `
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0b0f14; color:#d7e0e8;
+         font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR',Segoe UI,sans-serif;
+         line-height:1.75; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 20px 96px; }
+  .brand { display:flex; align-items:center; gap:10px; margin-bottom:8px;
+           font-size:13px; color:#7c8b9a; letter-spacing:.02em; }
+  .brand a { color:#7c8b9a; text-decoration:none; }
+  .brand a:hover { color:#c7d3de; }
+  h1 { font-size:30px; line-height:1.3; margin:.2em 0 .6em; color:#f0f5f9; letter-spacing:-.01em; }
+  h2 { font-size:21px; margin:2.2em 0 .7em; padding-top:1.2em; color:#eaf1f7;
+       border-top:1px solid #1b2530; }
+  h3 { font-size:16px; margin:1.8em 0 .5em; color:#b9c8d6; }
+  p, li { font-size:15px; color:#c4d0db; }
+  a { color:#6ea8fe; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.88em;
+         background:#151d26; color:#8ee7c0; padding:.15em .4em; border-radius:4px; }
+  pre { background:#0f151c; border:1px solid #1b2530; border-radius:12px;
+        padding:16px; overflow-x:auto; }
+  pre code { background:none; color:#c8d6e5; padding:0; font-size:13px; line-height:1.65; }
+  table { width:100%; border-collapse:collapse; margin:1.2em 0; font-size:14px; }
+  th,td { border:1px solid #1b2530; padding:9px 12px; text-align:left; }
+  th { background:#131b24; color:#e3ecf4; }
+  blockquote { border-left:3px solid #2a3947; margin:1.2em 0; padding:.2em 1em; color:#9fb0c0; }
+  hr { border:0; border-top:1px solid #1b2530; margin:2.4em 0; }
+  .cta { display:inline-block; margin-top:8px; padding:10px 18px; border-radius:10px;
+         background:#2f6fed; color:#fff; text-decoration:none; font-size:14px; font-weight:600; }
+  .note { margin-top:40px; padding:16px 18px; border:1px solid #1b2530; border-radius:12px;
+          background:#0f151c; font-size:14px; color:#9fb0c0; }
+`;
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * GET /ai — 가이드를 사람이 읽는 HTML 로.
+ * AI 가 가져가도 같은 내용을 그대로 받는다(서버에서 완성해 보내므로).
+ */
+exports.aiSetupPage = onRequest(
+  { timeoutSeconds: 30, memory: '256MiB', cors: true },
+  async (req, res) => {
+    const { marked } = require('marked');
+    const body = marked.parse(GUIDE, { mangle: false, headerIds: true });
+
+    const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeAttr(PAGE_TITLE)}</title>
+<meta name="description" content="${escapeAttr(PAGE_DESC)}">
+<meta property="og:title" content="${escapeAttr(PAGE_TITLE)}">
+<meta property="og:description" content="${escapeAttr(PAGE_DESC)}">
+<meta property="og:type" content="article">
+<meta property="og:url" content="${BASE}/ai">
+<link rel="canonical" href="${BASE}/ai">
+<style>${PAGE_CSS}</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><a href="${BASE}">GDoc Fixer</a> · AI 연동</div>
+  ${body}
+  <div class="note">
+    <p style="margin:0 0 10px">API 키는 <a href="${BASE}">GDoc Fixer</a> 에 로그인한 뒤 프로필 페이지에서 발급합니다. 발급 직후 한 번만 보이니 안전한 곳에 복사해 두세요.</p>
+    <a class="cta" href="${BASE}">키 발급하러 가기</a>
+  </div>
+  <div class="note" style="margin-top:16px">
+    <p style="margin:0">이 문서의 원본(마크다운): <a href="${BASE}/api/guide">${BASE}/api/guide</a><br>
+    도구 스키마: <a href="${BASE}/api/tools">${BASE}/api/tools</a> · <a href="${BASE}/api/tools?format=openai">?format=openai</a></p>
+  </div>
+</div>
+</body>
+</html>`;
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=300');
+    res.status(200).send(html);
   }
 );

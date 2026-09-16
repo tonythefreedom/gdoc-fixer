@@ -33,6 +33,7 @@ exports.revokeApiKey = apiKeys.revokeApiKey;
 const agentGuide = require('./agentGuide');
 exports.agentGuide = agentGuide.agentGuide;
 exports.agentTools = agentGuide.agentTools;
+exports.aiSetupPage = agentGuide.aiSetupPage; // /ai — 서버 렌더 (AI 가 직접 읽는다)
 
 // 게시 API — 사용자의 AI 가 만든 HTML·슬라이드를 URL 로 올린다
 const publishApi = require('./publishApi');

@@ -90,6 +90,10 @@
         "function": "publishPresentation"
       },
       {
+        "source": "/ai",
+        "function": "aiSetupPage"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
